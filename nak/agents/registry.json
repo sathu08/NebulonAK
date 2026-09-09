@@ -1,0 +1,46 @@
+[
+  {
+    "name": "AgentCreator",
+    "description": "Creates new agents on disk after explicit confirmation",
+    "path": "nak/agents/AgentCreator",
+    "capabilities": [
+      "create_agent"
+    ],
+    "created_via": "manual",
+    "version": "0.1.0"
+  },
+  {
+    "name": "DecisionAgent",
+    "description": "Router: decides USE_AGENT / CREATE_AGENT / ASK_USER via NebulonMind",
+    "path": "nak/agents/DecisionAgent",
+    "capabilities": [
+      "route",
+      "decide"
+    ],
+    "created_via": "manual",
+    "version": "0.1.0"
+  },
+  {
+    "name": "Example",
+    "description": "Minimal harness that proxies to Brain.chat (SimpleAgent)",
+    "path": "nak/agents/Example",
+    "capabilities": [
+      "chat",
+      "remember",
+      "recall"
+    ],
+    "created_via": "manual",
+    "version": "0.1.0"
+  },
+  {
+    "name": "ExcelAgent",
+    "description": "Handles Excel duplicate supplier detection",
+    "path": "nak/agents/ExcelAgent",
+    "capabilities": [
+      "excel",
+      "duplicate-detection"
+    ],
+    "created_via": "agent_creator",
+    "version": "0.1.0"
+  }
+]

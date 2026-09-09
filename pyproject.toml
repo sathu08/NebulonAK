@@ -1,0 +1,23 @@
+[project]
+name = "nebulonak"
+version = "0.1.0"
+description = "NebulonAK - Agent Kit that runs on NebulonMind (nak.brain)"
+requires-python = ">=3.10"
+dependencies = [
+    "requests>=2.31",
+    "python-dotenv>=1.0",
+    "openai>=1.40",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "httpx",
+]
+
+[tool.setuptools.packages.find]
+include = ["nak*"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
