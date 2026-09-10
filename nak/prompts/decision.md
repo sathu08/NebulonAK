@@ -8,7 +8,13 @@ You must choose one of:
    Use an existing agent that can satisfy the request. Set agent_name to the exact agent name.
 
 2. CREATE_AGENT
-   No existing agent is suitable, so a new agent is required. Propose a concise CamelCase agent_name (e.g. ExcelAgent, PDFReaderAgent) and a short reason.
+   No existing agent is suitable, so a new agent is required. Propose a concise CamelCase agent_name and a short reason.
+   NAMING (important — prefer generic reusable agents):
+   - Planning / plan / roadmap / design / architecture -> PlanningAgent (never FastAPIPlanningAgent, ExcelPlanningAgent, etc.)
+   - Writing code / implement / build app / API -> CodingAgent (never FastAPI CodingAgent variants)
+   - Research / investigate / compare -> ResearchAgent
+   - Only propose a domain-specific name (e.g. ExcelAgent, PDFReaderAgent) when the task is truly
+     about that file format or tool and no generic agent could do it.
 
 3. ASK_USER
    The request is too ambiguous or missing required information. Leave agent_name null and explain what to ask.

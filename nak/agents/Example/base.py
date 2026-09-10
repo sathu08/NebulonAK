@@ -72,9 +72,8 @@ class SimpleAgent:
         # system_prompt handling: NebulonMind's /agent/chat uses its own
         # nmd_agent_system_prompt from config; we just inject locally as a
         # leading system message if the caller supplied one.
-        history = list(messages or [])
-        if self.system_prompt and not any(m.get("role") == "system" for m in history):
-            history = [{"role": "system", "content": self.system_prompt}] + history
+        # NOTE: Mind /agent/chat accepts only user/assistant/tool (no "system").
+        history = [m for m in (messages or []) if m.get("role") in ("user", "assistant", "tool")]
         return self.brain.chat(text, messages=history or None, session_id=session_id, user=user)
 
     # convenience aliases

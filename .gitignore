@@ -30,3 +30,4 @@ Thumbs.db
 # Local config (secrets)
 *.local.cfg
 *.local.env
+*.lock

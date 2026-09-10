@@ -42,5 +42,25 @@
     ],
     "created_via": "agent_creator",
     "version": "0.1.0"
+  },
+  {
+    "name": "PlanningAgent",
+    "description": "Reusable planning agent: creates implementation plans, roadmaps and designs for any task or stack (not tied to one framework)",
+    "path": "nak/agents/PlanningAgent",
+    "capabilities": [
+      "planning",
+      "roadmap",
+      "design"
+    ],
+    "created_via": "agent_creator",
+    "version": "0.1.0"
+  },
+  {
+    "name": "ResearchAgent",
+    "description": "No existing agent can handle research tasks on Databricks",
+    "path": "nak/agents/ResearchAgent",
+    "capabilities": [],
+    "created_via": "agent_creator",
+    "version": "0.1.0"
   }
 ]

@@ -39,12 +39,6 @@ except Exception:  # fallback if prompts package missing
     load_prompt = None  # type: ignore
 
 
-# Fallback inline prompt if file missing (kept in sync with nak/prompts/decision.md)
-_FALLBACK_PROMPT = """You are DecisionAgent. Decide USE_AGENT/CREATE_AGENT/ASK_USER.
-Available agents: {available_agents}
-User request: {user_request}
-Return ONLY JSON with action, agent_name, reason, confidence, parameters."""
-
 _JSON_RE = re.compile(r"\{.*\}", re.DOTALL)
 
 
@@ -78,21 +72,22 @@ class DecisionAgent:
         # hybrid memory fallback: if agents_str is empty, try brain.search (best-effort, no raise)
         # not done here — caller can enrich if desired; keep prompt build pure.
 
-        if render_prompt is not None:
-            try:
-                return render_prompt(self.prompt_name, available_agents=agents_str, user_request=user_request)
-            except FileNotFoundError:
-                pass
-            except Exception as exc:
-                logger.debug("render_prompt failed: %s", exc)
-        if load_prompt is not None:
-            try:
-                tmpl = load_prompt(self.prompt_name)
-                # safe replace (preserve JSON braces)
-                return tmpl.replace("{available_agents}", agents_str).replace("{user_request}", user_request)
-            except Exception:
-                pass
-        return _FALLBACK_PROMPT.replace("{available_agents}", agents_str).replace("{user_request}", user_request)
+        # Prompt folder is the single source of truth — no inline copies.
+        # A missing file fails loud (FileNotFoundError) instead of silently
+        # deciding from a stale duplicated prompt.
+        if render_prompt is None or load_prompt is None:
+            raise FileNotFoundError(
+                f"prompt {self.prompt_name!r} unavailable (nak.prompts package missing)"
+            )
+        try:
+            return render_prompt(self.prompt_name, available_agents=agents_str, user_request=user_request)
+        except FileNotFoundError:
+            raise
+        except Exception as exc:
+            logger.debug("render_prompt failed, using raw template: %s", exc)
+        tmpl = load_prompt(self.prompt_name)
+        # safe replace (preserve JSON braces)
+        return tmpl.replace("{available_agents}", agents_str).replace("{user_request}", user_request)
 
     # -- parse -----------------------------------------------------------------
 

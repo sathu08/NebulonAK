@@ -14,6 +14,8 @@ It mirrors NebulonMD's nebulonmind.cfg style but simplified for AK usage.
 Sections:
     [nebulonmind] base_url, user, timeout, auth_token, ...
     [brain] default_top_k, auto_create_user, ...
+    [policy] tool_use, create_agent, max_turns (approvals + loop cap;
+             everything runs on NebulonMind only — no external provider)
     [paths] nak_home
 
 Secrets (auth_token) may also come from env; they are never written back to logs.
@@ -57,6 +59,9 @@ class NAKConfig:
     auto_create_user: bool
     persist_user: bool
     system_prompt: str
+    policy_tool_use: str
+    policy_create_agent: str
+    policy_max_turns: int
     cfg_path: Path
 
     @property
@@ -121,6 +126,11 @@ def load_config(cfg_path: str | Path | None = None) -> NAKConfig:
             "auto_create_user": "true",
             "persist_user": "false",
         },
+        "policy": {
+            "tool_use": "ask",
+            "create_agent": "ask",
+            "max_turns": "6",
+        },
         "paths": {
             "nak_home": str(_repo_root()),
         },
@@ -182,6 +192,15 @@ def load_config(cfg_path: str | Path | None = None) -> NAKConfig:
             if base_url.count("/") <= 2:  # e.g. http://localhost:9696
                 base_url = base_url + "/api/NebulonMind"
 
+    def _get_mode(section: str, key: str, fallback: str = "ask") -> str:
+        val = (os.environ.get(f"NAK_POLICY_{key.upper()}") or _get(section, key, fallback)).strip().lower()
+        return val if val in ("ask", "allow_once", "allow_always", "no") else fallback
+
+    try:
+        policy_max_turns = int(os.environ.get("NAK_POLICY_MAX_TURNS") or _get("policy", "max_turns", 6))
+    except ValueError:
+        policy_max_turns = 6
+
     return NAKConfig(
         base_url=base_url,
         user=user.strip() or "nmd_user_01",
@@ -196,6 +215,9 @@ def load_config(cfg_path: str | Path | None = None) -> NAKConfig:
         auto_create_user=_get_bool("brain", "auto_create_user", True),
         persist_user=_get_bool("brain", "persist_user", False),
         system_prompt="",  # agent config removed from cfg; agents own their prompts
+        policy_tool_use=_get_mode("policy", "tool_use"),
+        policy_create_agent=_get_mode("policy", "create_agent"),
+        policy_max_turns=max(1, policy_max_turns),
         cfg_path=cfg_path,
     )
 
