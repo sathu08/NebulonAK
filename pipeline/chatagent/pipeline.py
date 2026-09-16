@@ -1,366 +1,209 @@
 """
-pipeline.chatagent.pipeline -- production DecisionAgent router + execution.
+pipeline.chatagent.pipeline -- thin CLI wrapper over HarnessRuntime (Phase 1).
 
-Contract (production-ready):
-    1. EVERY user turn goes through DecisionAgent.decide() (stateless).
-       No direct Brain.chat fallback, no silent Example/SimpleAgent use.
-    2. Decision determines execution:
-       USE_AGENT    -> run that agent ONLY if it resolves on disk.
-                       If missing -> ask user to create it (needs_confirm=True).
-       CREATE_AGENT -> NEVER auto-create. Return proposal, terminal asks y/N.
-       ASK_USER     -> return decision.reason as the clarifying question.
-                       No task execution.
-    3. Every result carries `run_on` so the terminal can show:
-       "Running on: <agent>" / "Running on: DecisionAgent (question/proposal)".
+Historically this file OWNED the decide->route->run lifecycle. The harness
+runtime (nak.harness.HarnessRuntime) now owns it. This class keeps the exact
+public contract (handle/create_confirmed/run_agent_text/...) so the terminal
+and tests keep working unchanged, while every turn flows through
+HarnessRuntime with explicit HarnessState + workspace isolation.
 
-Agent load convention:
-    nak.agents.<Slug>.agent.Agent   (AgentCreator template: run/run_sync)
-    nak.agents.Example.base.SimpleAgent (legacy Example only)
-
-If an agent does not resolve -> FileNotFoundError path, converted by
-handle() into a create-proposal (needs_confirm=True), never a fallback chat.
+Boundary tools live at the bottom of THIS file (not in __main__.py):
+- PIPELINE_TOOL_SPEC(S) + execute_tool_call(): the pipeline as a callable
+  tool — same shape as AGENT_TOOLS, so builders / delegate / the future
+  canvas can drop the whole pipeline in as one node.
+- build_parser() + main(): the terminal boundary — single-shot CLI, one
+  service call per invocation, no REPL. `__main__.py` is only the entry
+  shim (`python -m pipeline.chatagent`) that calls main().
 """
 from __future__ import annotations
 
-import asyncio
-import importlib
-import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from nak.agents.AgentCreator.agent import AgentCreator
-from nak.agents.DecisionAgent.agent import DecisionAgent
-from nak.agents.DecisionAgent.models import DecisionResult
-from nak.brain.client import Brain, BrainError
+from nak.agents.Genesis.agent import Genesis
+from nak.agents.Polaris.agent import Polaris
+from nak.brain.client import Brain  # noqa: F401
+from nak.harness import HarnessRuntime
 from nak.utils.agent_registry import AgentRegistry
 
-logger = logging.getLogger("pipeline.chatagent")
+from nak.agents.Polaris.planning import make_plan, needs_planning, planning_mode
 
 
 class ChatAgentPipeline:
-    """Production pipeline: decide -> route -> run-or-ask."""
+    """Production pipeline: [plan] -> decide -> route -> run-or-ask.
+
+    The optional pre-execution plan step lives HERE (terminal layer only):
+    when enabled, a Kepler draft is seeded into the turn state's plan,
+    which HarnessRuntime then feeds to the worker as context. The runtime
+    itself is untouched.
+    """
 
     def __init__(
         self,
         brain: Optional[Brain] = None,
         registry: Optional[AgentRegistry] = None,
-        decision_agent: Optional[DecisionAgent] = None,
-        creator: Optional[AgentCreator] = None,
+        decision_agent: Optional[Polaris] = None,
+        creator: Optional[Genesis] = None,
         session_id: Optional[str] = None,
         auto_session: bool = True,
+        planning: Optional[str] = None,
+        instant_route: bool = False,
     ) -> None:
-        self.brain = brain or Brain()
-        self.registry = registry or AgentRegistry()
-        self.decision = decision_agent or DecisionAgent(
-            brain=self.brain, registry=self.registry
+        self.runtime = HarnessRuntime(
+            brain=brain,
+            registry=registry,
+            decision_agent=decision_agent,
+            creator=creator,
+            auto_session=False,  # session wiring below preserves legacy behaviour
+            instant_route=instant_route,  # user-consent token-saving mode -> Polaris
         )
-        self.creator = creator or AgentCreator(
-            brain=self.brain, registry=self.registry
-        )
-        self.session_id = session_id
-        if auto_session and self.session_id is None:
-            try:
-                sess = self.brain.create_session(
-                    metadata={"pipeline": "chatagent"}
-                )
-                if isinstance(sess, dict):
-                    self.session_id = (
-                        sess.get("session_id")
-                        or sess.get("id")
-                        or sess.get("sessionId")
-                    )
-            except Exception as exc:  # noqa: BLE001
-                logger.debug("auto session create failed: %s", exc)
-                self.session_id = None
-        self._history: List[Dict[str, str]] = []
+        # legacy: explicit session_id wins; else auto-create like before
+        if session_id is not None:
+            self.runtime.session_id = session_id
+        elif auto_session:
+            self.runtime.session_id = self.runtime._open_session()
+        # planning gate (terminal-layer only; see planning.py)
+        self.planning = planning_mode(planning)
+        # last pre-execution plan (for terminal display/tests; [] = none)
+        self.last_plan: List[str] = []
+        # back-compat attribute mirrors (terminal reads these directly)
+        self._history: List[Dict[str, str]] = self.runtime._history
 
-    # -- strict agent resolution -----------------------------------------
+    # -- attribute mirrors -------------------------------------------------
+
+    @property
+    def brain(self):  # type: ignore
+        return self.runtime.brain
+
+    @property
+    def registry(self):  # type: ignore
+        return self.runtime.registry
+
+    @property
+    def decision(self):  # type: ignore
+        return self.runtime.decision
+
+    @property
+    def creator(self):  # type: ignore
+        return self.runtime.creator
+
+    @property
+    def session_id(self) -> Optional[str]:
+        return self.runtime.session_id
+
+    @session_id.setter
+    def session_id(self, value: Optional[str]) -> None:
+        self.runtime.session_id = value
+
+    # -- delegated API (contract unchanged) --------------------------------
 
     def is_agent_resolvable(self, agent_name: str) -> bool:
-        """True if the agent can actually be loaded (disk + importable)."""
-        if not agent_name:
-            return False
-        # 1. Generated convention: nak/agents/<Slug>/agent.py -> Agent
-        try:
-            mod = importlib.import_module(f"nak.agents.{agent_name}.agent")
-            if getattr(mod, "Agent", None) is not None:
-                return True
-        except ModuleNotFoundError:
-            pass
-        except Exception:  # noqa: BLE001
-            return False
-        # 2. Legacy Example: nak/agents/Example/base.py -> SimpleAgent
-        if agent_name.lower() == "example":
-            try:
-                mod = importlib.import_module("nak.agents.Example.base")
-                return getattr(mod, "SimpleAgent", None) is not None
-            except Exception:  # noqa: BLE001
-                return False
-        return False
+        return self.runtime.is_agent_resolvable(agent_name)
 
     async def run_agent_text(
         self, agent_name: str, text: str, **kwargs: Any
     ) -> Dict[str, Any]:
-        """Run a resolved agent. STRICT: raises if not resolvable.
+        return await self.runtime.run_agent_text(agent_name, text, **kwargs)
 
-        Raises:
-            FileNotFoundError: agent not on disk / not importable.
-            BrainError: Mind unreachable during agent run.
-        """
-        if not self.is_agent_resolvable(agent_name):
-            raise FileNotFoundError(
-                f"agent {agent_name!r} is not installed "
-                f"(missing nak/agents/{agent_name}/agent.py)"
-            )
-        # Generated agents
-        try:
-            mod = importlib.import_module(f"nak.agents.{agent_name}.agent")
-        except ModuleNotFoundError:
-            mod = None  # type: ignore
-        if mod is not None and getattr(mod, "Agent", None) is not None:
-            cls = getattr(mod, "Agent")
-            inst = cls(brain=self.brain)
-            if hasattr(inst, "run") and asyncio.iscoroutinefunction(
-                getattr(inst, "run")
-            ):
-                data = await inst.run(text, session_id=self.session_id, **kwargs)
-            elif hasattr(inst, "run_sync"):
-                data = await asyncio.to_thread(
-                    inst.run_sync, text, session_id=self.session_id, **kwargs
-                )
-            elif hasattr(inst, "run"):
-                data = await asyncio.to_thread(
-                    inst.run, text, session_id=self.session_id, **kwargs
-                )
-            else:
-                raise AttributeError(f"Agent {agent_name} has no run/run_sync")
-            answer = str(
-                data.get("answer") or data.get("content") or data.get("text") or ""
-            )
-            steps = data.get("steps") if isinstance(data, dict) else None
-            return {"answer": answer, "run_on": agent_name, "raw": data,
-                    "steps": list(steps) if isinstance(steps, list) else []}
-
-        # Legacy Example
-        from nak.agents.Example.base import SimpleAgent  # type: ignore
-
-        agent = SimpleAgent(brain=self.brain)
-        data = await asyncio.to_thread(agent.run, text, session_id=self.session_id)
-        return {
-            "answer": str(data.get("answer") or ""),
-            "run_on": "Example",
-            "raw": data,
-            "steps": [],
-        }
-
-    # -- main turn: decide -> route --------------------------------------
-
-    async def handle(
-        self,
-        text: str,
-        *,
-        auto_create: bool = False,
-    ) -> Dict[str, Any]:
-        """One pipeline turn. ALWAYS decides first.
-
-        Returns:
-            {
-              "decision": DecisionResult.to_dict(),
-              "answer": str,            # agent answer OR question OR proposal
-              "run_on": str,            # <-- show this: "Running on: X"
-              "routed_via": str,        # compat alias of run_on
-              "needs_confirm": bool,    # True -> terminal must ask to create
-              "created_path": str|None,
-              "session_id": str|None,
-            }
-        """
-        if not text or not text.strip():
-            raise ValueError("text must be non-empty")
-        text = text.strip()
-
-        # 1. DECIDE (stateless so the decision prompt never pollutes chat history)
-        try:
-            decision: DecisionResult = await self.decision.decide(
-                text, session_id=None
-            )
-        except BrainError as exc:
-            # Mind down -> honest fallback question, NO silent execution
-            fb = DecisionResult(
-                action="ASK_USER",
-                agent_name=None,
-                reason=f"NebulonMind unavailable ({exc}, status={exc.status}). "
-                "Please retry or clarify your request.",
-                confidence=0.0,
-                parameters={},
-            )
-            return {
-                "decision": fb.to_dict(),
-                "answer": fb.reason,
-                "run_on": "DecisionAgent (fallback)",
-                "routed_via": "DecisionAgent (fallback)",
-                "needs_confirm": False,
-                "created_path": None,
-                "session_id": self.session_id,
-            }
-
-        self._history.append({"role": "user", "content": text})
-
-        # 2a. ASK_USER -> ask, do NOT execute any task agent
-        if decision.is_ask:
-            question = decision.reason or "Could you clarify your request?"
-            self._history.append({"role": "assistant", "content": question})
-            return {
-                "decision": decision.to_dict(),
-                "answer": question,
-                "run_on": "DecisionAgent",
-                "routed_via": "DecisionAgent",
-                "needs_confirm": False,
-                "created_path": None,
-                "session_id": self.session_id,
-            }
-
-        # 2b. CREATE_AGENT -> propose the model's name as-is
-        # (generic naming is enforced by the decision/agent_naming prompts),
-        # NEVER auto-run. Terminal asks y/N.
-        if decision.is_create:
-            if auto_create:
-                async def _yes(_spec: DecisionResult) -> bool:
-                    return True
-
-                try:
-                    created = await self.creator.create(decision, _yes)
-                except (FileExistsError, ValueError) as exc:
-                    return {
-                        "decision": decision.to_dict(),
-                        "answer": f"Agent {decision.agent_name} already exists: {exc}. "
-                        "Please retry your request so it routes via USE_AGENT.",
-                        "run_on": "DecisionAgent",
-                        "routed_via": "DecisionAgent",
-                        "needs_confirm": False,
-                        "created_path": None,
-                        "session_id": self.session_id,
-                    }
-                created_str = str(created) if created else None
-                return {
-                    "decision": decision.to_dict(),
-                    "answer": f"Created agent {decision.agent_name} at {created_str}. "
-                    "Please retry your request so it routes via USE_AGENT.",
-                    "run_on": f"AgentCreator:{decision.agent_name}",
-                    "routed_via": f"AgentCreator:{decision.agent_name}",
-                    "needs_confirm": False,
-                    "created_path": created_str,
-                    "session_id": self.session_id,
-                }
-            proposal = (
-                f"No suitable agent found for: {text[:200]}\n"
-                f"Proposed: create '{decision.agent_name}' — {decision.reason}"
-            )
-            return {
-                "decision": decision.to_dict(),
-                "answer": proposal,
-                "run_on": "DecisionAgent",
-                "routed_via": "DecisionAgent",
-                "needs_confirm": True,
-                "created_path": None,
-                "session_id": self.session_id,
-            }
-
-        # 2c. USE_AGENT -> run ONLY if resolvable, else ask to create
-        agent_name = decision.agent_name or ""
-        if not agent_name:
-            return {
-                "decision": decision.to_dict(),
-                "answer": "Decision returned USE_AGENT without an agent_name. "
-                "Please clarify which agent should handle this.",
-                "run_on": "DecisionAgent",
-                "routed_via": "DecisionAgent",
-                "needs_confirm": False,
-                "created_path": None,
-                "session_id": self.session_id,
-            }
-        if not self.is_agent_resolvable(agent_name):
-            proposal = (
-                f"Decision selected '{agent_name}' but it is not installed "
-                f"(missing nak/agents/{agent_name}/).\n"
-                f"Reason: {decision.reason}"
-            )
-            alt = dict(decision.to_dict())
-            # re-target the confirm flow at the missing agent
-            alt["action"] = "CREATE_AGENT"
-            alt["agent_name"] = agent_name
-            return {
-                "decision": alt,
-                "answer": proposal,
-                "run_on": "DecisionAgent",
-                "routed_via": "DecisionAgent",
-                "needs_confirm": True,
-                "created_path": None,
-                "session_id": self.session_id,
-            }
-        try:
-            exec_res = await self.run_agent_text(agent_name, text)
-        except BrainError as exc:
-            return {
-                "decision": decision.to_dict(),
-                "answer": f"Agent {agent_name} failed: Mind unavailable ({exc}).",
-                "run_on": agent_name,
-                "routed_via": agent_name,
-                "needs_confirm": False,
-                "created_path": None,
-                "session_id": self.session_id,
-                "steps": [],
-            }
-        self._history.append(
-            {"role": "assistant", "content": exec_res["answer"]}
-        )
-        return {
-            "decision": decision.to_dict(),
-            "answer": exec_res["answer"],
-            "run_on": exec_res["run_on"],
-            "routed_via": exec_res["run_on"],
-            "needs_confirm": False,
-            "created_path": None,
-            "session_id": self.session_id,
-            "steps": exec_res.get("steps", []),
-        }
-
-    # -- confirm-gated creation for the terminal loop --------------------
+    async def handle(self, text: str, *, auto_create: bool = False,
+                     instant_route: Optional[bool] = None) -> Dict[str, Any]:
+        # Terminal-layer planning gate: pre-create the turn state so the plan
+        # step shares the turn's workate.plan, then delegate.
+        # Mode "never" (or a simple request) takes the legacy single call.
+        # instant_route=None follows the pipeline/Polaris mode; True/False
+        # overrides it for this turn (user consent passed from the terminal).
+        self.last_plan = []
+        if text and text.strip() and needs_planning(text, self.planning):
+            st = self.runtime.create_state(text)
+            steps = await make_plan(self.runtime, text, st)
+            if steps:
+                st.plan = list(steps)
+                self.last_plan = list(steps)
+            return await self.runtime.handle(text, auto_create=auto_create, state=st,
+                                             instant_route=instant_route)
+        return await self.runtime.handle(text, auto_create=auto_create, instant_route=instant_route)
 
     async def create_confirmed(self, decision_dict: Dict[str, Any]) -> Optional[Path]:
-        """Create the proposed agent after terminal y/N (confirm-gated)."""
-        spec = DecisionResult.from_dict(decision_dict)
-        if spec.action != "CREATE_AGENT":
-            # USE_AGENT-missing path re-targets here; normalize
-            spec = DecisionResult(
-                action="CREATE_AGENT",
-                agent_name=spec.agent_name,
-                reason=spec.reason,
-                confidence=spec.confidence,
-                parameters=spec.parameters,
-            )
-
-        async def _yes(_s: DecisionResult) -> bool:
-            return True  # terminal already asked; gate still enforced via callback
-
-        return await self.creator.create(spec, _yes)
-
-    # -- helpers ----------------------------------------------------------
+        return await self.runtime.create_confirmed(decision_dict)
 
     def list_agents_str(self) -> str:
-        try:
-            return self.registry.available_agents_str()
-        except Exception as exc:  # noqa: BLE001
-            return f"(registry error: {exc})"
+        return self.runtime.list_agents_str()
 
     def reset_session(self) -> Optional[str]:
-        try:
-            sess = self.brain.create_session(metadata={"pipeline": "chatagent"})
-            if isinstance(sess, dict):
-                self.session_id = (
-                    sess.get("session_id") or sess.get("id") or sess.get("sessionId")
-                )
-        except Exception as exc:  # noqa: BLE001
-            logger.debug("reset session failed: %s", exc)
-            self.session_id = None
-        self._history.clear()
-        return self.session_id
+        return self.runtime.reset_session()
+
+
+# -- API boundary: the pipeline as callable tool(s) --------------------------
+# Same {type:function} shape as nak.plugins.tool.agent_tools.AGENT_TOOLS so
+# the drag-drop canvas and delegate() can treat the whole pipeline as one
+# node ("ask the harness"). Stable names: "pipeline_ask", etc.
+
+PIPELINE_TOOL_SPEC = {
+    "type": "function",
+    "function": {
+        "name": "pipeline_ask",
+        "description": "One full NebulonAK turn: decide -> route -> run -> verify. "
+                       "Returns {decision, answer, run_on, needs_confirm, workspace}.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "User message"},
+                "auto_create": {"type": "boolean", "description": "Auto-create proposed agent"},
+                "instant_route": {"type": "boolean",
+                              "description": "User-consented token-saving mode: explicit "
+                                             "agent-name mention routes with 0 LLM calls"},
+            },
+            "required": ["text"],
+            "additionalProperties": False,
+        },
+    },
+}
+
+PIPELINE_TOOL_SPECS = [PIPELINE_TOOL_SPEC]
+
+
+def execute_tool_call(pipe: "ChatAgentPipeline", name: str, arguments: Any) -> str:
+    """Chatagent machine boundary: whole pipeline as one tool call.
+
+    Thin delegate — the generic runner lives in
+    nak.plugins.tool.terminal_tool so other pipelines reuse it.
+    Loop-safe JSON errors (never raises)."""
+    import asyncio as _asyncio
+
+    from nak.plugins.tool import terminal_tool as _terminal
+
+    def _run_turn(text: str, *, auto_create: bool = False,
+                  instant_route=None) -> Dict[str, Any]:
+        return _asyncio.run(pipe.handle(text, auto_create=auto_create,
+                                        instant_route=instant_route))
+
+    return _terminal.execute_tool_call(_run_turn, name, arguments)
+
+
+# -- terminal boundary: single-shot CLI (no REPL) ------------------------------
+# The terminal owns interactivity (bash read-loop, canvas button); this only
+# maps argv -> one NakService call -> stdout. No input(), no while-True here.
+# Grammar comes from the shared nak.plugins.tool.terminal_tool so every
+# pipeline reuses the same file; this pipeline includes all four groups.
+
+def build_parser():  # type: ignore
+    """Chatagent grammar = shared terminal grammar, all groups included."""
+    from nak.plugins.tool import terminal_tool
+
+    return terminal_tool.build_parser(prog="pipeline.chatagent")
+
+
+def main(argv=None) -> int:
+    """Chatagent terminal entry. Thin delegate — the generic argv -> service
+    -> stdout runner lives in nak.plugins.tool.terminal_tool.main so other
+    pipelines reuse it. Returns the process exit code."""
+    from nak.plugins.tool import terminal_tool as _terminal
+    from nak.service import create_service as _create_service
+
+    return _terminal.main(argv, prog="pipeline.chatagent",
+                          include=_terminal.ALL_GROUPS,
+                          create_service=_create_service)
+
+
+__all__ = ["ChatAgentPipeline", "PIPELINE_TOOL_SPEC", "PIPELINE_TOOL_SPECS",
+           "execute_tool_call", "build_parser", "main"]

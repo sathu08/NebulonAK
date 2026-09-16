@@ -35,15 +35,14 @@ NebulonAK/
       mcp/               # MCP integration (planned, placeholder only)
     tools/               # backward-compat shims -> nak.plugins.tool (do not extend)
     prompts/             # ALL prompt text lives here (no prompts in code)
-      decision.md        # DecisionAgent routing prompt
+      polaris.md        # Polaris routing prompt
       capabilities.md    # capability-set proposal prompt
       agent_naming.md    # reusable-name proposal prompt
     agents/
-      DecisionAgent/     # router: USE_AGENT / CREATE_AGENT / ASK_USER (via Mind)
-      AgentCreator/      # confirm-gated scaffolding for new agents
-      PlanningAgent/     # reusable: plans/roadmaps/designs for any task
+      Polaris/     # router: USE_AGENT / CREATE_AGENT / ASK_USER (via Mind)
+      Genesis/      # confirm-gated scaffolding for new agents
+      Kepler/     # reusable: plans/roadmaps/designs for any task
       ResearchAgent/     # reusable: research any topic
-      Example/           # minimal Brain.chat harness (legacy)
       registry.json      # source of truth: which agents exist
     test/
       test_brain_connection.py  # connectivity probe
@@ -148,23 +147,35 @@ It prints a step-by-step report and exits 0 on `ok: true`.
 
 ---
 
-## 3. DecisionAgent -- the router
+## 3. Polaris -- the router
 
-Every pipeline turn goes through `DecisionAgent.decide()` **first** (stateless, so the
+Every pipeline turn goes through `Polaris.decide()` **first** (stateless, so the
 decision prompt never pollutes chat history). It returns a `DecisionResult`:
 
 | action | meaning |
 |---|---|
 | `USE_AGENT` | an installed agent can handle it (`agent_name` set) |
-| `CREATE_AGENT` | none can; proposes a reusable `agent_name` (never task-specific: `PlanningAgent`, not `FastAPIPlanningAgent`) |
+| `CREATE_AGENT` | none can; proposes a reusable `agent_name` (never task-specific: `Kepler`, not `FastAPIKepler`) |
 | `ASK_USER` | too vague, or Mind unreachable; `reason` is the clarifying question |
 
 - Invalid JSON / unreachable Mind never raises to the caller (unless `strict=True`):
   it degrades to `ASK_USER` with `confidence=0.0`.
 - Agent discovery is JSON-led: `nak/agents/registry.json` is the leader,
   mirrored to Mind memory for semantic fallback (`AgentRegistry`).
-- `AgentCreator.create()` is **confirm-gated**: it cannot write without
+- `Genesis.create()` is **confirm-gated**: it cannot write without
   `await confirm(spec) == True`. Existing names/folders raise `FileExistsError`.
+- Shipped specialists (in `registry.json`, routed by name — never recreated):
+  `Apollo` (implement/fix, verifies its own work), `Pulsar`
+  (runs suites, reports pass/fail), `Astra` (read-only audit, ranked
+  findings). Routing is **always the LLM's own decision**: every `decide()`
+  sees the FULL agent list with descriptions + capabilities, and judges with
+  complete knowledge — no code pre-filters, no routing bypasses. Overlap
+  disambiguation lives in the registry descriptions themselves (e.g.
+  Pulsar's states it never implements; Astra's states it never
+  modifies), never in `polaris.md` prose — that file holds generic
+  principles only and is frozen (a test fails if per-agent rules return).
+  `CREATE_AGENT` is reserved for genuinely new domains (e.g. `ExcelAgent`),
+  never for these three.
 
 ---
 
@@ -174,13 +185,14 @@ decision prompt never pollutes chat history). It returns a `DecisionResult`:
 python -m pipeline.chatagent
 python -m pipeline.chatagent --user alice
 python -m pipeline.chatagent --once "create a trip plan to japan"
+python -m pipeline.chatagent --planning always   # auto (default) | always | never
 ```
 
 Every reply prints what decided and what ran:
 
 ```
-[decision] action=USE_AGENT agent=PlanningAgent conf=0.95
-[Running on: PlanningAgent]
+[decision] action=USE_AGENT agent=Kepler conf=0.95
+[Running on: Kepler]
 [tools used: recall]
 assistant> ...
 ```
@@ -201,7 +213,20 @@ not from the absence of an exception — executors answer errors as JSON.
 | `/remember <text>` / `/search <query>` | direct Brain utilities |
 | `/session` / `/new-session` | show / rotate the Mind chat session |
 | `/decision on\|off` | toggle decision JSON per turn |
+| `/planning auto\|always\|never` | pre-execution planning mode for this session |
 | `/exit`, `/quit`, `/bye` | leave |
+
+### Pre-execution planning (`auto` by default)
+
+Before complex turns, the terminal runs a `Kepler` draft and seeds it
+into the turn's plan (visible in the `[plan:]` block, fed to the worker as
+context). Modes: `auto` (destructive/complex/multi-step/long requests only —
+no LLM call to decide this), `always`, `never`. Set per-run with
+`--planning` or env `NAK_CHAT_PLANNING`, switch live with `/planning`.
+Lives entirely in `pipeline/chatagent/` (`planning.py`) — `nak/harness` is
+untouched, and `never` keeps turns byte-identical to unplanned ones.
+Project memory (auto-remembering project facts to Mind) is **not** built —
+tracked as a separate future item.
 
 ### Guided `/create-agent` flow
 
@@ -227,7 +252,7 @@ names (`agent_naming.md`). All yes-decisions accept `y / yes / 1`.
 ```
 you> i want to do research on databricks
 [decision] CREATE_AGENT ResearchAgent conf=0.95
-[Running on: DecisionAgent]
+[Running on: Polaris]
 No suitable agent found ... Proposed: create 'ResearchAgent' — ...
 Can I create agent 'ResearchAgent'? [y/N or 1/2]: y     # NO -> guidance only, nothing created/executed
 created: nak/agents/ResearchAgent
@@ -262,7 +287,7 @@ result_json = execute_plugin(Brain(), "read_file", {"path": "notes/todo.md"})
 Safety: binaries (null bytes) refused, size/row caps with `truncated` flags,
 executors always return JSON strings (errors as `{"error": …}`, loop-safe).
 `nak/plugins/mcp/` is a placeholder package holding the MCP server/client plan.
-Old `nak.tools.*` imports keep working via thin shims (canonical path is `nak.plugins.*`).
+All tools live under `nak.plugins.*` (the old `nak.tools.*` shims were removed).
 
 ---
 
@@ -286,8 +311,7 @@ needed to change policy.
 
 ## 7. Agents -- Mind-only ReAct loop
 
-Generated agents (`AgentCreator` template; `PlanningAgent`/`ResearchAgent` aligned)
-run a tool loop **on NebulonMind** — no external keys, ever:
+Agents run a shared tool loop **on NebulonMind** — no external keys, ever:
 
 1. build context: `role_hint + custom_instructions` prefixed to the request
    (Mind accepts only `user/assistant/tool` roles — `system` is rejected, so
@@ -297,9 +321,20 @@ run a tool loop **on NebulonMind** — no external keys, ever:
 3. policy-gate each tool call, execute via `execute_plugin`, feed results back;
 4. stop at an answer or `max_turns`; return `{answer, turns, steps, agent}`.
 
+The loop lives **once**, in `nak/agents/_react.py` (`run_react_loop` /
+`parse_step_answer`), declared in `nak/agents/shared.json` under its proper
+name `_react`. `Apollo` / `Pulsar` / `Astra` and every
+`Genesis`-generated agent run it — never an embedded copy.
+(`Kepler`/`ResearchAgent` predate it and keep their own aligned copies.)
+
+The three specialists **ship with the repo** (`created_via: NAK` in
+`registry.json`) — they are the harness's standard library, not something to
+create live. `Genesis` exists for genuinely new domains (file formats,
+internal tools). See §3 for how the router tells them apart.
+
 `custom_instructions` (from `/create-agent`) are baked into `agent.py` at
 creation time (quote/brace/newline-escaped so generated code stays valid).
-Every completed `PlanningAgent` run also saves its output to `nak_plan.md`
+Every completed `Kepler` run also saves its output to `nak_plan.md`
 (repo root) for user reference — error markers are never saved, and a failed
 save never fails the run.
 
@@ -310,17 +345,19 @@ save never fails the run.
 **No prompt text in code.** All prompts live in `nak/prompts/*.md` and load via
 `from nak.prompts import render_prompt, load_prompt`:
 
-- `decision.md` — routing rules incl. generic-naming (`PlanningAgent`, not `FastAPIPlanningAgent`)
+- `polaris.md` — routing rules incl. generic-naming (`Kepler`, not `FastAPIKepler`)
 - `capabilities.md` — capability-set proposals (`{description}`)
 - `agent_naming.md` — reusable-name proposals (`{description}`)
 
 A missing prompt file fails loud (`FileNotFoundError`) instead of silently
-deciding from a stale inline copy. Template files must double every literal
-brace (`{{…}}`) because agent code renders through `str.format()` — **including
-inside comments** (format scans the whole template; a `{"…": …}` in a comment
-broke creation once). Prefer brace-free constructs (e.g. `find`/`rfind`
-slicing over regex) where possible. Verify with `string.Formatter().parse()`
-(only `name/reason/reason_lower` may appear).
+deciding from a stale inline copy. The `Genesis` agent template must
+double every literal brace (`{{…}}`) because it renders through `str.format()`
+— **including inside comments** (format scans the whole template; a `{"…": …}`
+in a comment broke creation once). The template itself stays tiny because the
+loop lives in `nak.agents._react` (resolved via `nak/agents/shared.json`, so a
+rename touches the manifest, not the template). Verify with
+`string.Formatter().parse()`
+(only `name`/`reason`/`reason_lower`/`react_module` may appear).
 
 ---
 
@@ -333,20 +370,20 @@ milliseconds. The pattern used for every feature in this repo:
   answers by prefix), recording `remember`/`search`; unexpected calls raise.
 - Stubbed `input()` (answer queues) to drive confirm/approve/choice prompts,
   including EOF paths.
-- Isolated disk (`tempfile` registry + agents root) for real `AgentCreator`
+- Isolated disk (`tempfile` registry + agents root) for real `Genesis`
   runs; generated files are imported and executed.
 - Scripted Mind replies (`{"tool":…}` → `{"answer":…}`) to drive the agent loop,
   including error-recovery and policy-`no` paths.
 
 ```bash
-python -m nak.test.test_decision_agent   # 15 tests: parse, decide, fallback, registry, creator gates
+python -m nak.test.test_decision_agent   # 18 tests: parse, decide, fallback, registry, creator gates + shared-loop manifest/template/generated-agent
 ```
 
 Covered offline: decide→route→run for all three actions, NO/YES/approve-denied
 creation flows, guided `/create-agent`, policy modes, tool loop incl. template
 brace-correctness, file tools (text/json/csv/binary/missing/sandbox-escape,
 create/overwrite/append). **Live Mind runs** then confirm routing end-to-end
-(`USE_AGENT PlanningAgent 0.95` for a Japan trip, `CREATE_AGENT ResearchAgent`
+(`USE_AGENT Kepler 0.95` for a Japan trip, `CREATE_AGENT ResearchAgent`
 → created → plan → approve → execute).
 
 ---
@@ -356,6 +393,9 @@ create/overwrite/append). **Live Mind runs** then confirm routing end-to-end
 - Running `NebulonDB` at `localhost:6969` (via `nebulondb start`)
 - Running `NebulonMind` at `localhost:9696` (via `nebulonmind start`)
 - Python 3.10+ (`pip install -e .`; full deps in the bundled `.venv`)
+- `pytest` installed in the same Python (`pip install pytest` — it ships as a
+  runtime dependency because the harness verifier and `run_test` execute it;
+  without it, test checks fail with an install hint instead of running)
 - No LLM keys needed: agents reason and loop purely on NebulonMind
 
 ---
@@ -377,4 +417,6 @@ curl http://localhost:9696/api/NebulonMind/llm/status
 | `(no answer after tool loop)` | Mind spent all `max_turns` calling tools without summarizing — raise `max_turns` |
 | `request validation failed … role` | a `system`-role message was sent; Mind accepts only `user/assistant/tool` (fixed in all shipped agents) |
 | stale agent proposed (folder missing) | `registry.json` drifted from disk — pipeline converts it into a create proposal |
-| `DecisionAgent parse failed …` in test output | expected: negative tests feeding garbage to prove `ASK_USER` fallback (suite still green) |
+| `Polaris parse failed …` in test output | expected: negative tests feeding garbage to prove `ASK_USER` fallback (suite still green) |
+| `429 Too Many Requests` from Mind / provider | rate-limited after burst use — wait a minute and retry; space out live test runs |
+| `Prompt exceeds max length` (code 1261) on later turns | stale server-side session growth — current runtime mints a fresh Mind session per turn, so update if you see this on old code |

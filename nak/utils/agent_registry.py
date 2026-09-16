@@ -3,13 +3,13 @@ nak.utils.agent_registry -- JSON leader + Memory index for agent discovery.
 
 Hybrid store (approved plan):
 - JSON (nak/agents/registry.json) is source of truth: git-tracked, cold-start safe,
-  fast scan via Path.glob, used to build DecisionAgent's available_agents prompt.
+  fast scan via Path.glob, used to build Polaris's available_agents prompt.
 - Memory (Brain.remember/search) is semantic replica + audit: on registry change,
-  AgentCreator mirrors to NebulonMind for semantic fallback and history.
+  Genesis mirrors to NebulonMind for semantic fallback and history.
 
-This module owns the JSON side; the Memory side is orchestrated by AgentCreator
-(calls Brain.remember). DecisionAgent optionally falls back to Brain.search when
-confidence is low (not implemented here — see DecisionAgent for that fallback).
+This module owns the JSON side; the Memory side is orchestrated by Genesis
+(calls Brain.remember). Polaris optionally falls back to Brain.search when
+confidence is low (not implemented here — see Polaris for that fallback).
 
 Usage:
     from nak.utils.agent_registry import AgentRegistry
@@ -87,7 +87,7 @@ class AgentMeta:
     description: str = ""
     path: str = ""  # relative to repo root e.g. nak/agents/ExcelAgent
     capabilities: List[str] = field(default_factory=list)
-    created_via: str = "manual"  # manual|agent_creator
+    created_via: str = "NAK"  # provenance tag (NAK-built agents)
     version: str = "0.1.0"
 
     @property
@@ -104,7 +104,7 @@ class AgentMeta:
             description=str(d.get("description", "") or ""),
             path=str(d.get("path", "") or ""),
             capabilities=list(d.get("capabilities") or []),
-            created_via=str(d.get("created_via", "manual") or "manual"),
+            created_via=str(d.get("created_via", "NAK") or "NAK"),
             version=str(d.get("version", "0.1.0") or "0.1.0"),
         )
 
@@ -207,11 +207,16 @@ class AgentRegistry:
         return True
 
     def available_agents_str(self) -> str:
-        """Comma-separated 'Name: description' for prompt injection."""
+        """One agent per line — 'Name: description (+ capabilities)'.
+
+        Rendered verbatim into the decision prompt's agent list, so the LLM
+        judges fit from full descriptions. One-per-line (not ;-separated)
+        keeps each agent's scope visually distinct for accurate routing.
+        """
         agents = self.list_agents()
         if not agents:
             return "(no agents registered yet)"
-        parts = []
+        lines = []
         for m in agents:
             desc = (m.description or "").strip()
             caps = ", ".join(m.capabilities) if m.capabilities else ""
@@ -220,8 +225,8 @@ class AgentRegistry:
                 suffix = f" — capabilities: {caps}"
             elif caps and desc:
                 suffix += f" (capabilities: {caps})"
-            parts.append(f"{m.name}{suffix}")
-        return "; ".join(parts)
+            lines.append(f"- {m.name}{suffix}")
+        return "\n".join(lines)
 
     def available_agents_names(self) -> List[str]:
         return [m.name for m in self.list_agents()]
@@ -261,7 +266,7 @@ class AgentRegistry:
                     description=desc,
                     path=f"nak/agents/{child.name}",
                     capabilities=[],
-                    created_via="disk_scan",
+                    created_via="NAK",
                 )
             )
         return out

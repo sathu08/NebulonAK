@@ -17,6 +17,8 @@ Sections:
     [policy] tool_use, create_agent, max_turns (approvals + loop cap;
              everything runs on NebulonMind only — no external provider)
     [paths] nak_home
+    [harness] workspace_dir, verify_commands, verify_timeout, max_retries,
+              max_delegation (env NAK_* wins over cfg; cfg wins over defaults)
 
 Secrets (auth_token) may also come from env; they are never written back to logs.
 """
@@ -62,6 +64,12 @@ class NAKConfig:
     policy_tool_use: str
     policy_create_agent: str
     policy_max_turns: int
+    harness_workspace_dir: str
+    harness_verify_commands: str
+    harness_verify_timeout: int
+    harness_max_retries: int
+    harness_max_delegation: int
+    harness_project_memory: bool
     cfg_path: Path
 
     @property
@@ -134,6 +142,14 @@ def load_config(cfg_path: str | Path | None = None) -> NAKConfig:
         "paths": {
             "nak_home": str(_repo_root()),
         },
+        "harness": {
+            "workspace_dir": "",
+            "verify_commands": "",
+            "verify_timeout": "60",
+            "max_retries": "2",
+            "max_delegation": "2",
+            "project_memory": "true",
+        },
     })
 
     if cfg_path.exists():
@@ -201,6 +217,32 @@ def load_config(cfg_path: str | Path | None = None) -> NAKConfig:
     except ValueError:
         policy_max_turns = 6
 
+    def _harness_str(key: str, env: str, default: str = "") -> str:
+        return (os.environ.get(env) or _get("harness", key, default)).strip()
+
+    def _harness_int(key: str, env: str, default: int, lo: int, hi: int) -> int:
+        try:
+            val = int(os.environ.get(env) or _get("harness", key, str(default)))
+        except ValueError:
+            val = default
+        return max(lo, min(val, hi))
+
+    def _harness_bool(key: str, env: str, default: bool = True) -> bool:
+        raw_env = os.environ.get(env)
+        if raw_env is not None:
+            v = raw_env.strip().lower()
+            if v in ("1", "true", "yes", "on", "enabled"):
+                return True
+            if v in ("0", "false", "no", "off", "disabled"):
+                return False
+            return default
+        v = _get("harness", key, str(default)).strip().lower()
+        if v in ("1", "true", "yes", "on", "enabled"):
+            return True
+        if v in ("0", "false", "no", "off", "disabled"):
+            return False
+        return default
+
     return NAKConfig(
         base_url=base_url,
         user=user.strip() or "nmd_user_01",
@@ -218,8 +260,68 @@ def load_config(cfg_path: str | Path | None = None) -> NAKConfig:
         policy_tool_use=_get_mode("policy", "tool_use"),
         policy_create_agent=_get_mode("policy", "create_agent"),
         policy_max_turns=max(1, policy_max_turns),
+        harness_workspace_dir=_harness_str("workspace_dir", "NAK_WORKSPACE"),
+        harness_verify_commands=_harness_str("verify_commands", "NAK_VERIFY_COMMANDS"),
+        harness_verify_timeout=_harness_int("verify_timeout", "NAK_VERIFY_TIMEOUT", 60, 1, 300),
+        harness_max_retries=_harness_int("max_retries", "NAK_MAX_RETRIES", 2, 0, 5),
+        harness_max_delegation=_harness_int("max_delegation", "NAK_MAX_DELEGATION", 2, 1, 5),
+        harness_project_memory=_harness_bool("project_memory", "NAK_PROJECT_MEMORY", True),
         cfg_path=cfg_path,
     )
 
 
-__all__ = ["NAKConfig", "load_config", "_default_cfg_path"]
+__all__ = ["NAKConfig", "load_config", "_default_cfg_path",
+           "get_workspace_dir", "get_verify_commands", "get_verify_timeout",
+           "get_max_retries", "get_max_delegation", "get_project_memory"]
+
+
+# -- harness settings accessors (env > cfg > defaults, never raise) -----------
+# Consumers (workspace/verifier/recovery/agent_tools) read through these so a
+# user edit to nebulonak.cfg [harness] takes effect with no restarts.
+
+def _harness_cfg() -> "NAKConfig | None":
+    try:
+        return load_config()
+    except Exception:
+        return None
+
+
+def get_workspace_dir() -> str:
+    """Workspace base dir override ("" = repo/workspace default)."""
+    cfg = _harness_cfg()
+    return cfg.harness_workspace_dir if cfg else ""
+
+
+def get_verify_commands() -> str:
+    """Verifier command override: JSON list or ';'-separated ("" = defaults)."""
+    cfg = _harness_cfg()
+    return cfg.harness_verify_commands if cfg else ""
+
+
+def get_verify_timeout() -> int:
+    """Per-check verifier seconds (default 60, clamped 1..300)."""
+    cfg = _harness_cfg()
+    return cfg.harness_verify_timeout if cfg else 60
+
+
+def get_max_retries() -> int:
+    """Auto-recovery budget (default 2, clamped 0..5)."""
+    cfg = _harness_cfg()
+    return cfg.harness_max_retries if cfg else 2
+
+
+def get_max_delegation() -> int:
+    """Delegate nesting cap (default 2, clamped 1..5)."""
+    cfg = _harness_cfg()
+    return cfg.harness_max_delegation if cfg else 2
+
+
+def get_project_memory() -> bool:
+    """R15 kill-switch: persistent project memory on/off (default True)."""
+    cfg = _harness_cfg()
+    if cfg is None:
+        return True
+    try:
+        return bool(cfg.harness_project_memory)
+    except Exception:  # noqa: BLE001
+        return True

@@ -1,11 +1,11 @@
 """
-nak.plugins.tool.file_tool -- generic file read/write tools for agents.
+nak.plugins.tool.file_tool -- generic file + filesystem tools for agents.
 
-Created agents currently use NO tools (plain Brain.chat proxy). This module
-gives them (and any LLM loop) two generic tools with OpenAI-compatible
-schemas, following the memory_tools.py convention:
+Merged module (absorbs legacy fs_tools.py):
+    read_file / write_file  single-file content (all types)
+    edit_file / list_files / search_files  filesystem ops (same sandbox)
 
-    from nak.plugins.tool import FILE_TOOLS, execute_file_tool
+    from nak.plugins.tool import FILE_TOOLS, FS_TOOLS, execute_file_tool, execute_fs_tool
 
     result_json = execute_file_tool("read_file", {"path": "notes/todo.md"})
     result_json = execute_file_tool("write_file", {"path": "out.md", "content": "..."})
@@ -22,19 +22,22 @@ read_file handles, by extension:
 Safety (production):
     - binary sniff (null bytes) -> refused with a message, never dumped
     - size caps (max_bytes / max_rows) with truncated flag + total size
-    - write_file is sandboxed under `root` (default: repo root); `..`
+    - all paths sandboxed under `root` (default: repo root); `..`
       escapes outside root are rejected; modes create/overwrite/append
 """
 from __future__ import annotations
 
 import csv
+import fnmatch
 import io
 import json
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 _DEFAULT_MAX_BYTES = 200_000
 _DEFAULT_MAX_ROWS = 200
+_DEFAULT_MAX_RESULTS = 50
 
 _TEXT_EXTS = {
     ".txt", ".md", ".markdown", ".py", ".js", ".ts", ".tsx", ".jsx",
@@ -54,7 +57,20 @@ def _repo_root() -> Path:
 
 
 def _resolve(path: str, root: Optional[str | Path] = None) -> Path:
-    """Resolve `path` (absolute or root-relative) and sandbox it under root."""
+    """Resolve `path` (absolute or root-relative) and sandbox it under root.
+
+    root=None falls back to the ambient harness workspace (when an agent runs
+    under AgentExecutor) and finally to the repo root (legacy behaviour).
+    """
+    if root is None:
+        try:
+            from .workspace import current_workspace_root
+
+            ambient = current_workspace_root()
+            if ambient is not None:
+                root = ambient
+        except Exception:
+            pass
     base = Path(root).expanduser().resolve() if root else _repo_root()
     p = Path(path).expanduser()
     target = p.resolve() if p.is_absolute() else (base / p).resolve()
@@ -237,12 +253,17 @@ def execute_file_tool(name: str, arguments: str | Dict[str, Any]) -> str:
         args = dict(arguments or {})
     try:
         if name == "read_file":
-            res = read_file(args.get("path", ""),
+            # Alias tolerance (like edit_file): LLMs often guess `file`/
+            # `filename`/`filepath`. Canonical `path` wins when present.
+            res = read_file(args.get("path") or args.get("file")
+                            or args.get("filename") or args.get("filepath") or "",
                             max_bytes=int(args.get("max_bytes") or _DEFAULT_MAX_BYTES),
                             max_rows=int(args.get("max_rows") or _DEFAULT_MAX_ROWS))
             return json.dumps(res, ensure_ascii=False, default=str)[:20000]
         if name == "write_file":
-            res = write_file(args.get("path", ""), args.get("content", ""),
+            res = write_file(args.get("path") or args.get("file")
+                             or args.get("filename") or args.get("filepath") or "",
+                             args.get("content", ""),
                              mode=str(args.get("mode") or "create"))
             return json.dumps(res, ensure_ascii=False, default=str)
         return json.dumps({"error": f"unknown file tool {name!r}"})
@@ -250,9 +271,262 @@ def execute_file_tool(name: str, arguments: str | Dict[str, Any]) -> str:
         return json.dumps({"error": str(exc)[:500]})
 
 
-__all__ = ["FILE_TOOLS", "read_file", "write_file", "execute_file_tool"]
+# -- filesystem ops (merged from legacy fs_tools.py) ---------------------------
+
+
+def edit_file(
+    path: str,
+    old_text: str,
+    new_text: str,
+    *,
+    root: Optional[str | Path] = None,
+    replace_all: bool = False,
+) -> Dict[str, Any]:
+    """Replace old_text with new_text inside a text file."""
+    if not old_text:
+        raise ValueError("old_text must be non-empty")
+    target = _resolve(path, root)
+    if not target.exists():
+        raise FileNotFoundError(f"no such file: {path!r}")
+    if target.is_dir():
+        raise ValueError(f"path is a directory: {path!r}")
+    original = target.read_text(encoding="utf-8", errors="replace")
+    if old_text not in original:
+        raise ValueError(f"old_text not found in {path!r}")
+    updated = (
+        original.replace(old_text, new_text)
+        if replace_all
+        else original.replace(old_text, new_text, 1)
+    )
+    target.write_text(updated, encoding="utf-8")
+    return {
+        "path": str(target),
+        "replacements": original.count(old_text) if replace_all else 1,
+        "size_bytes": target.stat().st_size,
+    }
+
+
+def list_files(
+    directory: str = ".",
+    *,
+    root: Optional[str | Path] = None,
+    pattern: str = "*",
+    max_results: int = _DEFAULT_MAX_RESULTS,
+) -> Dict[str, Any]:
+    """List files under `directory` (root-relative), optional glob pattern."""
+    base = _resolve(directory or ".", root)
+    if not base.exists():
+        raise FileNotFoundError(f"no such directory: {directory!r}")
+    if not base.is_dir():
+        raise ValueError(f"not a directory: {directory!r}")
+    entries: List[str] = []
+    truncated = False
+    for p in sorted(base.rglob("*")):
+        rel = p.relative_to(base).as_posix()
+        if not fnmatch.fnmatch(rel, pattern) and not fnmatch.fnmatch(
+            p.name, pattern
+        ):
+            continue
+        entries.append(rel + ("/" if p.is_dir() else ""))
+        if len(entries) >= max_results:
+            truncated = True
+            break
+    return {
+        "directory": str(base),
+        "pattern": pattern,
+        "entries": entries,
+        "count": len(entries),
+        "truncated": truncated,
+    }
+
+
+def search_files(
+    pattern: str,
+    *,
+    root: Optional[str | Path] = None,
+    directory: str = ".",
+    file_pattern: str = "*",
+    max_results: int = _DEFAULT_MAX_RESULTS,
+) -> Dict[str, Any]:
+    """Regex search across text files. Returns [{file, line, text}]."""
+    if not pattern:
+        raise ValueError("pattern must be non-empty")
+    try:
+        rx = re.compile(pattern)
+    except re.error as exc:
+        raise ValueError(f"invalid regex {pattern!r}: {exc}")
+    base = _resolve(directory or ".", root)
+    if not base.exists():
+        raise FileNotFoundError(f"no such directory: {directory!r}")
+    matches: List[Dict[str, Any]] = []
+    files_scanned = 0
+    for p in sorted(base.rglob("*")):
+        if not p.is_file():
+            continue
+        if not fnmatch.fnmatch(p.name, file_pattern):
+            continue
+        files_scanned += 1
+        try:
+            if p.stat().st_size > _DEFAULT_MAX_BYTES:
+                continue
+            with p.open("rb") as f:
+                head = f.read(4096)
+            if b"\x00" in head:
+                continue  # skip binaries
+            text = p.read_text(encoding="utf-8", errors="replace")
+        except (OSError, ValueError):
+            continue
+        for i, line in enumerate(text.splitlines(), 1):
+            if rx.search(line):
+                matches.append(
+                    {
+                        "file": p.relative_to(base).as_posix(),
+                        "line": i,
+                        "text": line[:300],
+                    }
+                )
+                if len(matches) >= max_results:
+                    return {
+                        "pattern": pattern,
+                        "matches": matches,
+                        "files_scanned": files_scanned,
+                        "truncated": True,
+                    }
+    return {
+        "pattern": pattern,
+        "matches": matches,
+        "files_scanned": files_scanned,
+        "truncated": False,
+    }
+
+
+FS_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "edit_file",
+            "description": "Replace text inside a file. Use to patch code/config without rewriting the whole file.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Root-relative or absolute file path"},
+                    "old_text": {"type": "string", "description": "Exact existing text to replace"},
+                    "new_text": {"type": "string", "description": "Replacement text"},
+                    "replace_all": {"type": "boolean", "description": "Replace every occurrence (default false = first only)"},
+                },
+                "required": ["path", "old_text", "new_text"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_files",
+            "description": "List files in a directory. Use to explore project layout before reading/editing.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "directory": {"type": "string", "description": "Directory to list (default '.')"},
+                    "pattern": {"type": "string", "description": "Glob pattern (default '*')"},
+                    "max_results": {"type": "integer", "minimum": 1, "maximum": 500},
+                },
+                "required": [],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_files",
+            "description": "Regex-search file contents. Use to find code, symbols, or TODOs across a project.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "pattern": {"type": "string", "description": "Regex pattern to search for"},
+                    "directory": {"type": "string", "description": "Directory to search (default '.')"},
+                    "file_pattern": {"type": "string", "description": "Glob for filenames (default '*')"},
+                    "max_results": {"type": "integer", "minimum": 1, "maximum": 200},
+                },
+                "required": ["pattern"],
+                "additionalProperties": False,
+            },
+        },
+    },
+]
+
+
+def execute_fs_tool(
+    name: str,
+    arguments: str | Dict[str, Any],
+    *,
+    root: Optional[str | Path] = None,
+) -> str:
+    """Route an fs tool call. Returns JSON string (errors as {"error": ...})."""
+    if isinstance(arguments, str):
+        try:
+            args = json.loads(arguments) if arguments.strip() else {}
+        except json.JSONDecodeError:
+            return json.dumps({"error": f"invalid JSON arguments: {arguments[:200]}"})
+    else:
+        args = dict(arguments or {})
+    # harness may inject workspace root via `_root` without polluting the schema
+    effective_root = args.pop("_root", root)
+    try:
+        if name == "edit_file":
+            # Alias tolerance: LLMs often guess `old`/`new`/`file`. Canonical
+            # keys win when both are present; schema still documents canonical.
+            path = args.get("path") or args.get("file") or args.get("filename") or ""
+            old = args.get("old_text")
+            if old is None:
+                old = args.get("old", "")
+            new = args.get("new_text")
+            if new is None:
+                new = args.get("new", "")
+            res = edit_file(
+                path,
+                old,
+                new,
+                root=effective_root,
+                replace_all=bool(args.get("replace_all", False)),
+            )
+            return json.dumps(res, ensure_ascii=False, default=str)
+        if name == "list_files":
+            res = list_files(
+                args.get("directory", "."),
+                root=effective_root,
+                pattern=str(args.get("pattern") or "*"),
+                max_results=int(args.get("max_results") or _DEFAULT_MAX_RESULTS),
+            )
+            return json.dumps(res, ensure_ascii=False, default=str)
+        if name == "search_files":
+            res = search_files(
+                args.get("pattern", ""),
+                root=effective_root,
+                directory=str(args.get("directory") or "."),
+                file_pattern=str(args.get("file_pattern") or "*"),
+                max_results=int(args.get("max_results") or _DEFAULT_MAX_RESULTS),
+            )
+            return json.dumps(res, ensure_ascii=False, default=str)[:20000]
+        return json.dumps({"error": f"unknown fs tool {name!r}"})
+    except Exception as exc:  # keep LLM loop alive
+        return json.dumps({"error": str(exc)[:500]})
 
 
 def _rows_preview(rows: List[List[Any]], n: int = 3) -> List[List[Any]]:
     """Small helper for logs/tests: first n CSV rows."""
     return rows[:n]
+
+
+__all__ = [
+    "FILE_TOOLS",
+    "FS_TOOLS",
+    "read_file",
+    "write_file",
+    "execute_file_tool",
+    "edit_file",
+    "list_files",
+    "search_files",
+    "execute_fs_tool",
+]

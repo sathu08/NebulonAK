@@ -7,11 +7,11 @@ dependencies = [
     "requests>=2.31",
     "python-dotenv>=1.0",
     "openai>=1.40",
+    "pytest>=7",  # runtime dep: verifier defaults + run_test execute pytest
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest",
     "httpx",
 ]
 

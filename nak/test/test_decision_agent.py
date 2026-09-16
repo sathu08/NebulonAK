@@ -1,4 +1,4 @@
-"""Tests for DecisionAgent (async, Mind-only) + AgentCreator confirm gate + AgentRegistry hybrid."""
+"""Tests for Polaris (async, Mind-only) + Genesis confirm gate + AgentRegistry hybrid."""
 from __future__ import annotations
 
 import asyncio
@@ -12,9 +12,9 @@ try:
 except ImportError:
     pytest = None  # type: ignore
 
-from nak.agents.DecisionAgent.models import DecisionResult
-from nak.agents.DecisionAgent.agent import DecisionAgent
-from nak.agents.AgentCreator.agent import AgentCreator
+from nak.agents.Polaris.models import DecisionResult
+from nak.agents.Polaris.agent import Polaris
+from nak.agents.Genesis.agent import Genesis
 from nak.utils.agent_registry import AgentRegistry, AgentMeta
 
 
@@ -67,25 +67,25 @@ def test_decision_result_invalid_action():
         pass
 
 
-# -- DecisionAgent parse -----------------------------------------------------
+# -- Polaris parse -----------------------------------------------------
 
 
 def test_decision_agent_parse_strict_json():
-    agent = DecisionAgent(brain=MagicMock(), registry=MagicMock())
+    agent = Polaris(brain=MagicMock(), registry=MagicMock())
     raw = json.dumps({"action": "USE_AGENT", "agent_name": "ExcelAgent", "reason": "x", "confidence": 0.94, "parameters": {}})
     r = agent._parse_response(raw)
     assert r.action == "USE_AGENT" and r.agent_name == "ExcelAgent"
 
 
 def test_decision_agent_parse_markdown_wrapped():
-    agent = DecisionAgent(brain=MagicMock(), registry=MagicMock())
+    agent = Polaris(brain=MagicMock(), registry=MagicMock())
     raw = '```json\n{"action":"CREATE_AGENT","agent_name":"PDFReaderAgent","reason":"no pdf agent","confidence":0.91}\n```'
     r = agent._parse_response(raw)
     assert r.action == "CREATE_AGENT" and r.agent_name == "PDFReaderAgent"
 
 
 def test_decision_agent_parse_invalid_returns_error():
-    agent = DecisionAgent(brain=MagicMock(), registry=MagicMock())
+    agent = Polaris(brain=MagicMock(), registry=MagicMock())
     try:
         agent._parse_response("not json at all")
         assert False
@@ -93,14 +93,14 @@ def test_decision_agent_parse_invalid_returns_error():
         pass
 
 
-# -- DecisionAgent async decide (Mind-only) ----------------------------------
+# -- Polaris async decide (Mind-only) ----------------------------------
 
 
 def test_decision_agent_decide_use_agent():
     brain = FakeBrain(json.dumps({"action": "USE_AGENT", "agent_name": "Example", "reason": "example can handle", "confidence": 0.92, "parameters": {}}))
     reg = MagicMock()
     reg.available_agents_str.return_value = "Example — minimal harness"
-    agent = DecisionAgent(brain=brain, registry=reg)  # type: ignore
+    agent = Polaris(brain=brain, registry=reg)  # type: ignore
 
     result = asyncio.run(agent.decide("hello"))
     assert result.action == "USE_AGENT"
@@ -115,7 +115,7 @@ def test_decision_agent_decide_create_agent():
     brain = FakeBrain(json.dumps({"action": "CREATE_AGENT", "agent_name": "ExcelAgent", "reason": "no excel agent", "confidence": 0.88}))
     reg = MagicMock()
     reg.available_agents_str.return_value = "Example"
-    agent = DecisionAgent(brain=brain, registry=reg)  # type: ignore
+    agent = Polaris(brain=brain, registry=reg)  # type: ignore
     result = asyncio.run(agent.decide("Read this Excel and find duplicates"))
     assert result.is_create and result.agent_name == "ExcelAgent"
 
@@ -124,7 +124,7 @@ def test_decision_agent_decide_fallback_ask_on_invalid_json():
     brain = FakeBrain("not a json response!!!")
     reg = MagicMock()
     reg.available_agents_str.return_value = "Example"
-    agent = DecisionAgent(brain=brain, registry=reg)  # type: ignore
+    agent = Polaris(brain=brain, registry=reg)  # type: ignore
     result = asyncio.run(agent.decide("ambiguous", strict=False))
     assert result.action == "ASK_USER"
     assert result.confidence == 0.0
@@ -134,7 +134,7 @@ def test_decision_agent_strict_raises():
     brain = FakeBrain("bad json")
     reg = MagicMock()
     reg.available_agents_str.return_value = "Example"
-    agent = DecisionAgent(brain=brain, registry=reg)  # type: ignore
+    agent = Polaris(brain=brain, registry=reg)  # type: ignore
     try:
         asyncio.run(agent.decide("hi", strict=True))
         assert False
@@ -151,7 +151,7 @@ def test_decision_agent_brain_error_fallback():
 
     reg = MagicMock()
     reg.available_agents_str.return_value = "Example"
-    agent = DecisionAgent(brain=ErrorBrain(), registry=reg)  # type: ignore
+    agent = Polaris(brain=ErrorBrain(), registry=reg)  # type: ignore
     result = asyncio.run(agent.decide("hello", strict=False))
     assert result.action == "ASK_USER"
     assert "unreachable" in result.reason.lower() or "unavailable" in result.reason.lower()
@@ -192,7 +192,7 @@ def test_registry_scan_disk(tmp_path: Path = None):
         assert "Foo" not in names
 
 
-# -- AgentCreator confirm gate ----------------------------------------------
+# -- Genesis confirm gate ----------------------------------------------
 
 
 def test_agent_creator_needs_confirm(tmp_path: Path = None):
@@ -204,7 +204,7 @@ def test_agent_creator_needs_confirm(tmp_path: Path = None):
         brain = FakeBrain(json.dumps({}))  # not used for create except remember mirror
         # patch remember to avoid Mind call
         brain.remember = MagicMock(return_value={"memory_id": "x"})
-        creator = AgentCreator(brain=brain, registry=reg, agents_root=agents_root)  # type: ignore
+        creator = Genesis(brain=brain, registry=reg, agents_root=agents_root)  # type: ignore
 
         spec = DecisionResult(action="CREATE_AGENT", agent_name="ExcelAgent", reason="need excel", confidence=0.9)
 
@@ -232,7 +232,7 @@ def test_agent_creator_rejects_existing(tmp_path: Path = None):
         reg = AgentRegistry(registry_path=td / "registry.json", agents_root=agents_root)
         brain = MagicMock()
         brain.remember = MagicMock(return_value={})
-        creator = AgentCreator(brain=brain, registry=reg, agents_root=agents_root)  # type: ignore
+        creator = Genesis(brain=brain, registry=reg, agents_root=agents_root)  # type: ignore
         spec = DecisionResult(action="CREATE_AGENT", agent_name="ExcelAgent", reason="x", confidence=0.9)
         asyncio.run(creator.create(spec, always_confirm))
         # second create should raise FileExistsError
@@ -250,10 +250,92 @@ def test_agent_creator_wrong_action_noop():
         agents_root.mkdir()
         reg = AgentRegistry(registry_path=td / "registry.json", agents_root=agents_root)
         brain = MagicMock()
-        creator = AgentCreator(brain=brain, registry=reg, agents_root=agents_root)  # type: ignore
+        creator = Genesis(brain=brain, registry=reg, agents_root=agents_root)  # type: ignore
         spec = DecisionResult(action="USE_AGENT", agent_name="Example", reason="x", confidence=0.9)
         result = asyncio.run(creator.create(spec, always_confirm))
         assert result is None
+
+
+# -- shared _react loop: manifest + template + generated agents ---------------
+
+REACT_MODULE = "nak.agents._react"
+
+
+def test_shared_manifest_names_react():
+    import importlib
+
+    manifest = Path(__file__).resolve().parents[1] / "agents" / "shared.json"
+    assert manifest.exists(), "nak/agents/shared.json missing"
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    comps = {c["name"]: c for c in data.get("shared_components", [])}
+    assert "_react" in comps, comps.keys()
+    entry = comps["_react"]
+    assert entry["module"] == REACT_MODULE
+    mod = importlib.import_module(entry["module"])
+    for fn in entry["provides"]:
+        assert callable(getattr(mod, fn, None)), fn
+
+
+def test_creator_template_brace_safe():
+    import string
+
+    from nak.agents.Genesis.agent import _AGENT_PY_TEMPLATE
+
+    fields = {fname for _, fname, _, _ in string.Formatter().parse(_AGENT_PY_TEMPLATE)
+              if fname}
+    assert fields <= {"name", "reason", "reason_lower", "react_module"}, fields
+    assert {"name", "reason", "reason_lower", "react_module"} <= fields
+
+
+def test_created_agent_uses_shared_loop():
+    import importlib.util
+    import os
+
+    with tempfile.TemporaryDirectory() as td:
+        td = Path(td)
+        agents_root = td / "agents"
+        agents_root.mkdir()
+        reg = AgentRegistry(registry_path=td / "registry.json", agents_root=agents_root)
+        brain = MagicMock()
+        brain.remember = MagicMock(return_value={})
+        creator = Genesis(brain=brain, registry=reg, agents_root=agents_root)  # type: ignore
+        spec = DecisionResult(action="CREATE_AGENT", agent_name="ProbeAgent",
+                              reason="probe tasks", confidence=0.9)
+        path = asyncio.run(creator.create(spec, always_confirm))
+        assert path is not None
+        src = (path / "agent.py").read_text(encoding="utf-8")
+        # thin agent: imports the canonical loop, embeds no loop of its own
+        assert f"from {REACT_MODULE} import run_react_loop" in src
+        assert "for _ in range(max_turns)" not in src
+        assert "def _parse_step_answer" not in src
+
+        # import + run offline with a scripted brain (tool -> answer)
+        spec_name = "probe_agent_generated"
+        mod_spec = importlib.util.spec_from_file_location(
+            spec_name, path / "agent.py")
+        assert mod_spec and mod_spec.loader
+        mod = importlib.util.module_from_spec(mod_spec)
+        mod_spec.loader.exec_module(mod)  # type: ignore
+
+        answers = [
+            json.dumps({"tool": "list_files", "arguments": {"directory": "."}}),
+            json.dumps({"answer": "probe done"}),
+        ]
+
+        class QueueBrain:
+            def chat(self, text, messages=None, session_id=None, **k):
+                return {"answer": answers.pop(0) if len(answers) > 1 else answers[0]}
+
+        os.environ["NAK_POLICY_TOOL_USE"] = "allow_always"
+        try:
+            agent = mod.Agent(brain=QueueBrain())
+            assert agent._mind_step is not None  # test seam preserved
+            data = agent.run_sync("probe it")
+        finally:
+            del os.environ["NAK_POLICY_TOOL_USE"]
+        assert data["answer"] == "probe done", data
+        assert data["agent"] == "ProbeAgent", data
+        assert any(s.get("tool") == "list_files" and s.get("ok") for s in data["steps"])
 
 
 def main():

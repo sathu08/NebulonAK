@@ -1,0 +1,12 @@
+{
+  "_comment": "Shared (non-agent) components under nak/agents. The Genesis template resolves these by name so generated agents import the canonical implementation instead of embedding their own copy. Do NOT list entries here in registry.json and do NOT route to them via Polaris — they are libraries, not agents.",
+  "shared_components": [
+    {
+      "name": "_react",
+      "module": "nak.agents._react",
+      "provides": ["run_react_loop", "parse_step_answer"],
+      "description": "Canonical Mind-only ReAct loop (prompt -> brain.chat -> policy-gated tool calls -> answer). All Genesis-generated agents MUST run this instead of embedding a loop.",
+      "used_by": ["Genesis template", "Apollo", "Pulsar", "Astra"]
+    }
+  ]
+}

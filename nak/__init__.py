@@ -4,7 +4,7 @@ NAK - NebulonAK
 LLM Agent Kit that runs on NebulonMind.
 
 nak.brain is the memory brain backed by NebulonMD (/api/NebulonMind).
-nak.tools / nak.agents will hold future LLM tools & agents that call the brain.
+nak.plugins / nak.agents hold the LLM tools & agents that call the brain.
 
 Quick start:
     from nak.brain import Brain

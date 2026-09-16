@@ -1,0 +1,617 @@
+{
+  "version": 1,
+  "count": 17,
+  "tools": [
+    {
+      "name": "agent_chat",
+      "group": "NEBULONAK_TOOLS",
+      "module": "memory_tools",
+      "scope": "none",
+      "policy": "ask",
+      "spec": {
+        "type": "function",
+        "function": {
+          "name": "agent_chat",
+          "description": "Delegate a full turn to NebulonMind's in-process agent (recall + remember + answer). Use when you want the brain to answer with tool-calling already integrated.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "description": "User utterance to send to the brain agent"
+              },
+              "session_id": {
+                "type": "string",
+                "description": "Optional persistent session id"
+              }
+            },
+            "required": [
+              "text"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "name": "build_context",
+      "group": "NEBULONAK_TOOLS",
+      "module": "memory_tools",
+      "scope": "none",
+      "policy": "ask",
+      "spec": {
+        "type": "function",
+        "function": {
+          "name": "build_context",
+          "description": "Build a bounded, provenance-carrying LLM context string for a query from stored memories. Use when you need to inject memory context into a downstream prompt.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string",
+                "description": "Query to build context for"
+              },
+              "top_k": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10
+              },
+              "max_characters": {
+                "type": "integer",
+                "minimum": 100,
+                "maximum": 20000
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "name": "create_plan",
+      "group": "PLAN_TOOLS",
+      "module": "agent_tools",
+      "scope": "none",
+      "policy": "ask",
+      "spec": {
+        "type": "function",
+        "function": {
+          "name": "create_plan",
+          "description": "Replace the current turn's step-by-step plan. Use after deciding how to attack the task so progress is trackable.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "steps": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Ordered plan steps"
+              }
+            },
+            "required": [
+              "steps"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "name": "decide",
+      "group": "NEBULONAK_TOOLS",
+      "module": "memory_tools",
+      "scope": "none",
+      "policy": "ask",
+      "spec": {
+        "type": "function",
+        "function": {
+          "name": "decide",
+          "description": "Run the intelligence decision engine on text without storing. Returns what would be remembered vs rejected. Use to preview without persisting.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "description": "Conversation text to evaluate"
+              },
+              "include_rejected": {
+                "type": "boolean",
+                "description": "Include rejected decisions in output"
+              }
+            },
+            "required": [
+              "text"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "name": "delegate",
+      "group": "AGENT_TOOLS",
+      "module": "agent_tools",
+      "scope": "none",
+      "policy": "ask",
+      "spec": {
+        "type": "function",
+        "function": {
+          "name": "delegate",
+          "description": "Delegate a sub-task to another agent (e.g. Apollo writes code, Pulsar runs tests). Use to split work across specialists.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "agent_name": {
+                "type": "string",
+                "description": "Exact agent name (e.g. Apollo)"
+              },
+              "task": {
+                "type": "string",
+                "description": "Self-contained sub-task for that agent"
+              }
+            },
+            "required": [
+              "agent_name",
+              "task"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "name": "edit_file",
+      "group": "FS_TOOLS",
+      "module": "file_tool",
+      "scope": "file",
+      "policy": "ask",
+      "spec": {
+        "type": "function",
+        "function": {
+          "name": "edit_file",
+          "description": "Replace text inside a file. Use to patch code/config without rewriting the whole file.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Root-relative or absolute file path"
+              },
+              "old_text": {
+                "type": "string",
+                "description": "Exact existing text to replace"
+              },
+              "new_text": {
+                "type": "string",
+                "description": "Replacement text"
+              },
+              "replace_all": {
+                "type": "boolean",
+                "description": "Replace every occurrence (default false = first only)"
+              }
+            },
+            "required": [
+              "path",
+              "old_text",
+              "new_text"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "name": "list_files",
+      "group": "FS_TOOLS",
+      "module": "file_tool",
+      "scope": "file",
+      "policy": "ask",
+      "spec": {
+        "type": "function",
+        "function": {
+          "name": "list_files",
+          "description": "List files in a directory. Use to explore project layout before reading/editing.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "directory": {
+                "type": "string",
+                "description": "Directory to list (default '.')"
+              },
+              "pattern": {
+                "type": "string",
+                "description": "Glob pattern (default '*')"
+              },
+              "max_results": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 500
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "name": "python_exec",
+      "group": "EXEC_TOOLS",
+      "module": "exec_tools",
+      "scope": "exec",
+      "policy": "ask",
+      "spec": {
+        "type": "function",
+        "function": {
+          "name": "python_exec",
+          "description": "Run Python code via `python -c`. Use for quick computation, transforms, or checks.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "description": "Python source to execute"
+              },
+              "timeout": {
+                "type": "integer",
+                "description": "Timeout seconds 1-120 (default 30)",
+                "minimum": 1,
+                "maximum": 120
+              }
+            },
+            "required": [
+              "code"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "name": "read_file",
+      "group": "FILE_TOOLS",
+      "module": "file_tool",
+      "scope": "file",
+      "policy": "ask",
+      "spec": {
+        "type": "function",
+        "function": {
+          "name": "read_file",
+          "description": "Read a file (text, JSON, CSV/TSV, PDF, Excel, Word). Use when the agent needs file contents to answer or plan.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Root-relative or absolute file path"
+              },
+              "max_bytes": {
+                "type": "integer",
+                "description": "Max text bytes to return",
+                "minimum": 100,
+                "maximum": 1000000
+              },
+              "max_rows": {
+                "type": "integer",
+                "description": "Max CSV/Excel rows to return",
+                "minimum": 1,
+                "maximum": 1000
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "name": "recall",
+      "group": "NEBULONAK_TOOLS",
+      "module": "memory_tools",
+      "scope": "none",
+      "policy": "ask",
+      "spec": {
+        "type": "function",
+        "function": {
+          "name": "recall",
+          "description": "Search the user's stored memories (semantic recall, ranked). Use when the user asks something that may have been remembered before, or to ground answers with context.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string",
+                "description": "Natural language query to recall memories"
+              },
+              "top_k": {
+                "type": "integer",
+                "description": "Number of memories to return (1-10)",
+                "minimum": 1,
+                "maximum": 10
+              },
+              "expand": {
+                "type": "boolean",
+                "description": "Expand via graph (depth-1) before ranking"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "name": "remember",
+      "group": "NEBULONAK_TOOLS",
+      "module": "memory_tools",
+      "scope": "none",
+      "policy": "ask",
+      "spec": {
+        "type": "function",
+        "function": {
+          "name": "remember",
+          "description": "Store a new memory for the user. Use when the user shares a durable fact, preference, skill, or event that should be recalled later.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "description": "Content to remember (1-2 sentences, concrete)"
+              },
+              "category": {
+                "type": "string",
+                "description": "Optional category hint (e.g. fact, preference, skill)"
+              },
+              "memory_type": {
+                "type": "string",
+                "enum": [
+                  "working",
+                  "short_term",
+                  "long_term",
+                  "episodic",
+                  "semantic",
+                  "knowledge",
+                  "doc"
+                ],
+                "description": "Memory type"
+              },
+              "importance": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "description": "Importance score 0-1"
+              }
+            },
+            "required": [
+              "text"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "name": "run_build",
+      "group": "EXEC_TOOLS",
+      "module": "exec_tools",
+      "scope": "exec",
+      "policy": "ask",
+      "spec": {
+        "type": "function",
+        "function": {
+          "name": "run_build",
+          "description": "Run the project's build in the workspace (auto-detects Makefile, npm build script, or Python build; pass command to override). Returns pass/fail plus log tail.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "command": {
+                "type": "string",
+                "description": "Explicit build command (default: auto-detect)"
+              },
+              "timeout": {
+                "type": "integer",
+                "description": "Timeout seconds 1-120 (default 120)",
+                "minimum": 1,
+                "maximum": 120
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "name": "run_test",
+      "group": "EXEC_TOOLS",
+      "module": "exec_tools",
+      "scope": "exec",
+      "policy": "ask",
+      "spec": {
+        "type": "function",
+        "function": {
+          "name": "run_test",
+          "description": "Run pytest on a target path in the workspace. Returns pass/fail plus log tail.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "target": {
+                "type": "string",
+                "description": "Pytest target (default '.')"
+              },
+              "timeout": {
+                "type": "integer",
+                "description": "Timeout seconds 1-120 (default 60)",
+                "minimum": 1,
+                "maximum": 120
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "name": "search_files",
+      "group": "FS_TOOLS",
+      "module": "file_tool",
+      "scope": "file",
+      "policy": "ask",
+      "spec": {
+        "type": "function",
+        "function": {
+          "name": "search_files",
+          "description": "Regex-search file contents. Use to find code, symbols, or TODOs across a project.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "pattern": {
+                "type": "string",
+                "description": "Regex pattern to search for"
+              },
+              "directory": {
+                "type": "string",
+                "description": "Directory to search (default '.')"
+              },
+              "file_pattern": {
+                "type": "string",
+                "description": "Glob for filenames (default '*')"
+              },
+              "max_results": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 200
+              }
+            },
+            "required": [
+              "pattern"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "name": "shell",
+      "group": "EXEC_TOOLS",
+      "module": "exec_tools",
+      "scope": "exec",
+      "policy": "ask",
+      "spec": {
+        "type": "function",
+        "function": {
+          "name": "shell",
+          "description": "Run a shell command in the task workspace. Use for mkdir, pytest, builds, scripts. Output is truncated.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "command": {
+                "type": "string",
+                "description": "Shell command to run"
+              },
+              "timeout": {
+                "type": "integer",
+                "description": "Timeout seconds 1-120 (default 30)",
+                "minimum": 1,
+                "maximum": 120
+              }
+            },
+            "required": [
+              "command"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "name": "update_plan",
+      "group": "PLAN_TOOLS",
+      "module": "agent_tools",
+      "scope": "none",
+      "policy": "ask",
+      "spec": {
+        "type": "function",
+        "function": {
+          "name": "update_plan",
+          "description": "Update the current turn's plan: append a step, mark index complete, or clear.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "append",
+                  "complete",
+                  "clear"
+                ]
+              },
+              "step": {
+                "type": "string",
+                "description": "Step text (for append)"
+              },
+              "index": {
+                "type": "integer",
+                "description": "Step index (for complete)",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "name": "write_file",
+      "group": "FILE_TOOLS",
+      "module": "file_tool",
+      "scope": "file",
+      "policy": "ask",
+      "spec": {
+        "type": "function",
+        "function": {
+          "name": "write_file",
+          "description": "Write content to a file inside the sandbox root. Use to save plans, reports, or generated files.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Root-relative or absolute file path"
+              },
+              "content": {
+                "type": "string",
+                "description": "Full content to write"
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "create",
+                  "overwrite",
+                  "append"
+                ]
+              }
+            },
+            "required": [
+              "path",
+              "content"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    }
+  ],
+  "hash": "f66556ba693c"
+}

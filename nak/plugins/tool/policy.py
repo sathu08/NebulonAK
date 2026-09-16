@@ -77,11 +77,44 @@ def mark_create_approved() -> None:
     _create_once_ok = True
 
 
+# -- per-state (harness) approvals ---------------------------------------
+# Process-global `_tool_once_ok` breaks multi-session harnesses. The runtime
+# keeps `state.permissions["tool_once_ok"]` per task; these helpers read and
+# update that scope while falling back to the globals for legacy callers.
+
+
+def approve_tool_use_for_state(state, name: str, arguments: Any = None) -> bool:
+    """Gate one tool call for a HarnessState (per-run allow_once window)."""
+    global _tool_once_ok
+    mode = get_policy()["tool_use"]
+    if mode == "no":
+        return False
+    if mode == "allow_always":
+        return True
+    perms = getattr(state, "permissions", None)
+    once_ok = bool(perms.get("tool_once_ok")) if isinstance(perms, dict) else False
+    if mode == "allow_once" and (once_ok or _tool_once_ok):
+        return True
+    preview = ""
+    if arguments:
+        try:
+            preview = " " + json.dumps(arguments, ensure_ascii=False)[:200]
+        except Exception:
+            preview = ""
+    ok = _prompt(f"Allow tool {name!r}{preview}? [y/N or 1/2]: ")
+    if ok and mode == "allow_once":
+        if isinstance(perms, dict):
+            perms["tool_once_ok"] = True
+        _tool_once_ok = True
+    return ok
+
+
 __all__ = [
     "MODES",
     "get_policy",
     "reset_tool_once",
     "approve_tool_use",
+    "approve_tool_use_for_state",
     "create_once_approved",
     "mark_create_approved",
 ]

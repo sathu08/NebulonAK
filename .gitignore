@@ -31,3 +31,6 @@ Thumbs.db
 *.local.cfg
 *.local.env
 *.lock
+
+# Harness task workspaces (per-session project/logs/artifacts/state)
+workspace/

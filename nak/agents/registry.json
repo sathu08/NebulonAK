@@ -1,66 +1,85 @@
 [
   {
-    "name": "AgentCreator",
+    "name": "Genesis",
     "description": "Creates new agents on disk after explicit confirmation",
-    "path": "nak/agents/AgentCreator",
+    "path": "nak/agents/Genesis",
     "capabilities": [
       "create_agent"
     ],
-    "created_via": "manual",
-    "version": "0.1.0"
+    "created_via": "NAK_MANUAL",
+    "version": "1.0.0"
   },
   {
-    "name": "DecisionAgent",
-    "description": "Router: decides USE_AGENT / CREATE_AGENT / ASK_USER via NebulonMind",
-    "path": "nak/agents/DecisionAgent",
+    "name": "Polaris",
+    "description": "Router + planning gate: decides USE_AGENT / CREATE_AGENT / ASK_USER via NebulonMind and runs the pre-execution planning step (planning.py lives here)",
+    "path": "nak/agents/Polaris",
     "capabilities": [
       "route",
-      "decide"
+      "decide",
+      "planning"
     ],
-    "created_via": "manual",
-    "version": "0.1.0"
+    "created_via": "NAK_MANUAL",
+    "version": "1.0.0"
   },
   {
-    "name": "Example",
-    "description": "Minimal harness that proxies to Brain.chat (SimpleAgent)",
-    "path": "nak/agents/Example",
-    "capabilities": [
-      "chat",
-      "remember",
-      "recall"
-    ],
-    "created_via": "manual",
-    "version": "0.1.0"
-  },
-  {
-    "name": "ExcelAgent",
-    "description": "Handles Excel duplicate supplier detection",
-    "path": "nak/agents/ExcelAgent",
-    "capabilities": [
-      "excel",
-      "duplicate-detection"
-    ],
-    "created_via": "agent_creator",
-    "version": "0.1.0"
-  },
-  {
-    "name": "PlanningAgent",
-    "description": "Reusable planning agent: creates implementation plans, roadmaps and designs for any task or stack (not tied to one framework)",
-    "path": "nak/agents/PlanningAgent",
+    "name": "Kepler",
+    "description": "Reusable planning agent: creates implementation plans, roadmaps and designs for any task or stack. Route planning, roadmap and design requests here — not implementation, testing, or review.",
+    "path": "nak/agents/Kepler",
     "capabilities": [
       "planning",
       "roadmap",
       "design"
     ],
-    "created_via": "agent_creator",
-    "version": "0.1.0"
+    "created_via": "NAK_AGENT",
+    "version": "1.0.0"
   },
   {
     "name": "ResearchAgent",
-    "description": "No existing agent can handle research tasks on Databricks",
+    "description": "Research specialist: investigates topics, compares options, and reports findings. Route research and investigation requests here.",
     "path": "nak/agents/ResearchAgent",
-    "capabilities": [],
-    "created_via": "agent_creator",
-    "version": "0.1.0"
+    "capabilities": [
+      "research",
+      "investigate",
+      "compare"
+    ],
+    "created_via": "NAK_AGENT",
+    "version": "1.0.0"
+  },
+  {
+    "name": "Apollo",
+    "description": "Implementation specialist: writes, edits and fixes code in the task workspace, then verifies with tests. Route here for ANY write, fix or build request — even when testing is mentioned, it handles its own verification.",
+    "path": "nak/agents/Apollo",
+    "capabilities": [
+      "coding",
+      "implement",
+      "fix",
+      "build"
+    ],
+    "created_via": "NAK_MANUAL",
+    "version": "1.0.0"
+  },
+  {
+    "name": "Pulsar",
+    "description": "Testing specialist: runs existing suites (pytest/compileall) and reports pass/fail; writes regression tests on request. Does NOT implement features or fix production code — route those to Apollo.",
+    "path": "nak/agents/Pulsar",
+    "capabilities": [
+      "testing",
+      "pytest",
+      "regression"
+    ],
+    "created_via": "NAK_MANUAL",
+    "version": "1.0.0"
+  },
+  {
+    "name": "Astra",
+    "description": "Read-only code reviewer: inspects code and reports ranked findings with file:line references. Never modifies files — route any write or edit request to Apollo.",
+    "path": "nak/agents/Astra",
+    "capabilities": [
+      "review",
+      "code-review",
+      "audit"
+    ],
+    "created_via": "NAK_MANUAL",
+    "version": "1.0.0"
   }
 ]

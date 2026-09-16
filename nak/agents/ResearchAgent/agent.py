@@ -21,6 +21,14 @@ from nak.plugins import PLUGIN_TOOLS, execute_plugin
 from nak.utils.config import load_config
 
 
+def _live_specs():
+    try:
+        from nak.plugins.tool.manifest import manifest_specs as _ms
+        return _ms() or list(PLUGIN_TOOLS)
+    except Exception:
+        return list(PLUGIN_TOOLS)
+
+
 def _parse_step_answer(raw):
     """Mind reply -> answer-step or tool-step. Unparseable replies become final answers."""
     answer = ""
@@ -95,7 +103,7 @@ class Agent:
         reset_tool_once()
         session_id = kwargs.get("session_id")
         tool_brief = "; ".join(
-            s["function"]["name"] + ": " + s["function"].get("description", "")[:80] for s in PLUGIN_TOOLS
+            s["function"]["name"] + ": " + s["function"].get("description", "")[:80] for s in _live_specs()
         )
         transcript = [{"role": "user", "content": effective}]
         last_text, turns = "", 0

@@ -1,6 +1,5 @@
 """
-nak.plugins.tool.memory_tools -- LLM tool schemas that proxy to NebulonMind
-(moved from nak.tools.tools; old path kept as a thin shim).
+nak.plugins.tool.memory_tools -- LLM tool schemas that proxy to NebulonMind.
 
 The Brain itself already implements recall/remember/decide in Python.
 This module exposes them as OpenAI-compatible function tool specs so

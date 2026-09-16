@@ -1,4 +1,4 @@
-"""nak.prompts -- prompt templates for agents (decision.md etc)."""
+"""nak.prompts -- prompt templates for agents (polaris.md etc)."""
 from pathlib import Path
 
 _PROMPTS_ROOT = Path(__file__).resolve().parent
