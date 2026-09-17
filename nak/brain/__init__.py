@@ -21,5 +21,7 @@ For future LLM agents:
 
 from nak.utils.config import NAKConfig, load_config
 from .client import Brain, BrainError
+from .retry import acall_with_retry, call_with_retry, is_transient, probe_mind
 
-__all__ = ["NAKConfig", "load_config", "Brain", "BrainError"]
+__all__ = ["NAKConfig", "load_config", "Brain", "BrainError",
+           "acall_with_retry", "call_with_retry", "is_transient", "probe_mind"]

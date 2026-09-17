@@ -22,6 +22,7 @@ env/
 # OS
 .DS_Store
 Thumbs.db
+new_plan.md
 
 # Testing
 .coverage
@@ -34,3 +35,10 @@ Thumbs.db
 
 # Harness task workspaces (per-session project/logs/artifacts/state)
 workspace/
+
+# ===============================
+# Test / Dev directories
+# ===============================
+test_*/
+tests/
+dev/

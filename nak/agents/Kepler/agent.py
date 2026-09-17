@@ -84,7 +84,9 @@ class Agent:
     def run_sync(self, text: str, messages: Optional[List[Dict[str, str]]] = None, **kwargs: Any) -> Dict[str, Any]:
         if not text or not text.strip():
             raise ValueError("text must be non-empty")
+        from nak.brain.retry import call_with_retry, probe_mind
         from nak.plugins.tool.policy import reset_tool_once, approve_tool_use
+        _probe = lambda: probe_mind(self.brain)  # noqa: E731
         context = " ".join(
             p.strip() for p in (self.role_hint, self.custom_instructions) if p and p.strip()
         ).strip()
@@ -114,7 +116,9 @@ class Agent:
                 "History so far:\n" + json.dumps(transcript[-10:], ensure_ascii=False)[:6000]
             )
             try:
-                raw = self._mind_step(step_prompt, (history + transcript)[-12:] or None, session_id)
+                raw = call_with_retry(self._mind_step, step_prompt,
+                                      (history + transcript)[-12:] or None, session_id,
+                                      probe=_probe)
             except Exception as exc:
                 last_text = f"[brain error: {exc}]"
                 break

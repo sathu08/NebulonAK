@@ -34,6 +34,7 @@ _CORE_GROUPS = {
     "FILE_TOOLS": ("file_tool", "file"),
     "FS_TOOLS": ("file_tool", "file"),
     "EXEC_TOOLS": ("exec_tools", "exec"),
+    "WEB_TOOLS": ("web_tool", "file"),
     "AGENT_TOOLS": ("agent_tools", "none"),
     "PLAN_TOOLS": ("agent_tools", "none"),
 }
@@ -71,7 +72,7 @@ def _iter_custom_tool_lists() -> List[Dict[str, Any]]:
         if not mname.endswith("_tools") or mname in _SKIP_MODULES:
             continue
         # skip core modules already covered (they also end with _tools)
-        if mname in ("memory_tools", "file_tool", "exec_tools", "agent_tools"):
+        if mname in ("memory_tools", "file_tool", "exec_tools", "agent_tools", "web_tool"):
             continue
         full = f"{pkg_name}.{mname}"
         try:
@@ -103,7 +104,7 @@ def _iter_custom_tool_lists() -> List[Dict[str, Any]]:
 
 def collect_entries() -> List[Dict[str, Any]]:
     """Live discovery: core groups + custom files. Dedupes (custom wins)."""
-    from . import agent_tools, exec_tools, file_tool, memory_tools
+    from . import agent_tools, exec_tools, file_tool, memory_tools, web_tool
 
     entries: List[Dict[str, Any]] = []
     core_map = {
@@ -111,6 +112,7 @@ def collect_entries() -> List[Dict[str, Any]]:
         "FILE_TOOLS": getattr(file_tool, "FILE_TOOLS", []),
         "FS_TOOLS": getattr(file_tool, "FS_TOOLS", []),
         "EXEC_TOOLS": getattr(exec_tools, "EXEC_TOOLS", []),
+        "WEB_TOOLS": getattr(web_tool, "WEB_TOOLS", []),
         "AGENT_TOOLS": getattr(agent_tools, "AGENT_TOOLS", []),
         "PLAN_TOOLS": getattr(agent_tools, "PLAN_TOOLS", []),
     }

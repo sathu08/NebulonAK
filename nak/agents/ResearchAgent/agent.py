@@ -94,8 +94,10 @@ class Agent:
         effective = f"Agent context: {context}\nUser request: {text.strip()}" if context else text.strip()
         # Only forward user/assistant/tool roles — Mind rejects "system".
         history = [m for m in (messages or []) if m.get("role") in ("user", "assistant", "tool")]
+        from nak.brain.retry import call_with_retry, probe_mind
         from nak.plugins.tool.policy import reset_tool_once, approve_tool_use
         from nak.utils.config import load_config
+        _probe = lambda: probe_mind(self.brain)  # noqa: E731
         try:
             max_turns = max(1, load_config().policy_max_turns)
         except Exception:
@@ -119,7 +121,9 @@ class Agent:
                 "History so far:\n" + json.dumps(transcript[-10:], ensure_ascii=False)[:6000]
             )
             try:
-                raw = self._mind_step(step_prompt, (history + transcript)[-12:] or None, session_id)
+                raw = call_with_retry(self._mind_step, step_prompt,
+                                      (history + transcript)[-12:] or None, session_id,
+                                      probe=_probe)
             except Exception as exc:
                 last_text = f"[brain error: {exc}]"
                 break

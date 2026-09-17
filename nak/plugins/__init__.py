@@ -18,6 +18,8 @@ from .tool import (
     execute_fs_tool,
     EXEC_TOOLS,
     execute_exec_tool,
+    WEB_TOOLS,
+    execute_web_tool,
     AGENT_TOOLS,
     PLAN_TOOLS,
     execute_agent_tools,
@@ -25,7 +27,7 @@ from .tool import (
 
 PLUGIN_TOOLS = (
     list(NEBULONAK_TOOLS) + list(FILE_TOOLS) + list(FS_TOOLS)
-    + list(EXEC_TOOLS) + list(AGENT_TOOLS) + list(PLAN_TOOLS)
+    + list(EXEC_TOOLS) + list(WEB_TOOLS) + list(AGENT_TOOLS) + list(PLAN_TOOLS)
 )
 
 # Back-compat alias: harness extended set == PLUGIN_TOOLS (memory + file + fs + exec).
@@ -45,6 +47,7 @@ def execute_plugin(brain, name: str, arguments, *, _root=None, _cwd=None) -> str
     file_names = {spec["function"]["name"] for spec in FILE_TOOLS}
     fs_names = {spec["function"]["name"] for spec in FS_TOOLS}
     exec_names = {spec["function"]["name"] for spec in EXEC_TOOLS}
+    web_names = {spec["function"]["name"] for spec in WEB_TOOLS}
     orchestration_names = ({spec["function"]["name"] for spec in AGENT_TOOLS}
                            | {spec["function"]["name"] for spec in PLAN_TOOLS})
     ambient = current_workspace_root()
@@ -63,6 +66,8 @@ def execute_plugin(brain, name: str, arguments, *, _root=None, _cwd=None) -> str
         return execute_fs_tool(name, arguments, root=root)
     if name in exec_names:
         return execute_exec_tool(name, arguments, cwd=cwd)
+    if name in web_names:
+        return execute_web_tool(name, arguments, root=root)
     if name in orchestration_names:
         # delegate needs brain; plan tools use the ambient turn state
         return execute_agent_tools(brain, name, arguments)
@@ -94,6 +99,8 @@ __all__ = [
     "execute_fs_tool",
     "EXEC_TOOLS",
     "execute_exec_tool",
+    "WEB_TOOLS",
+    "execute_web_tool",
     "AGENT_TOOLS",
     "PLAN_TOOLS",
     "execute_agent_tools",

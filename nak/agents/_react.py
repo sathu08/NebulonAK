@@ -99,7 +99,9 @@ def run_react_loop(
     mind_step=None,
 ) -> Dict[str, Any]:
     """Run the standard tool loop. `mind_step(prompt, messages, session_id)` injectable for tests."""
+    from nak.brain.retry import call_with_retry, probe_mind
     from nak.plugins import PLUGIN_TOOLS, execute_plugin
+    _probe = lambda: probe_mind(brain)  # noqa: E731 — fail fast when Mind is down
     try:
         from nak.plugins.tool.manifest import manifest_specs as _manifest_specs
         _SPECS = _manifest_specs() or list(PLUGIN_TOOLS)
@@ -150,7 +152,9 @@ def run_react_loop(
             "History so far:\n" + json.dumps(transcript[-10:], ensure_ascii=False)[:6000]
         )
         try:
-            raw = step_fn(step_prompt, (history + transcript)[-12:] or None, session_id)
+            raw = call_with_retry(step_fn, step_prompt,
+                                  (history + transcript)[-12:] or None, session_id,
+                                  probe=_probe)
         except Exception as exc:
             last_text = f"[brain error: {exc}]"
             break

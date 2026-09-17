@@ -161,7 +161,15 @@ class HarnessRuntime:
             recalled = recall_for_turn(self.brain, state, state.request) or ""
         except Exception:  # noqa: BLE001
             recalled = ""
-        if not notes and not files and not plan and not recalled:
+        board = ""
+        try:
+            from .plan_board import ensure_board_for_state, read_board_snippet
+
+            ensure_board_for_state(st, files=files)
+            board = read_board_snippet(st) or ""
+        except Exception:  # noqa: BLE001
+            board = ""
+        if not notes and not files and not plan and not recalled and not board:
             return ""
         parts = ["[Workspace continuity — build on the work below, don't redo it]"]
         if plan:
@@ -175,6 +183,8 @@ class HarnessRuntime:
                          + "\n".join(f"- {n}" for n in notes[-3:]))
         if recalled:
             parts.append(recalled)
+        if board:
+            parts.append(board)
         return "\n".join(parts)
 
     def _remember_turn(self, state: HarnessState, agent_name: str, answer: str) -> None:
@@ -207,6 +217,28 @@ class HarnessRuntime:
             store_turn(self.brain, state, agent_name, answer)
         except Exception:  # noqa: BLE001
             logger.debug("project memory store failed")
+        # Multitask board (huge-only): flip this agent's todo row to DONE.
+        # Best-effort; agents may also edit the board directly via edit_file.
+        try:
+            from .plan_board import mark_slice
+
+            ok = getattr(state, "status", "") not in ("failed", "error")
+            for row in (getattr(state, "plan", None) or [])[:26]:
+                _ = row  # plan text kept in board tasks col; slice key is part-*
+            # mark first matching todo row for this agent; no-op when disabled
+            from .plan_board import board_path as _bp
+
+            bp = _bp(getattr(state, "session_id", None), getattr(state, "workspace", None))
+            if bp is not None and bp.exists():
+                text = bp.read_text(encoding="utf-8", errors="replace")
+                for i in range(26):
+                    sname = f"part-{chr(97 + i)}"
+                    if f"| {sname} " in text and agent_name in text.split(f"| {sname} ")[1].split("\n")[0]:
+                        mark_slice(state, sname, agent_name, ok=ok,
+                                   note=str(answer or "")[:60])
+                        break
+        except Exception:  # noqa: BLE001
+            logger.debug("plan board mark failed")
 
     # -- decide --------------------------------------------------------------
 

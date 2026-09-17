@@ -5,6 +5,10 @@
 terminal_tool (shared CLI grammar + terminal emit helpers) is imported as a
 submodule -- `from nak.plugins.tool import terminal_tool` -- and is NOT part
 of PLUGIN_TOOLS (it is the human boundary, not an LLM tool).
+
+api_tool (shared HTTP JSON boundary: the web twin of terminal_tool) is
+imported the same way -- `from nak.plugins.tool import api_tool` -- and is
+likewise NOT part of PLUGIN_TOOLS.
 """
 from .memory_tools import (
     NEBULONAK_TOOLS,
@@ -26,6 +30,7 @@ from .file_tool import (
     execute_fs_tool,
 )
 from .exec_tools import EXEC_TOOLS, shell, python_exec, run_test, run_build, detect_build_command, destructive_command_reason, execute_exec_tool
+from .web_tool import WEB_TOOLS, TOOL_SCOPES as WEB_TOOL_SCOPES, read_url, download_file, execute_web_tool
 from .agent_tools import (
     AGENT_TOOLS,
     PLAN_TOOLS,
@@ -36,6 +41,7 @@ from .agent_tools import (
 )
 from . import policy
 from . import terminal_tool
+from . import api_tool
 
 __all__ = [
     "NEBULONAK_TOOLS",
@@ -61,6 +67,11 @@ __all__ = [
     "detect_build_command",
     "destructive_command_reason",
     "execute_exec_tool",
+    "WEB_TOOLS",
+    "WEB_TOOL_SCOPES",
+    "read_url",
+    "download_file",
+    "execute_web_tool",
     "AGENT_TOOLS",
     "PLAN_TOOLS",
     "delegate",
@@ -69,4 +80,5 @@ __all__ = [
     "execute_agent_tools",
     "policy",
     "terminal_tool",
+    "api_tool",
 ]

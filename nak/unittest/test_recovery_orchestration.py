@@ -184,7 +184,9 @@ def test_tool_count_includes_orchestration():
     names = {s["function"]["name"] for s in PLUGIN_TOOLS}
     for tool in ("delegate", "create_plan", "update_plan"):
         assert tool in names, tool
-    assert len(PLUGIN_TOOLS) == 17
+    for tool in ("read_url", "download_file"):
+        assert tool in names, tool
+    assert len(PLUGIN_TOOLS) == 19
 
 
 def test_run_build_detection_and_errors():

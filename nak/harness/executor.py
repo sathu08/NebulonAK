@@ -133,6 +133,7 @@ class ToolExecutor:
     # tools whose file args resolve under the workspace root
     _FILE_SCOPED = {
         "read_file", "write_file", "edit_file", "list_files", "search_files",
+        "read_url", "download_file",
     }
     # tools that execute with cwd = workspace project dir
     _EXEC_SCOPED = {"shell", "python_exec", "run_test", "run_build"}

@@ -70,6 +70,11 @@ class NAKConfig:
     harness_max_retries: int
     harness_max_delegation: int
     harness_project_memory: bool
+    multitask_enabled: bool
+    multitask_max_agents: int
+    multitask_huge_tasks: int
+    multitask_huge_files: int
+    approval_channel: str
     cfg_path: Path
 
     @property
@@ -115,7 +120,9 @@ def load_config(cfg_path: str | Path | None = None) -> NAKConfig:
     else:
         cfg_path = Path(cfg_path).expanduser().resolve()
 
-    parser = ConfigParser()
+    # strict=False: a duplicated key (e.g. two live `channel = ...` lines)
+    # takes the last value instead of discarding the whole file.
+    parser = ConfigParser(strict=False)
     # defaults first
     parser.read_dict({
         "nebulonmind": {
@@ -149,6 +156,19 @@ def load_config(cfg_path: str | Path | None = None) -> NAKConfig:
             "max_retries": "2",
             "max_delegation": "2",
             "project_memory": "true",
+        },
+        "multitask": {
+            # PLACEHOLDER: user turns multitask on ONLY for huge projects.
+            # Small tasks skip the board entirely (single-turn prompts stay
+            # byte-identical). Env NAK_MULTITASK_* wins over these values.
+            "enabled": "false",
+            "max_agents": "5",
+            "huge_tasks": "5",
+            "huge_files": "5",
+        },
+        "approval": {
+            # Single live approval channel (env NAK_APPROVAL_VIA wins).
+            "channel": "auto",
         },
     })
 
@@ -243,6 +263,36 @@ def load_config(cfg_path: str | Path | None = None) -> NAKConfig:
             return False
         return default
 
+    def _multitask_bool(key: str, env: str, default: bool = False) -> bool:
+        raw_env = os.environ.get(env)
+        if raw_env is not None:
+            v = raw_env.strip().lower()
+            if v in ("1", "true", "yes", "on", "enabled"):
+                return True
+            if v in ("0", "false", "no", "off", "disabled"):
+                return False
+            return default
+        v = _get("multitask", key, str(default)).strip().lower()
+        if v in ("1", "true", "yes", "on", "enabled"):
+            return True
+        if v in ("0", "false", "no", "off", "disabled"):
+            return False
+        return default
+
+    def _multitask_int(key: str, env: str, default: int, lo: int, hi: int) -> int:
+        try:
+            val = int(os.environ.get(env) or _get("multitask", key, str(default)))
+        except ValueError:
+            val = default
+        return max(lo, min(val, hi))
+
+    def _approval_channel() -> str:
+        raw_env = (os.environ.get("NAK_APPROVAL_VIA") or "").strip().lower()
+        if raw_env in ("web", "terminal"):
+            return raw_env
+        val = _get("approval", "channel", "auto").strip().lower()
+        return val if val in ("web", "terminal", "auto") else "auto"
+
     return NAKConfig(
         base_url=base_url,
         user=user.strip() or "nmd_user_01",
@@ -266,13 +316,21 @@ def load_config(cfg_path: str | Path | None = None) -> NAKConfig:
         harness_max_retries=_harness_int("max_retries", "NAK_MAX_RETRIES", 2, 0, 5),
         harness_max_delegation=_harness_int("max_delegation", "NAK_MAX_DELEGATION", 2, 1, 5),
         harness_project_memory=_harness_bool("project_memory", "NAK_PROJECT_MEMORY", True),
+        multitask_enabled=_multitask_bool("enabled", "NAK_MULTITASK_ENABLED", False),
+        multitask_max_agents=_multitask_int("max_agents", "NAK_MULTITASK_MAX_AGENTS", 5, 1, 5),
+        multitask_huge_tasks=_multitask_int("huge_tasks", "NAK_MULTITASK_HUGE_TASKS", 5, 2, 100),
+        multitask_huge_files=_multitask_int("huge_files", "NAK_MULTITASK_HUGE_FILES", 5, 2, 200),
+        approval_channel=_approval_channel(),
         cfg_path=cfg_path,
     )
 
 
 __all__ = ["NAKConfig", "load_config", "_default_cfg_path",
            "get_workspace_dir", "get_verify_commands", "get_verify_timeout",
-           "get_max_retries", "get_max_delegation", "get_project_memory"]
+           "get_max_retries", "get_max_delegation", "get_project_memory",
+           "get_multitask_enabled", "get_multitask_max_agents",
+           "get_multitask_huge_tasks", "get_multitask_huge_files",
+           "get_approval_channel"]
 
 
 # -- harness settings accessors (env > cfg > defaults, never raise) -----------
@@ -325,3 +383,63 @@ def get_project_memory() -> bool:
         return bool(cfg.harness_project_memory)
     except Exception:  # noqa: BLE001
         return True
+
+
+def get_multitask_enabled() -> bool:
+    """Multitask board kill-switch: ONLY huge projects (default False)."""
+    cfg = _harness_cfg()
+    if cfg is None:
+        return False
+    try:
+        return bool(cfg.multitask_enabled)
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def get_multitask_max_agents() -> int:
+    """Max parallel agents for huge tasks (default 5, clamped 1..5)."""
+    cfg = _harness_cfg()
+    if cfg is None:
+        return 5
+    try:
+        return max(1, min(int(cfg.multitask_max_agents), 5))
+    except Exception:  # noqa: BLE001
+        return 5
+
+
+def get_multitask_huge_tasks() -> int:
+    """Plan steps at/above which a task counts as huge (default 5)."""
+    cfg = _harness_cfg()
+    if cfg is None:
+        return 5
+    try:
+        return max(2, int(cfg.multitask_huge_tasks))
+    except Exception:  # noqa: BLE001
+        return 5
+
+
+def get_multitask_huge_files() -> int:
+    """File count at/above which a task counts as huge (default 5)."""
+    cfg = _harness_cfg()
+    if cfg is None:
+        return 5
+    try:
+        return max(2, int(cfg.multitask_huge_files))
+    except Exception:  # noqa: BLE001
+        return 5
+
+
+def get_approval_channel() -> str:
+    """Live approval channel: terminal | web | auto (default auto).
+
+    terminal = input() prompts; web = browser Approvals queue;
+    auto = terminal when stdin is a TTY, else web. Env NAK_APPROVAL_VIA wins.
+    """
+    cfg = _harness_cfg()
+    if cfg is None:
+        return "auto"
+    try:
+        val = str(cfg.approval_channel or "auto").strip().lower()
+        return val if val in ("web", "terminal", "auto") else "auto"
+    except Exception:  # noqa: BLE001
+        return "auto"

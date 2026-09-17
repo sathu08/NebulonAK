@@ -257,10 +257,17 @@ class Polaris:
         prompt = self._build_prompt(user_request, available_agents)
 
         # Mind-only: Brain.chat -> POST /agent/chat (sync) offloaded to thread
-        # Use lock to avoid requests.Session thread-safety race when sharing one Brain
-        try:
+        # Use lock to avoid requests.Session thread-safety race when sharing one Brain.
+        # Transient failures (timeouts/hangs/5xx) retry with backoff so a slow
+        # Mind self-recovers instead of forcing an ASK_USER fallback turn.
+        async def _chat_once():
             async with self._lock:
-                raw = await asyncio.to_thread(self.brain.chat, prompt, session_id=session_id)
+                return await asyncio.to_thread(self.brain.chat, prompt, session_id=session_id)
+
+        try:
+            from nak.brain.retry import acall_with_retry, probe_mind
+
+            raw = await acall_with_retry(_chat_once, probe=lambda: probe_mind(self.brain))
         except BrainError as exc:
             logger.warning("Polaris brain.chat BrainError: %s (status=%s)", exc, exc.status)
             if strict:
