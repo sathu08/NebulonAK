@@ -1,15 +1,43 @@
-# Python
+# ===============================
+# File extensions to ignore
+# ===============================
+*.ndb
+*.json
+*.faiss
+*.npy
+
+# ===============================
+# Python cache
+# ===============================
 __pycache__/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
 *.pyc
 *.pyo
+*.lock
+
+# ===============================
+# Test / Dev directories
+# ===============================
+test/
+tests/
+dev/
+
+# ===============================
+# Logs & environment
+# ===============================
+*.log
+logs/
+.env
+*.pid
+
+# ===============================
+# Virtual environment, storage & build
+# ===============================
 .venv/
-.uv-cache/
-.libs/
-
-# Build
-*.egg-info/
 dist/
-
-# Runtime (generated per run, never committed)
+build/
+*.egg-info
 workspace/
 pipeline/vetting/runs/
