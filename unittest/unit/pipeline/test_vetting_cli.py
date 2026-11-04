@@ -28,6 +28,21 @@ def test_parser_can_enable_target_decision():
     assert _parser().parse_args(["--target-decision"]).target_decision is True
 
 
+def test_parser_bank_and_repeat_defaults():
+    args = _parser().parse_args([])
+    assert args.cases_from is None
+    assert args.repeat == 1
+    assert _parser().parse_args(
+        ["--cases-from", "arivu", "--repeat", "3"]).cases_from == "arivu"
+
+
+def test_run_rejects_bad_repeat():
+    from pipeline.vetting.cli.run import run as run_fn
+
+    args = _parser().parse_args(["--repeat", "0"])
+    assert run_fn(args) == 2
+
+
 def test_cli_defaults_to_run(monkeypatch):
     seen = {}
 

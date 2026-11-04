@@ -129,6 +129,39 @@ class RunSummary:
 
 
 @dataclass
+class WorkerAggregate:
+    name: str
+    threshold: float = 0.6
+    scores: list[float] = field(default_factory=list)
+    median: float = 0.0
+    lowest: float = 0.0
+    passes: int = 0
+    repeats: int = 0
+    verdict: str = "FAIL"
+    run_dirs: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class AggregateSummary:
+    run_dir: str
+    started_at: str
+    finished_at: str = ""
+    repeats: int = 1
+    cases_from: str = ""
+    threshold: float = 0.6
+    run_dirs: list[str] = field(default_factory=list)
+    workers: list[WorkerAggregate] = field(default_factory=list)
+    exit_code: int = 0
+    error: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
 class ProbeConfig:
     max_cases: int = 6
     answer_chars: int = 8000

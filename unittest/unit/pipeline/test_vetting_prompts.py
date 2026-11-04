@@ -39,6 +39,93 @@ def test_validate_plan_accepts_balanced_six():
     assert cases[0].checks[0]["op"] == "contains"
 
 
+def _craft_case(question):
+    case = _case()
+    case["question"] = question
+    return {"cases": [case]}
+
+
+def test_validate_plan_rejects_unlisted_craft():
+    plan = _craft_case("Explain the plan craft approval flow.")
+    with pytest.raises(PromptError, match="only has"):
+        validate_plan(plan, 1, ["test", "validate"])
+
+
+def test_validate_plan_accepts_listed_craft():
+    plan = _craft_case("Explain the test craft approval flow.")
+    cases = validate_plan(plan, 1, ["test", "validate"])
+    assert len(cases) == 1
+
+
+def test_validate_plan_ignores_generic_craft_prose():
+    plan = _craft_case("Describe the craft of writing good tests.")
+    assert len(validate_plan(plan, 1, ["test", "validate"])) == 1
+
+
+def test_validate_plan_grounding_is_opt_in():
+    plan = _craft_case("Explain the plan craft approval flow.")
+    assert len(validate_plan(plan, 1)) == 1
+    assert len(validate_plan(plan, 1, [])) == 1
+
+
+def _four_without_hard():
+    return {"cases": [_case("q1", "easy"), _case("q2", "easy"),
+                      _case("q3", "mid"), _case("q4", "mid")]}
+
+
+def test_validate_plan_distribution_opt_out():
+    with pytest.raises(PromptError, match="missing difficulties"):
+        validate_plan(_four_without_hard(), 4)
+    assert len(validate_plan(_four_without_hard(), 4, None, False)) == 4
+
+
+def _modes_case(text):
+    case = _case()
+    case["question"] = text
+    return {"cases": [case]}
+
+
+def test_validate_plan_rejects_wrong_mode_count():
+    plan = _modes_case("Name the three modes and what each allows.")
+    with pytest.raises(PromptError, match="claims .* mode"):
+        validate_plan(plan, 1, None, False, ["plan", "build"])
+
+
+def test_validate_plan_accepts_matching_mode_count():
+    plan = _modes_case("Name the two modes and what each allows.")
+    assert len(validate_plan(plan, 1, None, False, ["plan", "build"])) == 1
+
+
+def test_validate_plan_ignores_step_limits_and_missing_modes():
+    plan = _modes_case("Stay within the three-step limit.")
+    assert len(validate_plan(plan, 1, None, False, ["plan", "build"])) == 1
+    other = _modes_case("Name the three modes.")
+    assert len(validate_plan(other, 1)) == 1
+
+
+def test_validate_plan_ignores_rubric_tier_language():
+    case = _case()
+    case["question"] = "Explain the modes."
+    case["expected"] = "Names the modes."
+    case["rubric"] = ("1.0 if both modes are named; "
+                      "0.5 if only one mode is named; 0.0 otherwise.")
+    plan = {"cases": [case]}
+    assert len(validate_plan(plan, 1, None, False, ["plan", "build"])) == 1
+
+
+def test_build_judge_prompt_renders_facts():
+    from pipeline.vetting.utils.models import Case as CaseModel
+
+    case = CaseModel(id="q1", question="Q?", expected="E.", rubric="R.",
+                     difficulty="easy")
+    plain = build_judge_prompt(case, "answer")
+    assert "Worker facts" in plain
+    filled = build_judge_prompt(case, "answer",
+                                profile_facts={"worker": "w",
+                                               "crafts": ["plan"]})
+    assert '"crafts"' in filled and '"plan"' in filled
+
+
 def test_validate_plan_requires_exact_count():
     plan = _plan()
     plan["cases"] = plan["cases"][:5]

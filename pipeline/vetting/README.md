@@ -25,6 +25,7 @@ Both point at the same CLI. With no subcommand, `nak-vetting` defaults to
 nak-vetting run --workers viyan,ezhilan --cases 6 --threshold 0.6
 nak-vetting run --workers viyan --json
 nak-vetting run --workers viyan --quiet
+nak-vetting run --workers ezhilan --cases-from ezhilan --repeat 2
 ```
 
 Outputs land in `pipeline/vetting/runs/<stamp>/` with `summary.md`,
@@ -43,7 +44,28 @@ Useful flags:
 | `--skip-crafts` / `--skip-tools` | Skip probes |
 | `--include-assessor` | Include Nunnan in an auto-run |
 | `--target-decision` | Keep the target's triage/policy layer enabled |
+| `--cases-from` | Grade on a reviewed bank (worker name, `worker.vN`, or file path) instead of generated questions |
+| `--repeat` | Run N passes and grade the aggregate (median + majority; default `1`) |
 | `--json` / `--quiet` | Machine-readable or minimal output |
+
+### Graded runs (banks + repeats)
+
+Generative runs invent fresh questions every time, so scores move between
+runs. Graded runs fix the questions: reviewed banks live in
+`pipeline/vetting/cases/<worker>.vN.json`, and `--repeat N` runs the same
+bank N times (subdirs `repeat-01..N`) grading the aggregate
+(`aggregate.json`/`aggregate.md`): per-worker median score plus a
+strict-majority pass count. Grade promotions on banks + repeats; use
+generative runs for discovery (finding new weaknesses).
+
+```bash
+nak-vetting run --workers ezhilan --cases-from ezhilan --repeat 3
+```
+
+Rules: with `--cases-from`, every vetted worker must resolve a bank (a path
+bank must declare that worker); `--cases` is nominal (each worker runs its
+bank's questions). Banks are validated on load and re-checked for craft
+grounding at run time.
 
 ### Report card
 

@@ -75,9 +75,11 @@ def _probe_call(harness: Any, tool: str) -> dict[str, Any]:
                                     "rules": [{"id": "probe", "metric": "quality",
                                                "weight": 1, "min": 0, "max": 1}]}),
         "report": ("report", {"action": "write", "format": "md",
-                              "title": "Vetting probe",
-                              "sections": {"probe": "ok"},
-                              "path": "output/probe.md"}),
+                               "title": "Vetting probe",
+                               "sections": {"probe": "ok"},
+                               "path": "output/probe.md"}),
+        "search": ("search", {"action": "grep", "pattern": "vetting",
+                              "path": "workspace/probe.txt"}),
     }
     if tool not in calls:
         return {"ok": False, "error": f"no safe probe for tool {tool!r}"}
@@ -103,6 +105,11 @@ def _verdict(data: dict[str, Any], tool: str) -> tuple:
         return "fail", "assertion probe did not pass"
     if tool == "trace" and int(data.get("matched") or 0) < 1:
         return "fail", "trace found no probe line"
+    if tool == "search":
+        matches = [m for m in data.get("matches") or [] if isinstance(m, dict)]
+        if int(data.get("count") or 0) < 1 or not any(
+                _MARKER in str(m.get("text", "")) for m in matches):
+            return "fail", "search found no probe line"
     if tool == "scorecard" and abs(float(data.get("score", 0)) - 1.0) > 1e-6:
         return "fail", "scorecard probe did not score 1.0"
     return "pass", ""

@@ -13,7 +13,42 @@ from .models import Case, Judgement
 OPS: tuple[str, ...] = ("eq", "ne", "contains", "regex", "gte", "lte", "in")
 DIFFICULTIES: tuple[str, ...] = ("easy", "mid", "hard")
 _ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
+# "<mode> craft" mentions are checked against the worker's own crafts so a
+# case can never demand behaviour from a craft the worker does not have
+# (e.g. plan-craft questions for a test/validate-only worker). Generic prose
+# ("the craft of ...") never matches; only known mode names do.
+_CRAFT_VOCAB = ("plan", "assign", "build", "assess", "review", "audit",
+                "test", "validate", "assist")
+_CRAFT_MENTION_RE = re.compile(
+    r"\b(" + "|".join(_CRAFT_VOCAB) + r")\s+craft\b", re.IGNORECASE)
+# "N modes" claims ("three modes", "2 modes") are checked against the
+# worker's real mode count: generators invent mode counts the same way they
+# invent unlisted crafts. Step/step-limit wording never matches (no "modes").
+_NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5}
+_MODES_CLAIM_RE = re.compile(
+    r"\b(one|two|three|four|five|\d+)\s+(?:autonomy\s+)?modes?\b",
+    re.IGNORECASE)
 _MAX_CHECKS_PER_CASE = 20
+
+
+def _claimed_mode_counts(*texts: Any) -> list[int]:
+    counts: list[int] = []
+    for text in texts:
+        for match in _MODES_CLAIM_RE.finditer(str(text or "")):
+            word = match.group(1).lower()
+            counts.append(_NUMBER_WORDS.get(word, int(word)
+                                           if word.isdigit() else 0))
+    return [c for c in counts if c > 0]
+
+
+def _mentioned_crafts(*texts: Any) -> list[str]:
+    seen: list[str] = []
+    for text in texts:
+        for match in _CRAFT_MENTION_RE.finditer(str(text or "")):
+            name = match.group(1).lower()
+            if name not in seen:
+                seen.append(name)
+    return seen
 _BRITTLE_CHECK_TOKENS = {
     "plan", "personality", "laya", "nemotron", "max_steps", "do_not",
     "tool_verdict", "permission", "decision.model", "decision", "memory",
@@ -80,7 +115,8 @@ def build_plan_retry_prompt(profile: dict[str, Any], n_cases: int,
 
 def build_judge_prompt(case: Case, answer: str, error: str = "",
                        policy: dict[str, Any] | None = None,
-                       checks: list[dict[str, Any]] | None = None) -> str:
+                       checks: list[dict[str, Any]] | None = None,
+                       profile_facts: dict[str, Any] | None = None) -> str:
     case_data = {
         "id": case.id,
         "question": case.question,
@@ -91,9 +127,12 @@ def build_judge_prompt(case: Case, answer: str, error: str = "",
     }
     policy_text = json.dumps(policy, ensure_ascii=False, sort_keys=True) if policy else ""
     checks_text = json.dumps(checks, ensure_ascii=False, sort_keys=True) if checks else ""
+    facts_text = json.dumps(profile_facts, ensure_ascii=False,
+                            sort_keys=True) if profile_facts else ""
     return (
         _template("judge")
         .replace("{{case}}", fence_untrusted(case_data))
+        .replace("{{profile_facts}}", fence_untrusted(facts_text))
         .replace("{{answer}}", fence_untrusted(answer))
         .replace("{{error}}", fence_untrusted(error))
         .replace("{{policy}}", fence_untrusted(policy_text))
@@ -381,7 +420,10 @@ def _check_case(item: Any, index: int) -> Case:
                 difficulty=difficulty, weight=float(weight), checks=checks)
 
 
-def validate_plan(payload: dict[str, Any], n_cases: int) -> list[Case]:
+def validate_plan(payload: dict[str, Any], n_cases: int,
+                  allowed_crafts: Any = None,
+                  enforce_distribution: bool = True,
+                  autonomy_modes: Any = None) -> list[Case]:
     if not isinstance(payload, dict):
         raise PromptError("plan must be a JSON object")
     raw_cases = payload.get("cases")
@@ -395,16 +437,43 @@ def validate_plan(payload: dict[str, Any], n_cases: int) -> list[Case]:
     if len(ids) != len(set(ids)):
         raise PromptError(f"plan case ids must be unique: {ids}")
     counts = {d: sum(1 for c in cases if c.difficulty == d) for d in DIFFICULTIES}
-    if n_cases == 6:
-        expected = {d: 2 for d in DIFFICULTIES}
-        if counts != expected:
-            raise PromptError(
-                f"plan must contain 2 easy, 2 mid and 2 hard cases (got {counts})"
-            )
-    elif n_cases >= 3:
-        missing = [d for d, count in counts.items() if count == 0]
-        if missing:
-            raise PromptError(f"plan is missing difficulties: {missing}")
+    if enforce_distribution:
+        if n_cases == 6:
+            expected = {d: 2 for d in DIFFICULTIES}
+            if counts != expected:
+                raise PromptError(
+                    f"plan must contain 2 easy, 2 mid and 2 hard cases (got {counts})"
+                )
+        elif n_cases >= 3:
+            missing = [d for d, count in counts.items() if count == 0]
+            if missing:
+                raise PromptError(f"plan is missing difficulties: {missing}")
+    if allowed_crafts is not None:
+        allowed = {str(c or "").strip().lower()
+                   for c in (allowed_crafts or []) if str(c or "").strip()}
+        if allowed:
+            for case in cases:
+                mentioned = _mentioned_crafts(case.question, case.expected,
+                                              case.rubric)
+                foreign = [m for m in mentioned if m not in allowed]
+                if foreign:
+                    raise PromptError(
+                        f"case {case.id}: mentions {foreign} craft, but the "
+                        f"worker only has: {sorted(allowed)}")
+    if autonomy_modes is not None:
+        modes = [str(m or "").strip().lower()
+                 for m in (autonomy_modes or []) if str(m or "").strip()]
+        if modes:
+            # Question + expected only: rubrics speak in partial-credit
+            # tiers ("0.5 if only one mode is named") that are not factual
+            # claims — checking them false-positives on good cases.
+            for case in cases:
+                claimed = _claimed_mode_counts(case.question, case.expected)
+                wrong = [c for c in claimed if c != len(modes)]
+                if wrong:
+                    raise PromptError(
+                        f"case {case.id}: claims {wrong} mode(s) but the "
+                        f"worker has {len(modes)} ({sorted(modes)})")
     return cases
 
 

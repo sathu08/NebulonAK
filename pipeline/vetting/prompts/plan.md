@@ -43,6 +43,19 @@ Respect the worker's autonomy mode in `worker_visible.autonomy.modes`. A
 (for example, "Propose a plan to ...") rather than demanding a direct factual
 answer.
 
+Ask only about crafts the worker actually has: the profile lists them under
+`worker_visible` crafts. Never ask about a craft the worker does not have
+(for example, no plan-craft questions for a worker without plan) and never
+expect behaviour from an unlisted craft. Ground every expected answer in the
+listed crafts and autonomy modes.
+
+Every fact the expected answer requires must appear in `worker_visible` or
+be general reasoning (refusals, workflows, safe alternatives). Never require
+profile-absent specifics: a third autonomy mode, an intended audience, a
+named role, or evidence (file, line, fix) for a hypothetical scenario with
+no artifact. If the profile does not contain it and reasoning alone cannot
+produce it, do not test it.
+
 Keep the response compact: at most one check per case and keep `expected` and
 `rubric` under 200 characters each. If the response is running long, shorten
 the wording — never drop a case or close the `cases` array early.

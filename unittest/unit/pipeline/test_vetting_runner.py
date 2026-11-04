@@ -310,7 +310,10 @@ def test_transient_plan_error_is_retried(tmp_path):
 
 
 def test_plan_retry_gives_up_after_three_attempts(tmp_path):
-    brain = ScriptedBrain([_bad_plan_json() for _ in range(3)])
+    bad = [_bad_plan_json() for _ in range(3)]
+    bad[1] = bad[1].replace('"q1"', '"q1x"')
+    bad[2] = bad[2].replace('"q1"', '"q1y"')
+    brain = ScriptedBrain(bad)
     summary = run_vetting(
         ["vizhi"],
         run_dir=tmp_path / "run",
@@ -332,7 +335,24 @@ def test_plan_retry_gives_up_after_three_attempts(tmp_path):
     report = (tmp_path / "run" / "vizhi" / "output" / "reports"
               / "vizhi.md").read_text()
     assert "INCONCLUSIVE" in report
-    assert "n/a" in report
+
+
+def test_identical_bad_plans_stop_before_third_attempt(tmp_path):
+    brain = ScriptedBrain([_bad_plan_json() for _ in range(3)])
+    summary = run_vetting(
+        ["vizhi"],
+        run_dir=tmp_path / "run",
+        brain=object(),
+        nunnan_brain=brain,
+        nunnan_factory=lambda b: FakeAssessor(b),
+        worker_factory=lambda name, b: FakeTarget([]),
+        probe_crafts_enabled=False,
+        probe_tools_enabled=False,
+    )
+    worker = summary.workers[0]
+    assert worker.status == "inconclusive"
+    assert "plan failed" in worker.error
+    assert len(brain.responses) == 1
 
 
 def test_trace_failure_is_evidence_not_a_report_failure(tmp_path, monkeypatch):

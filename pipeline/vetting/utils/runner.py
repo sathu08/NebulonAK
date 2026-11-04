@@ -28,11 +28,13 @@ from nak.harness.tools.trace import trace
 from nak.wiring import make_brain, make_worker
 
 from .models import (
+    AggregateSummary,
     Answer,
     Case,
     Improvement,
     Judgement,
     RunSummary,
+    WorkerAggregate,
     WorkerResult,
 )
 from .probes import probe_crafts, probe_tools
@@ -309,9 +311,40 @@ def _chat_target(target: Any, case: Case, session_id: str,
     return answer
 
 
+def _profile_facts(profile: dict[str, Any], worker_name: str) -> dict[str, Any]:
+    """Compact ground truth for the judge: crafts, modes, limits, do_not.
+
+    Note: the profile builder spreads identity fields (values, do_not, ...)
+    at the top level AND inside worker_visible — both are checked.
+    """
+    profile = profile if isinstance(profile, dict) else {}
+    visible = profile.get("worker_visible") or {}
+    if not isinstance(visible, dict):
+        visible = {}
+    crafts = [str(c.get("name", "") or "")
+              for c in (visible.get("crafts") or []) if isinstance(c, dict)]
+    autonomy = visible.get("autonomy") or {}
+    if not isinstance(autonomy, dict):
+        autonomy = {}
+    do_not = visible.get("do_not") or profile.get("do_not") or []
+    values = visible.get("values") or profile.get("values") or []
+    return {
+        "worker": str(worker_name or ""),
+        "crafts": [c for c in crafts if c],
+        "modes": [str(m) for m in (autonomy.get("modes") or [])
+                  if str(m or "").strip()],
+        "max_steps": autonomy.get("max_steps"),
+        "auto_steps": autonomy.get("auto_steps"),
+        "approval": autonomy.get("approval"),
+        "do_not": [str(d) for d in (do_not or []) if str(d or "").strip()],
+        "values": [str(v) for v in (values or []) if str(v or "").strip()],
+    }
+
+
 def _judge_case(nunnan: Any, case: Case, answer: Answer, history_path: Path,
                 target: str, root: Path | None = None,
-                timeout: float | None = None) -> Judgement:
+                timeout: float | None = None,
+                profile_facts: dict[str, Any] | None = None) -> Judgement:
     policy = None
     if answer.blocked or answer.policy_action in ("clarify", "escalate"):
         policy = {
@@ -324,7 +357,8 @@ def _judge_case(nunnan: Any, case: Case, answer: Answer, history_path: Path,
     # sent to the judge: live runs showed brittle `contains` checks anchoring
     # an otherwise correct answer to 0.0. The rubric/expected text is the
     # scoring contract; checks must never override it.
-    prompt = build_judge_prompt(case, answer.text, answer.error, policy)
+    prompt = build_judge_prompt(case, answer.text, answer.error, policy,
+                                  profile_facts=profile_facts)
     last_error = ""
     for attempt in range(2):
         attempt_timeout = timeout * (attempt + 1) if timeout else None
@@ -492,6 +526,15 @@ def _build_improvements(result: WorkerResult,
                 suggestion=("Re-run the judge; if it keeps failing, fix the "
                             "judge prompt/timeout before changing the worker."))
             continue
+        if "case-invalid" in str(judgement.rationale or "").lower():
+            add(source="case", section=case.difficulty, severity="medium",
+                target=case.id,
+                problem=(f"Case {case.id} flagged invalid by the judge: the "
+                         "worker is not at fault."),
+                evidence=str(judgement.rationale or "")[:500],
+                suggestion=("Fix or regenerate this case against the worker's "
+                            "visible profile, then re-run."))
+            continue
         if float(judgement.score) < threshold:
             add(source="case", section=case.difficulty,
                 severity="high" if judgement.score < 0.3 else "medium",
@@ -528,6 +571,17 @@ def _build_improvements(result: WorkerResult,
 
     for probe in result.tool_probes:
         if probe.status not in ("fail", "error"):
+            continue
+        if "no safe probe" in str(probe.detail):
+            # Vetting gap, not a tool problem: the tool itself was never
+            # exercised, so do not blame the tool or its registry entry.
+            add(source="tool", section="tool", scope="tool",
+                severity="medium", target=probe.name,
+                problem=f"Tool {probe.name} has no safe probe defined.",
+                evidence=str(probe.detail)[:500],
+                suggestion=(f"Add a safe read-only probe for tool {probe.name} "
+                            "in pipeline/vetting/utils/probes.py (_probe_call), "
+                            "then re-run the vetting probes."))
             continue
         add(source="tool", section="tool", scope="tool",
             severity="high" if probe.status == "error" else "medium",
@@ -623,7 +677,8 @@ def _run_one(name: str, run_id: str, run_dir: Path, *,
              worker_factory: Callable[[str, Any], Any],
              cases: int, threshold: float, answer_chars: int,
              probe_crafts_enabled: bool, probe_tools_enabled: bool,
-             target_decision: bool = False) -> WorkerResult:
+             target_decision: bool = False,
+             bank_cases: list | None = None) -> WorkerResult:
     worker_dir = run_dir / _safe_name(name)
     evidence = worker_dir / "output" / "evidence"
     reports = worker_dir / "output" / "reports"
@@ -655,30 +710,59 @@ def _run_one(name: str, run_id: str, run_dir: Path, *,
         _configure_assessor(nunnan)
         _reset_history(nunnan)
         assessor_profile = planner_profile(result.profile)
-        plan_prompt = build_plan_prompt(assessor_profile, cases)
-        plan_attempts = 3
-        for attempt in range(1, plan_attempts + 1):
-            try:
-                _reset_history(nunnan)
-                result.cases = _nunnan_json(
-                    nunnan, plan_prompt, history_path, name, "plan",
-                    lambda text: validate_plan(parse_json_object(text), cases),
-                )
-                break
-            except Exception as exc:  # noqa: BLE001 — retry a bad plan
-                record = getattr(exc, "record", {}) or {}
-                previous = str(record.get("raw_response", "") or "")
-                if attempt >= plan_attempts:
-                    raise
-                if not previous and attempt >= 2:
-                    raise
-                if previous:
-                    plan_prompt = build_plan_retry_prompt(
-                        assessor_profile, cases, previous, str(exc))
-        _append_transcript(transcript_path, {
-            "timestamp": _now(), "type": "plan", "target": name,
-            "cases": [case.to_dict() for case in result.cases],
-        })
+        visible = assessor_profile.get("worker_visible") \
+            if isinstance(assessor_profile, dict) else {}
+        allowed_crafts = [str(c.get("name", "") or "")
+                          for c in ((visible or {}).get("crafts") or [])
+                          if isinstance(c, dict)]
+        autonomy = (visible or {}).get("autonomy") or {}
+        worker_modes = [str(m or "").strip()
+                        for m in (autonomy.get("modes") or [])
+                        if str(m or "").strip()]
+        if bank_cases is not None:
+            # Graded mode: reviewed bank, no generation. Shape + grounding
+            # still validated (a bad bank fails loudly, not silently).
+            result.cases = validate_plan(
+                {"cases": [c.to_dict() for c in bank_cases]},
+                len(bank_cases), allowed_crafts, False, worker_modes)
+            _append_transcript(transcript_path, {
+                "timestamp": _now(), "type": "plan", "target": name,
+                "cases": [case.to_dict() for case in result.cases],
+                "bank": True,
+            })
+        else:
+            plan_prompt = build_plan_prompt(assessor_profile, cases)
+            plan_attempts = 3
+            last_raw = ""
+            for attempt in range(1, plan_attempts + 1):
+                try:
+                    _reset_history(nunnan)
+                    result.cases = _nunnan_json(
+                        nunnan, plan_prompt, history_path, name, "plan",
+                        lambda text: validate_plan(parse_json_object(text), cases,
+                                                   allowed_crafts, True,
+                                                   worker_modes),
+                    )
+                    break
+                except Exception as exc:  # noqa: BLE001 — retry a bad plan
+                    record = getattr(exc, "record", {}) or {}
+                    previous = str(record.get("raw_response", "") or "")
+                    if attempt >= plan_attempts:
+                        raise
+                    if previous and previous == last_raw:
+                        # Fixated: byte-identical rejected plan twice — a third
+                        # attempt wastes an LLM call, so stop here.
+                        raise
+                    last_raw = previous
+                    if not previous and attempt >= 2:
+                        raise
+                    if previous:
+                        plan_prompt = build_plan_retry_prompt(
+                            assessor_profile, cases, previous, str(exc))
+            _append_transcript(transcript_path, {
+                "timestamp": _now(), "type": "plan", "target": name,
+                "cases": [case.to_dict() for case in result.cases],
+            })
     except Exception as exc:  # noqa: BLE001 — no plan means no answers
         result.error = f"plan failed: {str(exc)[:400]}"
         result.status = "inconclusive"
@@ -717,7 +801,8 @@ def _run_one(name: str, run_id: str, run_dir: Path, *,
         else:
             judgement = _judge_case(
                 nunnan, case, answer, history_path, name, root=worker_dir,
-                timeout=60)
+                timeout=60,
+                profile_facts=_profile_facts(result.profile, name))
         result.judgements.append(judgement)
         _append_transcript(transcript_path, {
             "timestamp": _now(), "type": "judgement", "target": name,
@@ -778,8 +863,14 @@ def run_vetting(
     probe_tools_enabled: bool = True,
     include_assessor: bool = False,
     target_decision: bool = False,
+    cases_from: Any = None,
 ) -> RunSummary:
-    """Run one vetting pass and return the summary (also written to disk)."""
+    """Run one vetting pass and return the summary (also written to disk).
+
+    ``cases_from`` grades on reviewed banks (bank name, ``worker.vN`` or
+    file path) instead of generating fresh questions; every vetted worker
+    must resolve a bank or the run fails fast with exit 2.
+    """
     if isinstance(workers, str):
         workers = [part.strip() for part in workers.split(",") if part.strip()]
     run_path = Path(run_dir) if run_dir else _default_run_dir()
@@ -814,6 +905,20 @@ def run_vetting(
         summary.finished_at = _now()
         write_summary(summary)
         return summary
+
+    banked: dict[str, list] = {}
+    if cases_from is not None:
+        from .bank import resolve_bank
+
+        try:
+            for worker_name in names:
+                banked[worker_name] = resolve_bank(cases_from, worker_name)
+        except ValueError as exc:
+            summary.error = f"bank error: {exc}"
+            summary.exit_code = 2
+            summary.finished_at = _now()
+            write_summary(summary)
+            return summary
 
     def _make_target_brain(target: str) -> Any:
         if brain is not None:
@@ -852,6 +957,7 @@ def run_vetting(
                 probe_crafts_enabled=probe_crafts_enabled,
                 probe_tools_enabled=probe_tools_enabled,
                 target_decision=target_decision,
+                bank_cases=banked.get(name),
             )
         except Exception as exc:  # noqa: BLE001 — one worker never kills the run
             result = WorkerResult(
@@ -874,3 +980,66 @@ def run_vetting(
         summary.exit_code = 0
     write_summary(summary)
     return summary
+
+
+def repeat_vetting(workers: list[str] | None = None,
+                   run_dir: str | Path | None = None,
+                   *, repeats: int = 2,
+                   cases_from: Any = None,
+                   **kwargs: Any) -> AggregateSummary:
+    """Run N passes under one parent dir and grade the aggregate.
+
+    Each pass is a full run_vetting (own subdir repeat-01..N); the graded
+    verdict per worker is a strict majority of passed runs, with the median
+    score reported for context. Repeats pair with banks (same questions every
+    pass); without cases_from each pass generates fresh questions.
+    """
+    try:
+        count = int(repeats)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"repeats must be an int >= 1: {repeats!r}") from exc
+    if count < 1:
+        raise ValueError(f"repeats must be an int >= 1: {repeats!r}")
+    parent = Path(run_dir) if run_dir else _default_run_dir()
+    parent.mkdir(parents=True, exist_ok=True)
+    started = _now()
+    summaries: list[RunSummary] = []
+    for i in range(1, count + 1):
+        summaries.append(run_vetting(
+            workers, run_dir=parent / f"repeat-{i:02d}",
+            cases_from=cases_from, **kwargs))
+    return _aggregate(parent, summaries, cases_from, count, started)
+
+
+def _aggregate(parent: Path, summaries: list[RunSummary], cases_from: Any,
+               repeats: int, started: str) -> AggregateSummary:
+    from statistics import median
+
+    from ..report import write_aggregate
+
+    agg = AggregateSummary(
+        run_dir=str(parent), started_at=started, repeats=repeats,
+        cases_from=str(cases_from or ""),
+        threshold=(summaries[0].threshold if summaries else 0.6),
+        run_dirs=[s.run_dir for s in summaries])
+    by_worker: dict[str, list] = {}
+    for summary in summaries:
+        for worker in summary.workers:
+            by_worker.setdefault(worker.name, []).append((summary, worker))
+    for name in sorted(by_worker):
+        pairs = by_worker[name]
+        runs = [w for _, w in pairs]
+        scores = [round(float(w.score), 6) for w in runs]
+        passes = sum(1 for w in runs if w.passed)
+        med = round(median(scores), 6) if scores else 0.0
+        agg.workers.append(WorkerAggregate(
+            name=name, threshold=runs[0].threshold, scores=scores,
+            median=med, lowest=round(min(scores), 6) if scores else 0.0,
+            passes=passes, repeats=len(runs),
+            verdict="PASS" if passes * 2 > len(runs) else "FAIL",
+            run_dirs=[s.run_dir for s, _ in pairs if s.run_dir]))
+    agg.finished_at = _now()
+    agg.exit_code = 0 if agg.workers and all(
+        w.verdict == "PASS" for w in agg.workers) else 1
+    write_aggregate(agg, parent)
+    return agg

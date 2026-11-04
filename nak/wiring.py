@@ -8,6 +8,7 @@ BOUNDARY:
 
 Use:
     from nak.wiring import make_worker, make_brain, make_harness, decide, run_craft
+    from nak.wiring import make_task_store
     w = make_worker("vizhi")            # brain + decider + policy injected
     w.chat("hello")                     # triage auto-runs (decision.enabled)
     h = make_harness(worker="vizhi")    # sandboxed file/directory/terminal tools
@@ -15,6 +16,8 @@ Use:
     decide("read notes.txt", llm=False) # decider with registry loaders
     run_craft("extract invoice.pdf", w, h, approver=lambda info: True)
     run_craft("ship login", harness=h, team="core")  # leader plans
+    store = make_task_store("nebulondb")  # durable TaskStore (default: memory)
+    run_craft("ship login", harness=h, team="core", store=store)
     """
 
 from __future__ import annotations
@@ -78,11 +81,70 @@ def new_session(user: Any = None, label: Any = None, when: Any = None) -> str:
     return make_session_id(who, when=when)
 
 
+def make_registry(workers_file: Any = None, teams_file: Any = None,
+                  tools_file: Any = None,
+                  permissions_file: Any = None) -> Any:
+    """Create the JSON registry adapter (RegistryPort over manifests)."""
+    from nak.adapters.registry_json import JsonRegistry
+
+    return JsonRegistry(workers_file=workers_file, teams_file=teams_file,
+                        tools_file=tools_file, permissions_file=permissions_file)
+
+
+def make_memory(brain: Any = None, user: Any = None) -> Any:
+    """Create the memory adapter (MemoryPort over an injected brain)."""
+    from nak.adapters.memory_nebulon import NebulonMemory
+
+    return NebulonMemory(brain=brain, user=user)
+
+
+def make_executor(harness: Any = None, worker: Any = None,
+                  **kwargs: Any) -> Any:
+    """Create the harness executor (ToolExecutorPort over a harness).
+
+    Pass a built harness, or a worker name (+ make_harness kwargs) to build
+    one. Phase D's agent loop drives tool calls through this.
+    """
+    from nak.adapters.executor_harness import HarnessExecutor
+
+    if harness is None:
+        harness = make_harness(worker=worker, **kwargs)
+    return HarnessExecutor(harness)
+
+
+def call_worker(name: str, goal: str, *, store: Any = None,
+                approver: Any = None, workspace: str = "",
+                max_steps: int = 8, timeout: int = 300,
+                allowed_tools: Any = None, registry: Any = None,
+                harness_kwargs: Any = None, **kwargs: Any) -> Any:
+    """Call one named worker on one task (depth-1 delegation).
+
+    Convenience over nak.application.call_worker with real factories: a fresh
+    brain per call, worker + harness + executor + memory built and injected.
+    Returns {task, run, result, loop}. Extra kwargs are ignored.
+    """
+    from nak.adapters.store_memory import InMemoryTaskStore
+    from nak.application.call import call_worker as _app_call
+
+    _ = kwargs
+    return _app_call(
+        name, goal, store=store or InMemoryTaskStore(),
+        worker_factory=lambda n, b: make_worker(n, brain=b),
+        brain_factory=make_brain,
+        harness_factory=lambda **k: make_harness(**k),
+        executor_factory=lambda h: make_executor(harness=h),
+        memory_factory=lambda b: make_memory(brain=b),
+        registry=registry or make_registry(),
+        approver=approver, workspace=workspace, max_steps=max_steps,
+        timeout=timeout, allowed_tools=frozenset(allowed_tools or ()),
+        harness_kwargs=harness_kwargs)
+
+
 def _workers_loader(workers_file: Any = None) -> Callable[[], List[Dict[str, Any]]]:
     def _load() -> List[Dict[str, Any]]:
-        from nak.worker import list_workers
+        from nak.adapters.registry_json import JsonRegistry
 
-        return list(list_workers(workers_file) if workers_file else list_workers())
+        return list(JsonRegistry(workers_file=workers_file).workers())
 
     return _load
 
@@ -97,10 +159,11 @@ def _tools_loader(engine: Any = None, registry: Any = None) -> Callable[[], List
         # Registry names only — never build a ToolEngine here (its
         # constructor creates a session dir on disk as a side effect).
         try:
-            from nak.harness.engine.registry import load_registry
+            from nak.adapters.registry_json import JsonRegistry
 
             names = [str(e.get("name", "")).strip()
-                     for e in load_registry(registry) if isinstance(e, dict)]
+                     for e in JsonRegistry(tools_file=registry).tools()
+                     if isinstance(e, dict)]
             names = [n for n in names if n]
             if names:
                 return names
@@ -414,6 +477,83 @@ def make_worker(
     )
 
 
+def make_task_store(backend: str = "memory", **kwargs: Any) -> Any:
+    """Create a TaskStorePort: in-memory default or durable NebulonDB.
+
+    backend "memory" (default) needs no services — unit tests and offline
+    runs use it. backend "nebulondb" builds NebulonDBTaskStore: base_url,
+    user and password resolve from NebulonMD (single configured connection)
+    unless overridden — precedence per field is kwarg > env > cfg >
+    Mind-resolved > built-in default. A default-valued base_url counts as
+    "not configured" and resolves from Mind. Set resolve_from_mind=False
+    (cfg/env NAK_NDB_RESOLVE_FROM_MIND) for legacy direct configuration.
+    Unknown backend raises ValueError.
+    """
+    import os as _os
+
+    name = str(backend or "memory").strip().lower()
+    if name in ("memory", "off", "none"):
+        from nak.adapters.store_memory import InMemoryTaskStore
+
+        return InMemoryTaskStore()
+    if name in ("nebulondb", "ndb", "db"):
+        from nak.adapters.credentials_mind import MindCredentialsResolver
+        from nak.adapters.store_nebulondb import NebulonDBTaskStore
+
+        try:
+            from nak.utils.settings import DEFAULT_NDB_BASE_URL, load_settings
+
+            settings = load_settings()
+        except Exception:
+            settings = None
+
+        # Natural kwarg names (base_url/user/...) alias their ndb_* settings.
+        eff = dict(kwargs)
+        for natural, canonical in (
+                ("base_url", "ndb_base_url"), ("user", "ndb_user"),
+                ("password", "ndb_password"), ("corpus", "ndb_corpus"),
+                ("timeout", "ndb_timeout"), ("max_retries", "ndb_max_retries"),
+                ("retry_backoff", "ndb_retry_backoff")):
+            if eff.get(natural) not in (None, "") and eff.get(canonical) in (None, ""):
+                eff[canonical] = eff[natural]
+
+        def _pick(key: str, default: Any) -> Any:
+            if eff.get(key) not in (None, ""):
+                return eff[key]
+            return getattr(settings, key, default) if settings is not None else default
+
+        resolve = kwargs.get("resolve_from_mind")
+        if resolve is None:
+            resolve = getattr(settings, "resolve_from_mind", True) \
+                if settings is not None else True
+        base_url = str(_pick("ndb_base_url", DEFAULT_NDB_BASE_URL) or "").strip()
+        if base_url == DEFAULT_NDB_BASE_URL:
+            base_url = ""  # default-valued means "not configured" -> resolve
+        user = str(_pick("ndb_user", "") or "").strip()
+        password = kwargs.get("password") or _pick("ndb_password", "")
+        password = str(password or "")
+        resolver = None
+        if resolve:
+            mind_base = kwargs.get("mind_base_url") or (
+                str(getattr(settings, "base_url", "") or "").rstrip("/")
+                if settings is not None else "")
+            mind_token = kwargs.get("mind_auth_token") or (
+                str(getattr(settings, "auth_token", "") or "")
+                if settings is not None else "")
+            mind_token = mind_token or _os.environ.get("NAK_AUTH_TOKEN", "")
+            resolver = MindCredentialsResolver(
+                mind_base_url=mind_base, auth_token=mind_token,
+                timeout=_pick("ndb_timeout", 30.0))
+        return NebulonDBTaskStore(
+            base_url=base_url, user=user, password=password,
+            corpus=_pick("ndb_corpus", "nak_tasks"),
+            timeout=_pick("ndb_timeout", 30.0),
+            max_retries=_pick("ndb_max_retries", 2),
+            retry_backoff=_pick("ndb_retry_backoff", 1.0),
+            credentials_resolver=resolver)
+    raise ValueError(f"unknown task store backend {backend!r} (want memory|nebulondb)")
+
+
 def run_craft(goal: str, worker: Any = None, harness: Any = None,
               approver: Any = None, brain_factory: Any = None,
               factory: Any = None,
@@ -423,8 +563,17 @@ def run_craft(goal: str, worker: Any = None, harness: Any = None,
               decision: Any = None,
               decision_parallel: Optional[bool] = None,
               craft: Optional[str] = None,
-              dispatch: bool = True) -> Dict[str, Any]:
+              dispatch: bool = True,
+              store: Any = None) -> Dict[str, Any]:
     """Worker crafts a plan; approved assignments run as peer workers.
+
+    Facade over nak.application use-cases (create_task -> plan_task ->
+    assign_task); the peer-dispatch tail stays here until Phase D moves
+    execution into run_task/run_chain. Every stage is recorded in the
+    TaskStore (``store``; default in-memory, or make_task_store("nebulondb")
+    for durable runs): task.created -> task.planned -> task.approved (or
+    task.needs_approval) -> task.assigned -> task.running -> task.dispatched
+    (+ saved Result). Return shape is unchanged.
 
     Flow: worker.chat(goal, session_id=harness.session_id) (triage+policy
     run inside; the harness session doubles as the Mind session key so
@@ -463,6 +612,9 @@ def run_craft(goal: str, worker: Any = None, harness: Any = None,
     decision_parallel=False forces serial decisions (LLM mode is always
     serialized; endpoint batches are bounded by max_parallel/timeout).
 
+    store: TaskStorePort (None = throwaway in-memory store). Pass
+    store=make_task_store("nebulondb") for durable, resumable runs.
+
     Returns {"planned", "path"?, "steps"?, "needs_approval"?, "approved",
     "assigned_workers", "decision"?, "workers"?, "runs"?, "skipped"?,
     "blocked"?, "team", "members", "planner", "planner_outside_team",
@@ -470,7 +622,14 @@ def run_craft(goal: str, worker: Any = None, harness: Any = None,
     "parallel", "dispatched", "team_memory"?, "answer", "session_id",
     "reason"?}. Never raises on worker/harness/team failure — returns
     {"planned": False, ...} instead (except missing harness/planner args).
+    Task-store (infrastructure) failures propagate — persistence loss is
+    never silent.
     """
+    from nak.adapters.store_memory import InMemoryTaskStore
+    from nak.application import assign_task as _app_assign
+    from nak.application import create_task as _app_create
+    from nak.application import plan_task as _app_plan
+    from nak.domain.state import TaskState
     from nak.worker import GenericWorker as _GW
     from nak.worker.engine.team import (
         ensure_planner_allowed,
@@ -532,87 +691,73 @@ def run_craft(goal: str, worker: Any = None, harness: Any = None,
     if not g:
         return {"planned": False, "approved": False, "answer": "",
                 "reason": "missing goal", "session_id": sid, **meta}
+    if store is None:
+        store = InMemoryTaskStore()
     try:
-        resp = worker.chat(g, session_id=sid)
+        max_steps = int((getattr(worker, "autonomy", {}) or {}).get("max_steps", 3))
+    except (TypeError, ValueError):
+        max_steps = 3
+    try:
+        task, run = _app_create(
+            g, store=store,
+            inputs={"goal": g, "team": str(team or "")},
+            workspace=getattr(harness, "session_dir", "") or sid or "default",
+            max_steps=max_steps, timeout=300)
     except Exception as exc:
         return {"planned": False, "approved": False, "answer": "",
-                "reason": f"worker chat failed: {str(exc)[:150]}",
-                "session_id": sid, **meta}
-    answer = str((resp or {}).get("answer", ""))
-    triage = (resp or {}).get("triage") if isinstance(resp, dict) else None
-    pol = (triage or {}).get("policy", {}) if isinstance(triage, dict) else {}
-    if str(pol.get("action", "chat")).strip().lower() in ("clarify", "escalate"):
-        return {"planned": False, "approved": False, "answer": answer,
-                "triage": triage, "session_id": sid, **meta,
-                "reason": f"policy {pol.get('action')} — no plan started"}
-    steps = worker.extract_plan(answer)
-    if not steps:
-        return {"planned": False, "approved": False, "answer": answer,
-                "triage": triage, "reason": "no numbered steps in reply",
+                "reason": f"task store failed: {str(exc)[:150]}",
                 "session_id": sid, **meta}
     try:
         known = [str(e.get("name", "")).strip()
                  for e in _workers_loader(getattr(worker, "_workers_file", None))()]
     except Exception:
         known = []
-    decision_meta = None
-    try:
-        decision_cfg = _decision_config(worker, decision, craft)
-        if decision_cfg and decision_cfg.get("enabled"):
-            candidates = (list(team_spec["members"]) if team_spec else list(known))
-            candidates = [n for n in candidates if n and n != planner]
-            answer, _items, decision_meta = _apply_decisions(
-                g, answer, decision_cfg, worker, candidates, sid,
-                force_parallel=decision_parallel)
-            steps = worker.extract_plan(answer)
-    except Exception as exc:
-        decision_meta = {"scope": "", "mode": "", "status": "error",
-                         "items": [], "blocked": [],
-                         "reason": f"decision stage failed: {str(exc)[:150]}"}
-    if not steps:
-        return {"planned": False, "approved": False, "answer": answer,
-                "triage": triage, "reason": "no numbered steps in reply",
-                "session_id": sid, "decision": decision_meta, **meta}
-    assigned = worker.extract_assigned(answer, known or None)
-    need = worker.needs_plan_approval(len(steps))
-    if decision_meta and (decision_meta.get("blocked")
-                          or decision_meta.get("status") == "error"):
-        need = True  # unrouted/failed decision always needs a human look
-    try:
-        info = harness.start_plan(g, steps, assigned_workers=assigned,
-                                  needs_approval=need,
-                                  decision_evidence=decision_meta)
-    except Exception as exc:
-        return {"planned": False, "approved": False, "answer": answer,
-                "triage": triage, "session_id": sid, **meta,
-                "reason": f"plan file failed: {str(exc)[:150]}"}
-    approved = False
-    if not need:
-        approved = True  # small plan: file already says auto-approved
-    elif callable(approver):
-        try:
-            approved = bool(approver(info))
-        except Exception:
-            approved = False
-        try:
-            harness.approve_plan(approved, by="approver",
-                                 note="via run_craft")
-        except Exception:
-            pass
-    out: Dict[str, Any] = {
-        "planned": True, "path": info.get("path"), "steps": steps,
-        "needs_approval": need, "approved": approved,
-        "assigned_workers": assigned, "answer": answer, "triage": triage,
+    candidates = (list(team_spec["members"]) if team_spec else list(known))
+    candidates = [n for n in candidates if n and n != planner]
+
+    def _route(answer_text: str, cands: list) -> tuple:
+        cfg = _decision_config(worker, decision, craft)
+        if not (cfg and cfg.get("enabled")):
+            return answer_text, [], None
+        return _apply_decisions(g, answer_text, cfg, worker, cands, sid,
+                                force_parallel=decision_parallel)
+
+    plan_out = _app_plan(task, run, store=store, planner=worker,
+                         harness=harness, approver=approver,
+                         team_spec=team_spec, candidates=candidates,
+                         known_workers=known, route_steps=_route)
+    run = plan_out.pop("run")
+    if not plan_out.get("planned"):
+        return {**plan_out, **meta}
+    assign_out = _app_assign(task, run, store=store, team_spec=team_spec,
+                             assigned=plan_out.get("assigned_workers"),
+                             planner_name=planner,
+                             splitter=split_assignments)
+    run = assign_out.pop("run")
+    out: dict[str, Any] = {
+        "planned": True, "path": plan_out.get("path"),
+        "steps": plan_out.get("steps"),
+        "needs_approval": plan_out.get("needs_approval"),
+        "approved": plan_out.get("approved"),
+        "assigned_workers": assign_out.get("assigned_workers"),
+        "answer": plan_out.get("answer"), "triage": plan_out.get("triage"),
         "session_id": sid, "workers": [], "runs": [], "skipped": [],
-        "blocked": [], "dispatched": False, "decision": decision_meta, **meta,
+        "blocked": assign_out.get("blocked", []), "dispatched": False,
+        "decision": plan_out.get("decision"), **meta,
     }
     # Team is part of craft: approved assignments run as peer workers.
     # No plan -> no dispatch. No "assign" craft -> _enforce_autonomy has
     # already stripped [worker=] tags, so assigned is empty anyway.
     # dispatch=False keeps this planning-only (no peer chat runs).
-    allowed, blocked = split_assignments(team_spec, assigned, exclude=planner)
-    out["blocked"] = blocked
-    if not (dispatch and approved and allowed and worker.can("assign")):
+    allowed = assign_out.get("allowed", [])
+    if not (dispatch and plan_out.get("approved") and allowed and worker.can("assign")):
+        return out
+    answer = str(plan_out.get("answer", ""))
+    try:
+        run = store.transition(task.id, run.version, TaskState.RUNNING,
+                               {"type": "task.running"})
+    except Exception as exc:
+        out["reason"] = f"task store failed: {str(exc)[:150]}"
         return out
     from nak.worker.engine.dispatch import run_workers
 
@@ -638,6 +783,25 @@ def run_craft(goal: str, worker: Any = None, harness: Any = None,
             out["team_memory"] = worker.team_memory(sid)
         except Exception:
             pass
+    try:
+        from nak.domain.result import Result as _Result
+        from nak.domain.result import ResultStatus as _ResultStatus
+
+        runs = list(fan["runs"])
+        bad = [str(r.get("worker", "")) for r in runs if not r.get("ok")]
+        status = _ResultStatus.OK if not bad else _ResultStatus.FAILED
+        store.save_result(task.id, _Result(
+            task_id=task.id, worker=planner, status=status,
+            summary=f"{len(runs)} worker(s) ran, {len(runs) - len(bad)} ok",
+            files_changed=(), commands_run=(),
+            evidence={"runs": [{"worker": str(r.get("worker", "")),
+                                "ok": bool(r.get("ok"))} for r in runs],
+                      "skipped": list(fan.get("skipped", []))},
+            blockers=tuple(bad), needs_approval=False))
+        store.append_event(task.id, {"type": "task.dispatched",
+                                     "workers": [str(r.get("worker", "")) for r in runs]})
+    except Exception as exc:
+        out["reason"] = f"task store failed: {str(exc)[:150]}"
     return out
 
 

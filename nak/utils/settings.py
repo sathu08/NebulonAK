@@ -11,6 +11,10 @@ Sections in nebulonak.cfg:
   [nebulonmind]  base_url / user / auth_token / timeout
   [worker]       workers_file / language   (no default worker: call GenericWorker(name))
   [harness]      workspace_root / user / registry / permissions / crafts / crafts_prompt
+  [nebulondb]    resolve_from_mind / base_url / user / corpus / timeout
+                 (task store; base_url+user+password resolve from NebulonMD
+                 unless overridden; NAK_NDB_PASSWORD is an emergency override,
+                 never read from the cfg file)
 
 No [decision] section: decision + policy live ONLY in workers.json
 entries (edited in the JSON itself). New workers inherit code defaults
@@ -49,6 +53,14 @@ DEFAULT_CRAFTS = "nak/manifests/crafts.json"
 DEFAULT_CRAFTS_PROMPT = "nak/harness/craft"
 DEFAULT_REGISTRY = "nak/manifests/tools.json"
 DEFAULT_PERMISSIONS = "nak/manifests/permissions.json"
+# --- nebulondb (task store) defaults ------------------------------------
+DEFAULT_NDB_BASE_URL = "http://localhost:6969/api/NebulonDB"
+DEFAULT_NDB_USER = ""
+DEFAULT_NDB_CORPUS = "nak_tasks"
+DEFAULT_NDB_TIMEOUT = 30.0
+DEFAULT_NDB_MAX_RETRIES = 2
+DEFAULT_NDB_RETRY_BACKOFF = 1.0
+DEFAULT_NDB_RESOLVE_FROM_MIND = True
 # --- decision (laya System-1) defaults ----------------------------------
 # Mirrors nak/utils/constant.py DEFAULT_POLICY / DEFAULT_DECISION_QUESTIONS.
 # A newly created worker automatically gets decision+policy from
@@ -140,6 +152,17 @@ class Settings:
     harness_user: str = ""
     registry: str = DEFAULT_REGISTRY
     permissions: str = DEFAULT_PERMISSIONS
+    # [nebulondb] — task store connection (password is env-only, never cfg).
+    ndb_base_url: str = DEFAULT_NDB_BASE_URL
+    ndb_user: str = DEFAULT_NDB_USER
+    ndb_password: str = ""
+    ndb_corpus: str = DEFAULT_NDB_CORPUS
+    ndb_timeout: float = DEFAULT_NDB_TIMEOUT
+    ndb_max_retries: int = DEFAULT_NDB_MAX_RETRIES
+    ndb_retry_backoff: float = DEFAULT_NDB_RETRY_BACKOFF
+    # Resolve base_url/user/password from NebulonMD (single configured
+    # connection) unless explicitly overridden per field.
+    resolve_from_mind: bool = DEFAULT_NDB_RESOLVE_FROM_MIND
 
     cfg_path: Optional[Path] = field(default=None, compare=False)
 
@@ -256,6 +279,16 @@ def load_settings(cfg_path: Optional[str | Path] = None) -> Settings:
         crafts=get("harness", "crafts", DEFAULT_CRAFTS) or DEFAULT_CRAFTS,
         crafts_prompt=get("harness", "crafts_prompt", DEFAULT_CRAFTS_PROMPT)
         or DEFAULT_CRAFTS_PROMPT,
+        ndb_base_url=get("nebulondb", "base_url", DEFAULT_NDB_BASE_URL)
+        or DEFAULT_NDB_BASE_URL,
+        ndb_user=get("nebulondb", "user", DEFAULT_NDB_USER),
+        ndb_corpus=get("nebulondb", "corpus", DEFAULT_NDB_CORPUS)
+        or DEFAULT_NDB_CORPUS,
+        ndb_timeout=getfloat("nebulondb", "timeout", DEFAULT_NDB_TIMEOUT),
+        ndb_max_retries=getint("nebulondb", "max_retries", DEFAULT_NDB_MAX_RETRIES),
+        ndb_retry_backoff=getfloat("nebulondb", "retry_backoff", DEFAULT_NDB_RETRY_BACKOFF),
+        resolve_from_mind=getbool("nebulondb", "resolve_from_mind",
+                                  DEFAULT_NDB_RESOLVE_FROM_MIND),
         cfg_path=found,
     )
     # NOTE: any [llm] section is intentionally IGNORED (NebulonMD owns LLM).
@@ -297,6 +330,20 @@ def load_settings(cfg_path: Optional[str | Path] = None) -> Settings:
     s.harness_user = env("NAK_HARNESS_USER", "").strip() or s.harness_user
     s.registry = env("NAK_REGISTRY", "").strip() or s.registry
     s.permissions = env("NAK_PERMISSIONS", "").strip() or s.permissions
+    s.ndb_base_url = (env("NAK_NDB_BASE_URL", "").strip() or s.ndb_base_url).rstrip("/")
+    s.ndb_user = env("NAK_NDB_USER", "").strip() or s.ndb_user
+    # Password is env-only by design (never read from the cfg file).
+    s.ndb_password = env("NAK_NDB_PASSWORD", "").strip() or s.ndb_password
+    s.ndb_corpus = env("NAK_NDB_CORPUS", "").strip() or s.ndb_corpus
+    _nt = env("NAK_NDB_TIMEOUT", "").strip()
+    if _nt:
+        try:
+            s.ndb_timeout = float(_nt)
+        except ValueError:
+            pass
+    _rfm = env("NAK_NDB_RESOLVE_FROM_MIND", "").strip().lower()
+    if _rfm:
+        s.resolve_from_mind = _rfm not in ("0", "false", "no", "off", "")
 
     # Re-anchor relative paths against the cfg folder after env overrides.
     for attr in ("workers_file", "workspace_root", "registry"):
