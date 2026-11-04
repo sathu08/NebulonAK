@@ -1,22 +1,46 @@
 [project]
 name = "nebulonak"
 version = "0.1.0"
-description = "NebulonAK - Agent Kit that runs on NebulonMind (nak.brain)"
+description = "NebulonAK- Agent Kit brain adapter on NebulonMD (nak.brain, HTTP only, no local LLM)"
 requires-python = ">=3.10"
 dependencies = [
+    "laya>=0.3.28",
     "requests>=2.31",
-    "python-dotenv>=1.0",
-    "openai>=1.40",
-    "pytest>=7",  # runtime dep: verifier defaults + run_test execute pytest
+    "fastapi>=0.110,<1.0",
+    "uvicorn>=0.29,<0.31",
 ]
 
 [project.optional-dependencies]
-dev = [
-    "httpx",
+test = [
+    "pytest>=8.0,<10.0",
+    "httpx>=0.28,<1.0",
+    "ruff>=0.5,<1.0",
 ]
 
+[project.scripts]
+nebulonagentkit = "nebulonagentkit:main"
+nak-brain = "nak.brain.__main__:main"
+nak-worker = "nak.worker.__main__:main"
+nak-vetting = "pipeline.vetting.cli:main"
+nebuloncode = "pipeline.nebuloncode.cli:main"
+
+[tool.setuptools]
+py-modules = ["nebulonagentkit"]
+
 [tool.setuptools.packages.find]
-include = ["nak*"]
+include = ["nak*", "pipeline*"]
+
+[tool.pytest.ini_options]
+testpaths = ["unittest"]
+pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["F", "E", "W", "B", "SIM", "UP"]
+ignore = ["B008"]
 
 [build-system]
 requires = ["setuptools>=68"]

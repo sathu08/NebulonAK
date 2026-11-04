@@ -1,0 +1,246 @@
+[
+  {
+    "name": "file",
+    "description": "Perform a file operation inside the sandbox session.",
+    "module": "nak.harness.tools.file",
+    "function": "file",
+    "version": "2.0.0",
+    "dependencies": [],
+    "capabilities": ["read", "write", "delete"],
+    "action_capabilities": {
+      "read": ["file.read"],
+      "list": ["file.list"],
+      "write": ["file.write"],
+      "edit": ["file.write"],
+      "delete": ["file.delete"]
+    },
+    "args": {
+      "action": "read|write|edit|delete|list",
+      "path": "Path inside the session root",
+      "content": "Content for write operation",
+      "mode": "create|overwrite|append",
+      "old_string": "Exact text to replace for edit",
+      "new_string": "Replacement text for edit",
+      "replace_all": "Replace every occurrence (default false)",
+      "root": "Optional sandbox root"
+    },
+    "sandbox": {
+      "deny_names": [".env"],
+      "deny_suffixes": [".key", ".pem"],
+      "deny_dirs": ["secrets", ".git"],
+      "escapes": "reject .., absolute and symlink escapes via resolve()"
+    }
+  },
+  {
+    "name": "directory",
+    "description": "Perform a directory operation inside the sandbox session: create, list, rename or delete (recursive).",
+    "module": "nak.harness.tools.file",
+    "function": "directory",
+    "version": "1.0.0",
+    "dependencies": [],
+    "capabilities": ["read", "write", "delete"],
+    "action_capabilities": {
+      "create": ["directory.write"],
+      "list": ["directory.list"],
+      "rename": ["directory.write"],
+      "delete": ["directory.delete"]
+    },
+    "args": {
+      "action": "create|list|rename|delete",
+      "path": "Directory path inside the session root",
+      "new_path": "Destination path for rename",
+      "root": "Optional sandbox root"
+    },
+    "sandbox": {
+      "deny_names": [".env"],
+      "deny_suffixes": [".key", ".pem"],
+      "deny_dirs": ["secrets", ".git"],
+      "escapes": "reject .., absolute and symlink escapes via resolve()"
+    }
+  },
+  {
+    "name": "terminal",
+    "description": "Run one sandboxed command inside the session dir (cwd=workdir). Python libs via uv only, session-local: 'uv pip install --target .libs <pkg>', then 'python work/extract.py ...'. PYTHONPATH=.libs and UV_CACHE_DIR=.uv-cache auto-set. Allowlist binaries only; no shell; timeout+output capped.",
+    "module": "nak.harness.tools.terminal",
+    "function": "terminal",
+    "version": "1.0.0",
+    "dependencies": [],
+    "capabilities": ["execute"],
+    "action_capabilities": {
+      "exec": ["terminal.exec"],
+      "run": ["terminal.exec"],
+      "sh": ["terminal.exec"],
+      "uv": ["terminal.exec"],
+      "python": ["terminal.exec"]
+    },
+    "args": {
+      "action": "exec|run",
+      "command": "Command string or arg list (binary must be allowlisted: uv, python, python3, ...)",
+      "workdir": "Working dir inside the session root (default '.')",
+      "timeout": "Seconds, default 60, max 120",
+      "root": "Optional sandbox root"
+    },
+    "sandbox": {
+      "deny_names": [".env"],
+      "deny_suffixes": [".key", ".pem"],
+      "deny_dirs": ["secrets", ".git"],
+      "escapes": "reject .., absolute and symlink escapes via resolve()"
+    }
+  },
+  {
+    "name": "search",
+    "description": "Read-only search inside the sandbox session: glob file names or grep file contents with a regex, returning path/line/text. Skips build/cache dirs.",
+    "module": "nak.harness.tools.search",
+    "function": "search",
+    "version": "1.0.0",
+    "dependencies": [],
+    "capabilities": ["read"],
+    "action_capabilities": {
+      "glob": ["search.read"],
+      "find": ["search.read"],
+      "grep": ["search.read"],
+      "search": ["search.read"]
+    },
+    "args": {
+      "action": "glob|grep",
+      "pattern": "Glob pattern (glob) or regex (grep)",
+      "path": "Directory or file inside the session root (default '.')",
+      "include": "Optional glob filter when grepping",
+      "max_results": "Optional cap (default 200, max 500)",
+      "root": "Optional sandbox root"
+    },
+    "sandbox": {
+      "deny_names": [".env"],
+      "deny_suffixes": [".key", ".pem"],
+      "deny_dirs": ["secrets", ".git"],
+      "escapes": "reject .., absolute and symlink escapes via resolve()"
+    }
+  },
+  {
+    "name": "observe",
+    "description": "Capture file facts for decide() inside the sandbox session: content + size + session in one call. Files only (no directories).",
+    "module": "nak.harness.tools.observe",
+    "function": "observe",
+    "version": "1.0.0",
+    "dependencies": [],
+    "capabilities": ["read"],
+    "action_capabilities": {
+      "capture": ["observe.read"],
+      "read": ["observe.read"]
+    },
+    "args": {
+      "action": "capture|read",
+      "path": "File path inside the session root",
+      "root": "Optional sandbox root"
+    },
+    "sandbox": {
+      "deny_names": [".env"],
+      "deny_suffixes": [".key", ".pem"],
+      "deny_dirs": ["secrets", ".git"],
+      "escapes": "reject .., absolute and symlink escapes via resolve()"
+    }
+  },
+  {
+    "name": "assertion",
+    "description": "Run deterministic expectation checks (eq, ne, contains, regex, gte, lte, in) against supplied values or a JSON suite file inside the session. No eval; failing checks are reported, not raised.",
+    "module": "nak.harness.tools.assertion",
+    "function": "assertion",
+    "version": "1.0.0",
+    "dependencies": [],
+    "capabilities": ["read"],
+    "action_capabilities": {
+      "check": ["assertion.check"],
+      "run": ["assertion.check"],
+      "assert": ["assertion.check"]
+    },
+    "args": {
+      "action": "check|run|assert",
+      "checks": "List of {id, op, expected, actual}",
+      "suite_path": "Optional JSON list inside the session root",
+      "root": "Optional sandbox root"
+    },
+    "sandbox": {
+      "deny_names": [".env"],
+      "deny_suffixes": [".key", ".pem"],
+      "deny_dirs": ["secrets", ".git"],
+      "escapes": "reject .., absolute and symlink escapes via resolve()"
+    }
+  },
+  {
+    "name": "trace",
+    "description": "Read-only execution evidence: matching lines (regex) or the last N lines of one file inside the session, with 1-based line numbers and truncation flags.",
+    "module": "nak.harness.tools.trace",
+    "function": "trace",
+    "version": "1.0.0",
+    "dependencies": [],
+    "capabilities": ["read"],
+    "action_capabilities": {
+      "trace": ["trace.read"],
+      "read": ["trace.read"],
+      "grep": ["trace.read"],
+      "tail": ["trace.read"]
+    },
+    "args": {
+      "action": "trace|read|grep|tail",
+      "path": "File path inside the session root",
+      "pattern": "Optional regex filter",
+      "tail": "Last N lines when no pattern (default 50, max 200)",
+      "root": "Optional sandbox root"
+    },
+    "sandbox": {
+      "deny_names": [".env"],
+      "deny_suffixes": [".key", ".pem"],
+      "deny_dirs": ["secrets", ".git"],
+      "escapes": "reject .., absolute and symlink escapes via resolve()"
+    }
+  },
+  {
+    "name": "scorecard",
+    "description": "Weighted score from explicit rules: normalize each metric between min/max (inverted when higher_is_better is false) and return the weight-average plus a per-rule breakdown. Pure computation, no IO.",
+    "module": "nak.harness.tools.scorecard",
+    "function": "scorecard",
+    "version": "1.0.0",
+    "dependencies": [],
+    "capabilities": ["compute"],
+    "action_capabilities": {
+      "score": ["scorecard.score"],
+      "run": ["scorecard.score"],
+      "calculate": ["scorecard.score"]
+    },
+    "args": {
+      "action": "score|run|calculate",
+      "inputs": "Metric object (dotted paths allowed)",
+      "rules": "List of {id, metric, weight, min, max, higher_is_better}"
+    }
+  },
+  {
+    "name": "report",
+    "description": "Render and save a report artifact (md or json) inside the session root; refuses to overwrite unless overwrite is true. Writes are approval-gated by the permission engine.",
+    "module": "nak.harness.tools.report",
+    "function": "report",
+    "version": "1.0.0",
+    "dependencies": [],
+    "capabilities": ["write"],
+    "action_capabilities": {
+      "write": ["report.write"],
+      "generate": ["report.write"],
+      "save": ["report.write"]
+    },
+    "args": {
+      "action": "write|generate|save",
+      "format": "md|json",
+      "title": "Report title",
+      "sections": "Object of heading -> value",
+      "content": "Optional raw text instead of sections",
+      "path": "Output path inside the session root",
+      "overwrite": "Allow replacing an existing report",
+      "root": "Optional sandbox root"
+    },
+    "sandbox": {
+      "deny_names": [".env"],
+      "deny_suffixes": [".key", ".pem"],
+      "deny_dirs": ["secrets", ".git"],
+      "escapes": "reject .., absolute and symlink escapes via resolve()"
+    }
+  }
+]

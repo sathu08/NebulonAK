@@ -1,0 +1,541 @@
+{
+  "version": "1.0.0",
+  "_comment": "Worker <-> harness access boundary. Which worker (agent) may use which tools. Enforced by ToolEngine.inspect() BEFORE any tool runs: verdicts are allow (run), ask (needs approver, else denied with need_approval:true), deny (blocked). Fail-closed: unknown worker/tool, missing entry, disabled worker and errors all deny (see defaults). workers.json identities stay human-readable; THIS file is the executable boundary.",
+  "defaults": {
+    "unknown_worker": "deny",
+    "unknown_tool": "deny",
+    "missing_permission": "deny",
+    "error": "deny"
+  },
+  "roles": {
+    "project_manager": {
+      "description": "Manages projects, priorities, deadlines, risks and coordination.",
+      "tools": {
+        "file": "allow",
+        "directory": "allow",
+        "terminal": "allow",
+        "observe": "allow",
+        "search": "allow"
+      },
+      "capabilities": {
+        "file.read": "allow",
+        "file.list": "allow",
+        "file.write": "ask",
+        "file.delete": "deny",
+        "directory.list": "allow",
+        "directory.write": "ask",
+        "directory.delete": "deny",
+        "terminal.exec": "allow",
+        "observe.read": "allow",
+        "search.read": "allow"
+      },
+      "resources": {
+        "files": {
+          "read": [
+            "./workspace/**",
+            "./project/**",
+            "./docs/**",
+            "./test/**"
+          ],
+          "write": [
+            "./workspace/**",
+            "./output/**",
+            "./test/**"
+          ],
+          "deny": [
+            "**/.env",
+            "**/.git/**",
+            "**/.ssh/**",
+            "**/*password*",
+            "**/*secret*",
+            "**/*credential*"
+          ]
+        }
+      }
+    },
+    "researcher": {
+      "description": "Plans only: reads and lists files to ground research plans. No writes, no deletes, no terminal, no control actions.",
+      "tools": {
+        "file": "allow",
+        "directory": "allow",
+        "terminal": "deny",
+        "observe": "allow",
+        "search": "allow"
+      },
+      "capabilities": {
+        "file.read": "allow",
+        "file.list": "allow",
+        "file.write": "deny",
+        "file.delete": "deny",
+        "directory.list": "allow",
+        "directory.write": "deny",
+        "directory.delete": "deny",
+        "terminal.exec": "deny",
+        "observe.read": "allow",
+        "search.read": "allow"
+      },
+      "resources": {
+        "files": {
+          "read": [
+            "./workspace/**",
+            "./project/**",
+            "./docs/**",
+            "./test/**"
+          ],
+          "write": [],
+          "deny": [
+            "**/.env",
+            "**/.git/**",
+            "**/.ssh/**",
+            "**/*password*",
+            "**/*secret*",
+            "**/*credential*"
+          ]
+        }
+      }
+    },
+    "developer": {
+      "description": "Builds and fixes code opencode-style: reads, plans, implements via file writes and terminal checks. Writes gated by approval; no deletes.",
+      "tools": {
+        "file": "allow",
+        "directory": "allow",
+        "terminal": "allow",
+        "observe": "allow",
+        "search": "allow"
+      },
+      "capabilities": {
+        "file.read": "allow",
+        "file.list": "allow",
+        "file.write": "ask",
+        "file.delete": "deny",
+        "directory.list": "allow",
+        "directory.write": "ask",
+        "directory.delete": "deny",
+        "terminal.exec": "allow",
+        "observe.read": "allow",
+        "search.read": "allow"
+      },
+      "resources": {
+        "files": {
+          "read": [
+            "./workspace/**",
+            "./project/**",
+            "./docs/**",
+            "./test/**"
+          ],
+          "write": [
+            "./workspace/**",
+            "./output/**",
+            "./test/**"
+          ],
+          "deny": [
+            "**/.env",
+            "**/.git/**",
+            "**/.ssh/**",
+            "**/*password*",
+            "**/*secret*",
+            "**/*credential*"
+          ]
+        }
+      }
+    },
+    "performance_evaluator": {
+      "description": "Impartial assessor: validates expectations, gathers trace evidence and scores with explicit rules. Read-only by default; report writes require a per-worker override.",
+      "tools": {
+        "assertion": "allow",
+        "trace": "allow",
+        "scorecard": "allow",
+        "report": "deny"
+      },
+      "capabilities": {
+        "assertion.check": "allow",
+        "trace.read": "allow",
+        "scorecard.score": "allow",
+        "report.write": "deny"
+      },
+      "resources": {
+        "files": {
+          "read": [
+            "./workspace/**",
+            "./project/**",
+            "./docs/**",
+            "./test/**",
+            "./output/**"
+          ],
+          "write": [],
+          "deny": [
+            "**/.env",
+            "**/.git/**",
+            "**/.ssh/**",
+            "**/*password*",
+            "**/*secret*",
+            "**/*credential*"
+          ]
+        }
+      }
+    }
+  },
+  "workers": {
+    "default": {
+      "enabled": true,
+      "description": "Unbound engines (no worker specified, e.g. harness-internal use): read-only file access. Named-but-unlisted workers are NOT this entry — they hit defaults.unknown_worker (deny).",
+      "tools": {
+        "file": "allow"
+      },
+      "capabilities": {
+        "file.read": "allow"
+      },
+      "resources": {
+        "files": {
+          "read": [
+            "workspace/**"
+          ],
+          "write": [],
+          "deny": [
+            "**/.env",
+            "**/.git/**",
+            "**/.ssh/**",
+            "**/*password*",
+            "**/*secret*",
+            "**/*credential*"
+          ]
+        }
+      },
+      "limits": {
+        "max_tool_calls": 30,
+        "max_execution_time": 120,
+        "max_file_size": 10485760
+      }
+    },
+    "vizhi": {
+      "enabled": true,
+      "description": "Vizhi (project_manager role): Manages projects, priorities, deadlines, risks and coordination.",
+      "tools": {
+        "file": "allow",
+        "directory": "allow",
+        "terminal": "allow",
+        "observe": "allow"
+      },
+      "capabilities": {
+        "file.read": "allow",
+        "file.list": "allow",
+        "file.write": "ask",
+        "file.delete": "deny",
+        "directory.list": "allow",
+        "directory.write": "ask",
+        "directory.delete": "deny",
+        "terminal.exec": "allow",
+        "observe.read": "allow"
+      },
+      "resources": {
+        "files": {
+          "read": [
+            "./workspace/**",
+            "./project/**",
+            "./docs/**",
+            "./test/**"
+          ],
+          "write": [
+            "./workspace/**",
+            "./output/**",
+            "./test/**"
+          ],
+          "deny": [
+            "**/.env",
+            "**/.git/**",
+            "**/.ssh/**",
+            "**/*password*",
+            "**/*secret*",
+            "**/*credential*"
+          ]
+        }
+      },
+      "limits": {
+        "max_tool_calls": 30,
+        "max_execution_time": 120,
+        "max_file_size": 10485760
+      }
+    },
+    "aayan": {
+      "enabled": true,
+      "description": "Aayan (researcher role): plans only — reads and lists files to ground research plans. No writes, no terminal.",
+      "tools": {
+        "file": "allow",
+        "directory": "allow",
+        "terminal": "deny",
+        "observe": "allow"
+      },
+      "capabilities": {
+        "file.read": "allow",
+        "file.list": "allow",
+        "file.write": "deny",
+        "file.delete": "deny",
+        "directory.list": "allow",
+        "directory.write": "deny",
+        "directory.delete": "deny",
+        "terminal.exec": "deny",
+        "observe.read": "allow"
+      },
+      "resources": {
+        "files": {
+          "read": [
+            "./workspace/**",
+            "./project/**",
+            "./docs/**",
+            "./test/**"
+          ],
+          "write": [],
+          "deny": [
+            "**/.env",
+            "**/.git/**",
+            "**/.ssh/**",
+            "**/*password*",
+            "**/*secret*",
+            "**/*credential*"
+          ]
+        }
+      },
+      "limits": {
+        "max_tool_calls": 30,
+        "max_execution_time": 120,
+        "max_file_size": 10485760
+      }
+    },
+    "arivu": {
+      "enabled": true,
+      "description": "Arivu (developer role): builds and fixes code — reads, plans, implements via file writes and terminal checks with approval gates.",
+      "tools": {
+        "file": "allow",
+        "directory": "allow",
+        "terminal": "allow",
+        "observe": "allow"
+      },
+      "capabilities": {
+        "file.read": "allow",
+        "file.list": "allow",
+        "file.write": "ask",
+        "file.delete": "deny",
+        "directory.list": "allow",
+        "directory.write": "ask",
+        "directory.delete": "deny",
+        "terminal.exec": "allow",
+        "observe.read": "allow"
+      },
+      "resources": {
+        "files": {
+          "read": [
+            "./workspace/**",
+            "./project/**",
+            "./docs/**",
+            "./test/**"
+          ],
+          "write": [
+            "./workspace/**",
+            "./output/**",
+            "./test/**"
+          ],
+          "deny": [
+            "**/.env",
+            "**/.git/**",
+            "**/.ssh/**",
+            "**/*password*",
+            "**/*secret*",
+            "**/*credential*"
+          ]
+        }
+      },
+      "limits": {
+        "max_tool_calls": 30,
+        "max_execution_time": 120,
+        "max_file_size": 10485760
+      }
+    },
+    "nunnan": {
+      "enabled": true,
+      "description": "Nunnan (performance_evaluator role): assessor with report writes enabled behind approval.",
+      "tools": {
+        "report": "allow"
+      },
+      "capabilities": {
+        "report.write": "ask"
+      },
+      "resources": {
+        "files": {
+          "read": [],
+          "write": [
+            "./output/**"
+          ],
+          "deny": []
+        }
+      },
+      "limits": {
+        "max_tool_calls": 30,
+        "max_execution_time": 120,
+        "max_file_size": 10485760
+      }
+    },
+    "ezhilan": {
+      "enabled": true,
+      "description": "Ezhilan (tester): writes and runs focused tests, validates acceptance criteria and reports pass/fail evidence.",
+      "tools": {
+        "assertion": "allow",
+        "directory": "allow",
+        "file": "allow",
+        "observe": "allow",
+        "report": "allow",
+        "scorecard": "allow",
+        "terminal": "allow",
+        "trace": "allow"
+      },
+      "capabilities": {
+        "assertion.check": "allow",
+        "directory.delete": "deny",
+        "directory.list": "allow",
+        "directory.write": "ask",
+        "file.delete": "deny",
+        "file.list": "allow",
+        "file.read": "allow",
+        "file.write": "ask",
+        "observe.read": "allow",
+        "report.write": "allow",
+        "scorecard.score": "allow",
+        "system.execute": "deny",
+        "terminal.exec": "allow",
+        "trace.read": "allow"
+      },
+      "resources": {
+        "files": {
+          "read": [
+            "./workspace/**",
+            "./project/**",
+            "./docs/**",
+            "./test/**"
+          ],
+          "write": [
+            "./workspace/**",
+            "./output/**",
+            "./test/**"
+          ],
+          "deny": [
+            "**/.env",
+            "**/.git/**",
+            "**/.ssh/**",
+            "**/*password*",
+            "**/*secret*",
+            "**/*credential*"
+          ]
+        }
+      },
+      "limits": {
+        "max_tool_calls": 30,
+        "max_execution_time": 120,
+        "max_file_size": 10485760
+      }
+    },
+    "thiran": {
+      "enabled": true,
+      "description": "Thiran (reviewer): reviews code and audits it against explicit rules; read-only, writes only report artifacts inside the workspace.",
+      "tools": {
+        "assertion": "allow",
+        "directory": "allow",
+        "file": "allow",
+        "observe": "allow",
+        "report": "allow",
+        "scorecard": "allow",
+        "terminal": "deny",
+        "trace": "allow"
+      },
+      "capabilities": {
+        "assertion.check": "allow",
+        "directory.delete": "deny",
+        "directory.list": "allow",
+        "directory.write": "deny",
+        "file.delete": "deny",
+        "file.list": "allow",
+        "file.read": "allow",
+        "file.write": "deny",
+        "observe.read": "allow",
+        "report.write": "allow",
+        "scorecard.score": "allow",
+        "system.execute": "deny",
+        "terminal.exec": "deny",
+        "trace.read": "allow"
+      },
+      "resources": {
+        "files": {
+          "read": [
+            "./workspace/**",
+            "./project/**",
+            "./docs/**",
+            "./test/**"
+          ],
+          "write": [
+            "./output/**"
+          ],
+          "deny": [
+            "**/.env",
+            "**/.git/**",
+            "**/.ssh/**",
+            "**/*password*",
+            "**/*secret*",
+            "**/*credential*"
+          ]
+        }
+      },
+      "limits": {
+        "max_tool_calls": 30,
+        "max_execution_time": 120,
+        "max_file_size": 10485760
+      }
+    },
+    "viyan": {
+      "enabled": true,
+      "description": "Viyan (developer role): builds and fixes code — reads, plans, implements via file writes and terminal checks with approval gates.",
+      "tools": {
+        "file": "allow",
+        "directory": "allow",
+        "terminal": "allow",
+        "observe": "allow"
+      },
+      "capabilities": {
+        "file.read": "allow",
+        "file.list": "allow",
+        "file.write": "ask",
+        "file.delete": "deny",
+        "directory.list": "allow",
+        "directory.write": "ask",
+        "directory.delete": "deny",
+        "terminal.exec": "allow",
+        "observe.read": "allow"
+      },
+      "resources": {
+        "files": {
+          "read": [
+            "./workspace/**",
+            "./project/**",
+            "./docs/**",
+            "./test/**"
+          ],
+          "write": [
+            "./workspace/**",
+            "./output/**",
+            "./test/**"
+          ],
+          "deny": [
+            "**/.env",
+            "**/.git/**",
+            "**/.ssh/**",
+            "**/*password*",
+            "**/*secret*",
+            "**/*credential*"
+          ]
+        }
+      },
+      "limits": {
+        "max_tool_calls": 30,
+        "max_execution_time": 120,
+        "max_file_size": 10485760
+      }
+    }
+  }
+}

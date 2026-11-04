@@ -1,0 +1,141 @@
+{
+  "crafts": [
+    {
+      "mode": "plan",
+      "version": "1.0.0",
+      "description": "Propose and record an approved plan within defined craft limits.",
+      "tools": [
+        "file",
+        "directory",
+        "observe"
+      ],
+      "max_steps": 3,
+      "approval": "small",
+      "auto_steps": 2
+    },
+    {
+      "mode": "assign",
+      "version": "1.0.0",
+      "description": "Route plan steps to named workers; execution stays with the harness.",
+      "tools": [
+        "file",
+        "directory",
+        "observe"
+      ],
+      "approval": "all",
+      "decision": {
+        "enabled": true,
+        "scope": "per_step",
+        "assignment": "tags_win",
+        "mode": "auto",
+        "parallel": true,
+        "max_parallel": 4,
+        "timeout": 30.0,
+        "on_error": "ask"
+      }
+    },
+    {
+      "mode": "build",
+      "version": "1.0.0",
+      "description": "Implement, test and fix code in the session workspace — opencode-style build loop.",
+      "tools": [
+        "file",
+        "directory",
+        "terminal",
+        "observe"
+      ],
+      "max_steps": 3,
+      "approval": "small",
+      "auto_steps": 2
+    },
+    {
+      "mode": "assess",
+      "version": "1.0.0",
+      "description": "Evaluate a subject with assertions, trace evidence, scoring and a saved report.",
+      "tools": [
+        "assertion",
+        "trace",
+        "scorecard",
+        "report"
+      ],
+      "approval": "all",
+      "roles": [
+        "performance_evaluator"
+      ],
+      "workers": [
+        "nunnan"
+      ]
+    },
+    {
+      "mode": "review",
+      "version": "1.0.0",
+      "description": "Review code against requirements and report defects, risks and missing tests with evidence.",
+      "tools": [
+        "file",
+        "directory",
+        "observe",
+        "trace",
+        "report"
+      ],
+      "approval": "all",
+      "roles": [
+        "developer"
+      ]
+    },
+    {
+      "mode": "audit",
+      "version": "1.0.0",
+      "description": "Audit code or artifacts against explicit rules, gather evidence and score the findings.",
+      "tools": [
+        "file",
+        "directory",
+        "observe",
+        "trace",
+        "assertion",
+        "scorecard",
+        "report"
+      ],
+      "approval": "all",
+      "roles": [
+        "developer"
+      ]
+    },
+    {
+      "mode": "test",
+      "version": "1.0.0",
+      "description": "Write focused tests, execute them and report exact pass/fail evidence.",
+      "tools": [
+        "file",
+        "directory",
+        "terminal",
+        "observe",
+        "assertion",
+        "trace",
+        "report"
+      ],
+      "approval": "all",
+      "roles": [
+        "developer"
+      ]
+    },
+    {
+      "mode": "validate",
+      "version": "1.0.0",
+      "description": "Validate behavior against acceptance criteria and report pass/fail with evidence.",
+      "tools": [
+        "file",
+        "directory",
+        "terminal",
+        "observe",
+        "assertion",
+        "trace",
+        "scorecard",
+        "report"
+      ],
+      "approval": "all",
+      "roles": [
+        "developer"
+      ]
+    }
+  ]
+}
