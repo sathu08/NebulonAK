@@ -1,14 +1,14 @@
-"""CLI --craft: plan -> nak_plan.md -> approval, all through nak.wiring.run_craft."""
+"""CLI --craft: plan -> nak_plan.md -> approval, all through nak_host.wiring.run_craft."""
 import json
 
 from conftest import FakeBrain
-from nak.worker import __main__ as cli
+from nak_host.worker import __main__ as cli
 
 
 def _patch(monkeypatch, brain, workspace):
     """Build offline workers + a real harness rooted in tmp_workspace."""
-    import nak.wiring as wiring
-    from nak.worker import GenericWorker
+    import nak_host.wiring as wiring
+    from nak_host.worker import GenericWorker
 
     real_make_harness = wiring.make_harness
 

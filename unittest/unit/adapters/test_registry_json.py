@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from nak.adapters.registry_json import JsonRegistry
+from nak_host.adapters.registry_json import JsonRegistry
 
-MANIFESTS = Path(__file__).resolve().parents[3] / "nak" / "manifests"
+MANIFESTS = Path(__file__).resolve().parents[3] / "nak_host" / "manifests"
 
 
 def _registry(**overrides):
@@ -24,7 +24,7 @@ def _registry(**overrides):
 
 
 def test_workers_teams_match_direct_loaders():
-    from nak.worker.engine.registry import list_workers
+    from nak_host.worker.engine.registry import list_workers
 
     reg = _registry()
     assert [e["name"] for e in reg.workers()] == [e["name"] for e in list_workers()]
@@ -82,10 +82,11 @@ def test_cache_returns_copies_and_refreshes(tmp_path):
 
 
 def test_wiring_loaders_delegate():
-    from nak.wiring import _tools_loader, _workers_loader
+    from nak_host.wiring import _tools_loader, _workers_loader
 
     names = [e["name"] for e in _workers_loader()()]
     assert "vizhi" in names and "arivu" in names
     tools = _tools_loader()()
     assert "file" in tools
-    assert _tools_loader(None, "/no/such/tools.json")() == ["file"]
+    assert _tools_loader(None, "/no/such/tools.json")() == [
+        "file", "directory", "search", "terminal", "observe"]

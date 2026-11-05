@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from nak.utils.constant import (
+from nak_host.utils.constant import (
     SANDBOX_DENIED_NAMES as DENIED_NAMES,
     SANDBOX_DENIED_SUFFIXES as DENIED_SUFFIXES,
     WORKSPACE_HISTORY_FILENAME as HISTORY_FILENAME,
@@ -30,7 +30,7 @@ _DENIED_DIRS_CACHE: Any = "unloaded"  # set[str] | None (None = config missing) 
 
 
 def _tools_registry_path() -> Path:
-    """tools.json path: NAK_REGISTRY env > nak/manifests/tools.json."""
+    """tools.json path: NAK_REGISTRY env > nak_host/manifests/tools.json."""
     cand = (os.environ.get("NAK_REGISTRY", "") or "").strip()
     if cand:
         return Path(cand).expanduser()
@@ -246,7 +246,7 @@ def resource_bases(session_dir: str | Path, workspace_root: str | Path,
     """Bases a resolved path is tested against (session + workspace + project root)."""
     bases = []
     for b in (session_dir, workspace_root,
-              Path(engine_file).resolve().parents[3]):  # nak/harness/engine -> root
+              Path(engine_file).resolve().parents[3]):  # nak_host/harness/engine -> root
         try:
             if str(b or "").strip():
                 bases.append(Path(b).expanduser().resolve())
@@ -288,6 +288,15 @@ def check_resources(resolved: str, op: str,
     for pat in (files.get("deny") or []):
         if any(glob_hit(pat, f) for f in forms):
             return f"resource denied: {resolved}"
+    # Session dir is always granted (deny already won above): any base dir
+    # works, not just <project>/workspace. Grants still gate paths outside
+    # the session.
+    if bases:
+        try:
+            target.relative_to(Path(bases[0]).expanduser().resolve())
+            return None
+        except (ValueError, OSError):
+            pass
     grants = files.get(op) or []
     if op == "":
         grants = (files.get("read") or []) + (files.get("write") or [])

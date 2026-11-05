@@ -86,50 +86,50 @@ def tmp_workspace(tmp_path):
 
 @pytest.fixture()
 def harness_vizhi(tmp_workspace):
-    from nak.harness.engine import ExecutionHarness
+    from nak_host.harness.engine import ExecutionHarness
     return ExecutionHarness(worker="vizhi", user="tester", workspace_root=tmp_workspace)
 
 
 @pytest.fixture()
 def harness_vizhi_approved(tmp_workspace):
     """vizhi with approver=True: 'ask' verdicts pass so tool sandbox is tested."""
-    from nak.harness.engine import ExecutionHarness
+    from nak_host.harness.engine import ExecutionHarness
     return ExecutionHarness(worker="vizhi", user="tester", workspace_root=tmp_workspace,
                             approver=lambda *a, **k: True)
 
 
 @pytest.fixture()
 def harness_arivu(tmp_workspace):
-    from nak.harness.engine import ExecutionHarness
+    from nak_host.harness.engine import ExecutionHarness
     return ExecutionHarness(worker="arivu", user="tester", workspace_root=tmp_workspace)
 
 
 @pytest.fixture()
 def harness_aayan(tmp_workspace):
-    from nak.harness.engine import ExecutionHarness
+    from nak_host.harness.engine import ExecutionHarness
     return ExecutionHarness(worker="aayan", user="tester", workspace_root=tmp_workspace)
 
 
 @pytest.fixture()
 def worker_vizhi(fake_brain):
-    from nak.wiring import make_worker
+    from nak_host.wiring import make_worker
     return make_worker("vizhi", brain=fake_brain)
 
 
 @pytest.fixture()
 def worker_arivu(fake_brain):
-    from nak.wiring import make_worker
+    from nak_host.wiring import make_worker
     return make_worker("arivu", brain=fake_brain)
 
 
 @pytest.fixture()
 def worker_aayan(fake_brain):
-    from nak.wiring import make_worker
+    from nak_host.wiring import make_worker
     return make_worker("aayan", brain=fake_brain)
 
 
 @pytest.fixture()
 def bare_worker_vizhi():
     """No brain — for testing the no-brain error path."""
-    from nak.worker import GenericWorker
+    from nak_host.worker import GenericWorker
     return GenericWorker("vizhi")

@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from nak.harness.tools.report import report
+from nak_host.harness.tools.report import report
 
 
 def clip(text: Any, limit: int = 2000) -> str:

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from nak.adapters.store_memory import InMemoryTaskStore
-from nak.application import ApprovalLedger, create_task, run_task
-from nak.domain import ExecutionContext, ResultStatus, TaskState, Verdict
+from nak_host.adapters.store_memory import InMemoryTaskStore
+from nak_host.application import ApprovalLedger, create_task, run_task
+from nak_host.domain import ExecutionContext, ResultStatus, TaskState, Verdict
 
 from test_loop import FakeExecutor, ScriptBrain, _Cancel
 
@@ -51,11 +51,11 @@ def test_happy_path_result_and_evidence():
 def test_status_mapping():
     store = InMemoryTaskStore()
     block = '```json\n{"tool": "file", "arguments": {}}\n```'
-    # Needs approval.
+    # Needs approval (no auto budget).
     task, run = _assigned(store)
     out = _run(task, run, store, brain=ScriptBrain([block] * 4),
                executor=FakeExecutor(verdicts={"file": Verdict.ASK}),
-               worker_name="arivu")
+               worker_name="arivu", auto_steps=0)
     assert out["result"].status == ResultStatus.NEEDS_APPROVAL
     assert out["result"].needs_approval is True
     # Failed loop.

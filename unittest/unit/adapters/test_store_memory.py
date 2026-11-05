@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from nak.adapters.store_memory import InMemoryTaskStore
-from nak.domain import (
+from nak_host.adapters.store_memory import InMemoryTaskStore
+from nak_host.domain import (
     BlockReason,
     ConcurrencyError,
     DuplicateTask,

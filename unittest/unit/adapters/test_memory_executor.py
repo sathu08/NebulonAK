@@ -7,10 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from nak.adapters.executor_harness import HarnessExecutor
-from nak.adapters.memory_nebulon import NebulonMemory
-from nak.domain import ApprovalRef, ExecutionContext, Verdict
-from nak.domain.errors import ApprovalRevoked, TaskCancelled
+from nak_host.adapters.executor_harness import HarnessExecutor
+from nak_host.adapters.memory_nebulon import NebulonMemory
+from nak_host.domain import ApprovalRef, ExecutionContext, Verdict
+from nak_host.domain.errors import ApprovalRevoked, TaskCancelled
 
 
 class _Brain:
@@ -170,7 +170,7 @@ def test_run_cancelled_and_garbage(harness_vizhi):
 
 
 def test_make_factories(tmp_workspace):
-    from nak.wiring import make_executor, make_memory
+    from nak_host.wiring import make_executor, make_memory
 
     brain = _Brain()
     assert make_memory(brain=brain, user="t").recall("q")["count"] == 2

@@ -7,7 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from nak.harness.engine.permission import (
+from nak_host.harness.engine.permission import (
     load_worker_names,
 )
 

@@ -11,12 +11,12 @@ from pathlib import Path
 
 import pytest
 
-from nak.worker import GenericWorker, list_workers
-from nak.worker.engine.autonomy import (
+from nak_host.worker import GenericWorker, list_workers
+from nak_host.worker.engine.autonomy import (
     _autonomy_from_crafts,
     _autonomy_lines,
 )
-from nak.worker.engine.prompt import _render_prompt_template
+from nak_host.worker.engine.prompt import _render_prompt_template
 
 
 # ---------- manifest validation (fail-loud) ----------
@@ -25,7 +25,7 @@ def _write_workers(tmp_path, entries):
     p = tmp_path / "workers.json"
     p.write_text(json.dumps(entries), encoding="utf-8")
     # crafts.json must sit next to workers.json for derivation — copy real pins
-    real = Path(__file__).resolve().parents[3] / "nak" / "manifests" / "crafts.json"
+    real = Path(__file__).resolve().parents[3] / "nak_host" / "manifests" / "crafts.json"
     with contextlib.suppress(OSError):
         shutil.copy(str(real), str(tmp_path / "crafts.json"))
     return str(p)
@@ -67,7 +67,7 @@ def test_missing_memory_rejected(tmp_path):
 
 def test_new_type_accepted_from_json_itself(tmp_path):
     # types live in workers.json itself: a brand-new type loads with no code change
-    from nak.worker.engine.autonomy import _worker_types
+    from nak_host.worker.engine.autonomy import _worker_types
     e = _base_entry("novel")
     e["type"] = "reviewer"
     entries = list_workers(_write_workers(tmp_path, [e]))
@@ -87,7 +87,7 @@ def test_blank_type_defaults_to_coordinator(tmp_path):
 
 def test_craft_modes_come_from_registry(tmp_path):
     import json as _json
-    from nak.worker.engine.autonomy import _craft_modes
+    from nak_host.worker.engine.autonomy import _craft_modes
     modes = _craft_modes(None)
     assert "plan" in modes and "build" in modes
     # missing registry -> fallback list, never raises
@@ -144,7 +144,7 @@ def test_autonomy_honors_nak_crafts_env(tmp_path, monkeypatch):
 
 
 def test_worker_types_fallback_never_raises():
-    from nak.worker.engine.autonomy import _worker_types
+    from nak_host.worker.engine.autonomy import _worker_types
     assert _worker_types("/no/such/workers.json") == ["coordinator", "researcher", "coder"]
     assert isinstance(_worker_types(None), list) and _worker_types(None)
 
@@ -188,7 +188,7 @@ def test_autonomy_key_rejected(tmp_path):
 
 
 def test_crafts_derivation_defaults(tmp_path):
-    from nak.utils.constant import DEFAULT_WORKERS_JSON as _DEFAULT_WORKERS
+    from nak_host.utils.constant import DEFAULT_WORKERS_JSON as _DEFAULT_WORKERS
     a = _autonomy_from_crafts(None, str(_DEFAULT_WORKERS), "x")
     assert "plan" in a["modes"]
     assert a["approval"] in ("all", "small", "none")
@@ -311,7 +311,7 @@ def test_chat_session_key_client_owned_merges_not_daily(worker_vizhi, fake_brain
 def test_chat_mind_owned_session_forwards_and_defers(tmp_path):
     """A Mind-created (active) session keeps its own transcript: the key IS
     forwarded and AK defers the save to Mind (no clobber, no duplicate)."""
-    from nak.worker import GenericWorker
+    from nak_host.worker import GenericWorker
     from conftest import FakeBrain
 
     class OwnedBrain(FakeBrain):
@@ -337,7 +337,7 @@ def test_chat_without_session_keeps_daily_doc(worker_vizhi, fake_brain):
 
 
 def test_chat_old_brain_without_session_id_still_works(tmp_path):
-    from nak.worker import GenericWorker
+    from nak_host.worker import GenericWorker
 
     class OldBrain:
         def require_mind(self):
@@ -529,7 +529,7 @@ def test_triage_clarify_and_escalate_paths(worker_vizhi):
 
 
 def test_boundary_no_runtime_brain_import():
-    import nak.worker.engine.worker as mod
+    import nak_host.worker.engine.worker as mod
     lines = Path(mod.__file__).read_text(encoding="utf-8").splitlines()
     # runtime imports = top-level import/from NOT inside `if TYPE_CHECKING:` block
     runtime = []
@@ -546,6 +546,6 @@ def test_boundary_no_runtime_brain_import():
         if s.startswith(("import ", "from ")):
             runtime.append(s)
     blob = "\n".join(runtime)
-    assert "nak.brain" not in blob
-    assert "nak.decision" not in blob
-    assert "nak.harness" not in blob
+    assert "nak_host.brain" not in blob
+    assert "nak_host.decision" not in blob
+    assert "nak_host.harness" not in blob

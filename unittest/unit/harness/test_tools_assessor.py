@@ -4,12 +4,12 @@ import json
 
 from pathlib import Path
 
-from nak.harness.engine.registry import load_registry
-from nak.harness.tools import report as R
-from nak.harness.tools.assertion import assertion
-from nak.harness.tools.report import report
-from nak.harness.tools.scorecard import scorecard
-from nak.harness.tools.trace import trace
+from nak_host.harness.engine.registry import load_registry
+from nak_host.harness.tools import report as R
+from nak_host.harness.tools.assertion import assertion
+from nak_host.harness.tools.report import report
+from nak_host.harness.tools.scorecard import scorecard
+from nak_host.harness.tools.trace import trace
 
 NAMES = ("assertion", "trace", "scorecard", "report")
 
@@ -163,7 +163,7 @@ def _allow(*_a, **_k):
 
 
 def test_run_tool_injects_session_root_for_suite(tmp_path):
-    from nak.harness.engine.execution import run_tool
+    from nak_host.harness.engine.execution import run_tool
 
     session = tmp_path / "session"
     session.mkdir()
@@ -177,7 +177,7 @@ def test_run_tool_injects_session_root_for_suite(tmp_path):
 
 
 def test_run_tool_report_stays_inside_session(tmp_path):
-    from nak.harness.engine.execution import run_tool
+    from nak_host.harness.engine.execution import run_tool
 
     session = tmp_path / "session"
     session.mkdir()
@@ -195,18 +195,18 @@ def test_new_tools_denied_without_permission(harness_vizhi):
 
 
 FORBIDDEN_PREFIXES = (
-    "nak.worker", "nak.brain", "nak.decision", "nak.wiring",
-    "nak.harness.craft", "nak.harness.engine.engine",
-    "nak.harness.engine.execution", "nak.harness.engine.permission",
+    "nak_host.worker", "nak_host.brain", "nak_host.decision", "nak_host.wiring",
+    "nak_host.harness.craft", "nak_host.harness.engine.engine",
+    "nak_host.harness.engine.execution", "nak_host.harness.engine.permission",
 )
-ALLOWED_NAK_IMPORTS = {"nak.utils.constant", "nak.harness.engine.sandbox"}
+ALLOWED_NAK_IMPORTS = {"nak_host.utils.constant", "nak_host.harness.engine.sandbox"}
 
 
 def test_tool_modules_respect_dependency_boundary():
     import ast
 
     for name in NAMES:
-        module = importlib.import_module(f"nak.harness.tools.{name}")
+        module = importlib.import_module(f"nak_host.harness.tools.{name}")
         tree = ast.parse(Path(module.__file__).read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom) and not node.level:
@@ -217,5 +217,5 @@ def test_tool_modules_respect_dependency_boundary():
                 continue
             for mod in found.split(","):
                 assert not mod.startswith(FORBIDDEN_PREFIXES), f"{name} imports {mod}"
-                if mod.startswith("nak."):
+                if mod.startswith("nak_host."):
                     assert mod in ALLOWED_NAK_IMPORTS, f"{name} imports {mod}"

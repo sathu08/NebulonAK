@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from nak.adapters.store_memory import InMemoryTaskStore
-from nak.application import call_worker
-from nak.domain import ResultStatus, TaskState
+from nak_host.adapters.store_memory import InMemoryTaskStore
+from nak_host.application import call_worker
+from nak_host.domain import ResultStatus, TaskState
 
 from test_loop import FakeExecutor, ScriptBrain
 

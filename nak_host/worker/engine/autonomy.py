@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from nak.utils.constant import (
+from nak_host.utils.constant import (
     CRAFT_MAX_STEPS,
     CRAFT_MIN_STEPS,
     CRAFT_VALID_APPROVALS as _VALID_APPROVALS,
@@ -94,9 +94,10 @@ def _autonomy_from_crafts(allowed: Any, workers_file: str | Path,
       * allowed [] (explicit empty) = no crafts -> assist (answer directly).
       * modes = registry-order craft modes filtered to the allowlist.
       * approval = most restrictive pin (all > small > none).
-      * max_steps/auto_steps = min pin value (default 3/2) over the
-        PLANNING crafts only (plan/build); other crafts never cap steps.
-        auto_steps is capped to max_steps.
+      * max_steps = max pin value (default 3) over the PLANNING crafts
+        only (plan/build); other crafts never cap steps. A coder with
+        plan+build gets the build budget, not the plan budget.
+      * auto_steps = min pin value (default 2), capped to max_steps.
     Never raises on unreadable registry — falls back to plan/ask default.
     """
     try:
@@ -136,7 +137,7 @@ def _autonomy_from_crafts(allowed: Any, workers_file: str | Path,
     planning = [p for p in selected if p["mode"] in ("plan", "build")]
     policy = planning or selected
     try:
-        steps = min(max(CRAFT_MIN_STEPS, int(p.get("max_steps", 3))) for p in policy)
+        steps = max(max(CRAFT_MIN_STEPS, int(p.get("max_steps", 3))) for p in policy)
     except (TypeError, ValueError):
         steps = 3
     steps = max(CRAFT_MIN_STEPS, min(CRAFT_MAX_STEPS, steps))

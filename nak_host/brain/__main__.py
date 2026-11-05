@@ -1,4 +1,4 @@
-"""CLI: python -m nak.brain  (installed as `nak-brain`).
+"""CLI: python -m nak_host.brain  (installed as `nak-brain`).
 
 All commands talk to NebulonMD through Brain — including --chat,
 which runs Mind's LLM loop server-side.
@@ -10,8 +10,8 @@ import argparse
 import json
 import sys
 
-from nak.brain.client import Brain
-from nak.brain.config import load_config
+from nak_host.brain.client import Brain
+from nak_host.brain.config import load_config
 
 
 def main(argv=None) -> int:

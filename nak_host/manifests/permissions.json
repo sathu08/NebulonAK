@@ -214,7 +214,8 @@
         "file": "allow",
         "directory": "allow",
         "terminal": "allow",
-        "observe": "allow"
+        "observe": "allow",
+        "search": "allow"
       },
       "capabilities": {
         "file.read": "allow",
@@ -225,7 +226,8 @@
         "directory.write": "ask",
         "directory.delete": "deny",
         "terminal.exec": "allow",
-        "observe.read": "allow"
+        "observe.read": "allow",
+        "search.read": "allow"
       },
       "resources": {
         "files": {
@@ -308,7 +310,8 @@
         "file": "allow",
         "directory": "allow",
         "terminal": "allow",
-        "observe": "allow"
+        "observe": "allow",
+        "search": "allow"
       },
       "capabilities": {
         "file.read": "allow",
@@ -319,7 +322,8 @@
         "directory.write": "ask",
         "directory.delete": "deny",
         "terminal.exec": "allow",
-        "observe.read": "allow"
+        "observe.read": "allow",
+        "search.read": "allow"
       },
       "resources": {
         "files": {
@@ -495,7 +499,8 @@
         "file": "allow",
         "directory": "allow",
         "terminal": "allow",
-        "observe": "allow"
+        "observe": "allow",
+        "search": "allow"
       },
       "capabilities": {
         "file.read": "allow",
@@ -506,7 +511,8 @@
         "directory.write": "ask",
         "directory.delete": "deny",
         "terminal.exec": "allow",
-        "observe.read": "allow"
+        "observe.read": "allow",
+        "search.read": "allow"
       },
       "resources": {
         "files": {

@@ -1,7 +1,7 @@
 [project]
 name = "nebulonak"
 version = "0.1.0"
-description = "NebulonAK- Agent Kit brain adapter on NebulonMD (nak.brain, HTTP only, no local LLM)"
+description = "NebulonAK- Agent Kit brain adapter on NebulonMD (nak_host.brain, HTTP only, no local LLM)"
 requires-python = ">=3.10"
 dependencies = [
     "laya>=0.3.28",
@@ -19,16 +19,15 @@ test = [
 
 [project.scripts]
 nebulonagentkit = "nebulonagentkit:main"
-nak-brain = "nak.brain.__main__:main"
-nak-worker = "nak.worker.__main__:main"
+nak-brain = "nak_host.brain.__main__:main"
+nak-worker = "nak_host.worker.__main__:main"
 nak-vetting = "pipeline.vetting.cli:main"
-nebuloncode = "pipeline.nebuloncode.cli:main"
 
 [tool.setuptools]
 py-modules = ["nebulonagentkit"]
 
 [tool.setuptools.packages.find]
-include = ["nak*", "pipeline*"]
+include = ["nak_host*", "pipeline*"]
 
 [tool.pytest.ini_options]
 testpaths = ["unittest"]

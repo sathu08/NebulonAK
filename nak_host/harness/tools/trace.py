@@ -26,9 +26,9 @@ from typing import Any, Dict, List, Tuple
 try:
     from ..engine.sandbox import default_workspace, safe_join
 except Exception:  # pragma: no cover — direct-path import fallback
-    from nak.harness.engine.sandbox import default_workspace, safe_join  # type: ignore
+    from nak_host.harness.engine.sandbox import default_workspace, safe_join  # type: ignore
 
-from nak.utils.constant import (
+from nak_host.utils.constant import (
     TRACE_DEFAULT_TAIL as DEFAULT_TAIL,
     TRACE_MAX_CHARS as MAX_CHARS,
     TRACE_MAX_LINE_CHARS as MAX_LINE_CHARS,

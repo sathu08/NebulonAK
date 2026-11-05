@@ -1,4 +1,4 @@
-"""File tools available from nak.harness.tools."""
+"""File tools available from nak_host.harness.tools."""
 
 from .file import (
     create_dir,
@@ -12,8 +12,9 @@ from .file import (
     write_file,
 )
 from .observe import capture_file, observe
+from .search import search
 from .terminal import run_terminal, terminal
 
 __all__ = ["file", "directory", "read_file", "list_directory", "write_file", "delete_file",
            "create_dir", "rename_path", "delete_dir", "terminal", "run_terminal",
-           "observe", "capture_file"]
+           "observe", "capture_file", "search"]

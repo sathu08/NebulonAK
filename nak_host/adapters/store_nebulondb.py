@@ -36,21 +36,20 @@ from typing import Any
 import requests
 from requests.auth import HTTPBasicAuth
 
-from nak.domain.errors import ConcurrencyError, DuplicateTask, TaskNotFound
-from nak.domain.permission import BlockReason
-from nak.domain.result import Result, ResultStatus
-from nak.domain.state import TaskState, ensure_transition, is_pending_state
-from nak.domain.task import Task, TaskRun
+from nak_host.domain.errors import ConcurrencyError, DuplicateTask, TaskNotFound
+from nak_host.domain.permission import BlockReason
+from nak_host.domain.result import Result, ResultStatus
+from nak_host.domain.state import TaskState, ensure_transition, is_pending_state
+from nak_host.domain.task import Task, TaskRun
+from nak_host.utils.constant import HTTP_RETRYABLE_STATUS as _TRANSIENT_HTTP
+from nak_host.utils.constant import NDB_CORPUS_DEFAULT as CORPUS_DEFAULT
+from nak_host.utils.constant import NDB_SEG_EVENTS as SEG_EVENTS
+from nak_host.utils.constant import NDB_SEG_RESULTS as SEG_RESULTS
+from nak_host.utils.constant import NDB_SEG_RUNS as SEG_RUNS
+from nak_host.utils.constant import NDB_SEG_TASKS as SEG_TASKS
+from nak_host.utils.constant import STORE_RUN_FIELDS as _RUN_FIELDS
 
-CORPUS_DEFAULT = "nak_tasks"
-SEG_TASKS = "tasks"
-SEG_RUNS = "task_runs"
-SEG_EVENTS = "task_events"
-SEG_RESULTS = "task_results"
 _SEGMENTS = (SEG_TASKS, SEG_RUNS, SEG_EVENTS, SEG_RESULTS)
-
-_RUN_FIELDS = frozenset({"assigned_worker", "attempt", "block_reason", "result"})
-_TRANSIENT_HTTP = frozenset({429, 502, 503, 504})
 
 
 class NDBError(RuntimeError):

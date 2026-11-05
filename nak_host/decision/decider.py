@@ -6,12 +6,12 @@ Two paths (same return shape):
                scorer, NOT an LLM — typed choice/score/noul answers).
                HTTP failure -> deterministic fallback (never raises).
 
-BOUNDARY (strict): this module NEVER imports nak.worker / nak.brain /
-nak.harness, and NEVER imports any local decision lib. Workers/tools/brain
+BOUNDARY (strict): this module NEVER imports nak_host.worker / nak_host.brain /
+nak_host.harness, and NEVER imports any local decision lib. Workers/tools/brain
 arrive injected (params) or via a caller-supplied loader callable, or are
 read as raw JSON from disk. The decision endpoint comes from the
 workers.json decision block (or Settings defaults for new workers).
-The ONLY place that imports all three sides together is nak/wiring.py
+The ONLY place that imports all three sides together is nak_host/wiring.py
 (the composition root). Keep it that way.
 
 Workers: explicit `workers=[...]` wins; else `workers_loader()`; else
@@ -41,7 +41,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-from nak.utils.constant import (
+from nak_host.utils.constant import (
     DECISION_TIMEOUT as _DECISION_TIMEOUT,
     DECISION_TIMEOUT_FLOOR as _DECISION_TIMEOUT_FLOOR,
     DEFAULT_DECISION_QUESTIONS as _DEFAULT_DECISION_QUESTIONS,
@@ -191,7 +191,7 @@ def _down_notice(url: str) -> str:
 
 
 def _read_workers_json(workers_file: Any = None) -> List[Dict[str, Any]]:
-    """Raw JSON read — filesystem only, NEVER `from nak.worker import ...`."""
+    """Raw JSON read — filesystem only, NEVER `from nak_host.worker import ...`."""
     cand = Path(workers_file).expanduser() if workers_file else _DEFAULT_WORKERS_JSON
     try:
         raw = json.loads(cand.read_text(encoding="utf-8"))
@@ -205,7 +205,7 @@ def _all_workers(
     workers_file: Any = None,
     workers_loader: Optional[Callable[[], List[Dict[str, Any]]]] = None,
 ) -> List[str]:
-    """Resolve worker names. No nak.worker import — injected or raw JSON."""
+    """Resolve worker names. No nak_host.worker import — injected or raw JSON."""
     if workers:
         ws = [str(w).strip() for w in workers if str(w).strip()]
         if ws:
@@ -235,7 +235,7 @@ def _all_tools(
     engine: Any = None,
     tools_loader: Optional[Callable[[], List[str]]] = None,
 ) -> List[str]:
-    """Resolve tool names. No nak.harness import — injected engine/loader only."""
+    """Resolve tool names. No nak_host.harness import — injected engine/loader only."""
     if tools:
         ts = [str(t).strip() for t in tools if str(t).strip()]
         if ts:
@@ -307,9 +307,9 @@ def _obs_text(observation: Any) -> str:
 #    "endpoint": "http://localhost:8000/api/NebulonAgentKit/laya",
 #    "questions": [{"name": "priority", "type": "score"}, ...]}
 # Explicit `endpoint` arg wins over workers.json. No TCP probe, no
-# in-process scorer here (BOUNDARY: never import nak.api / nak.worker).
+# in-process scorer here (BOUNDARY: never import nak_host.api / nak_host.worker).
 # Failure -> deterministic fallback (never raises).
-# Defaults (_DEFAULT_DECISION_QUESTIONS etc.) live in nak/utils/constant.py.
+# Defaults (_DEFAULT_DECISION_QUESTIONS etc.) live in nak_host/utils/constant.py.
 # ------------------------------------------------------------------ #
 
 
@@ -317,7 +317,7 @@ def _load_decision(
     workers_file: Any = None,
     workers_loader: Optional[Callable[[], List[Dict[str, Any]]]] = None,
 ) -> Dict[str, Any]:
-    """First enabled decision block, else defaults. No nak.worker import."""
+    """First enabled decision block, else defaults. No nak_host.worker import."""
     entries: List[Any] = []
     if workers_loader is not None:
         try:
@@ -451,7 +451,7 @@ def local_rule(
     decision_cfg=None falls back to the first enabled block (backward compat);
     per-worker callers pass their own block so transports never leak across
     workers.
-    BOUNDARY: no nak.worker / nak.brain / nak.harness / nak.api imports here.
+    BOUNDARY: no nak_host.worker / nak_host.brain / nak_host.harness / nak_host.api imports here.
     """
     g = str(goal or "").strip()
     if not g:
@@ -561,7 +561,7 @@ def _decide_prompt_dirs(workers_file: Any = None) -> List[Path]:
         try:
             wf_parent = Path(workers_file).expanduser().parent
             dirs.append(wf_parent / "prompts")
-            # workers.json moved to nak/manifests/; prompts stay in nak/worker/prompts/
+            # workers.json moved to nak_host/manifests/; prompts stay in nak_host/worker/prompts/
             dirs.append(wf_parent.parent / "worker" / "prompts")
         except Exception:
             pass
@@ -586,9 +586,9 @@ def _llm_prompt(goal: str, observation: Any, workers: List[str], tools: List[str
     """Decision prompt for llm=True (shared by any LLM provider).
 
     Loads prompts/decide.md next to workers.json (same {{...}} convention
-    as nak/worker/prompts/*.md) so every LLM runs the same process;
+    as nak_host/worker/prompts/*.md) so every LLM runs the same process;
     missing/unreadable file -> built-in template below.
-    BOUNDARY: raw file read only — never `from nak.worker import ...`.
+    BOUNDARY: raw file read only — never `from nak_host.worker import ...`.
     """
     obs = _obs_text(observation)
     for d in _decide_prompt_dirs(workers_file):
@@ -685,8 +685,8 @@ def decide_task(
     """Goal -> worker + tool + arguments.
 
     BOUNDARY: brain/workers/tools/endpoint are INJECTED. This module never
-    does `from nak.worker / nak.brain / nak.harness import ...` and never
-    imports any local decision lib — see nak/wiring.py.
+    does `from nak_host.worker / nak_host.brain / nak_host.harness import ...` and never
+    imports any local decision lib — see nak_host/wiring.py.
 
     Args:
       goal: what the user needs todo (chat text, required).
@@ -737,11 +737,11 @@ def decide_task(
             fb["reason"] += f" (brain factory: {str(exc)[:100]})"
             fb["llm_fallback"] = True
             return fb
-    if brain is None:  # no direct `from nak.brain import Brain` here by design
+    if brain is None:  # no direct `from nak_host.brain import Brain` here by design
         fb = local_rule(g, ws, ts, observation, engine, workers_file,
                         workers_loader, tools_loader, endpoint, timeout,
                         auth_token, decision_cfg=decision_cfg)
-        fb["reason"] += " (no brain injected — wire via nak/wiring.py)"
+        fb["reason"] += " (no brain injected — wire via nak_host/wiring.py)"
         fb["llm_fallback"] = True
         return fb
 

@@ -2,7 +2,7 @@
 
 Pure stdlib. The caller injects ``fn(request) -> result``; this module does
 not import worker/brain/harness and does not know what a decision is. That
-keeps nak.decision's boundary intact while letting craft runners issue one
+keeps nak_host.decision's boundary intact while letting craft runners issue one
 decision per plan step concurrently.
 
 Guarantees:
@@ -24,7 +24,7 @@ from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-from nak.utils.constant import DECISION_BATCH_TIMEOUT, DECISION_MAX_PARALLEL
+from nak_host.utils.constant import DECISION_BATCH_TIMEOUT, DECISION_MAX_PARALLEL
 
 
 def _request_id(request: dict[str, Any], index: int) -> str:

@@ -24,16 +24,13 @@ from collections.abc import Iterator
 try:
     from ..engine.sandbox import default_workspace, safe_join
 except Exception:  # pragma: no cover — direct-path import fallback
-    from nak.harness.engine.sandbox import default_workspace, safe_join  # type: ignore
+    from nak_host.harness.engine.sandbox import default_workspace, safe_join  # type: ignore
 
-_DEFAULT_MAX_RESULTS = 200
-_MAX_RESULTS_CAP = 500
-_MAX_FILE_BYTES = 1_000_000
-_MAX_LINE_CHARS = 400
-_SKIP_DIRS = {
-    ".git", ".libs", ".uv-cache", ".venv", "node_modules", "__pycache__",
-    "secrets",
-}
+from nak_host.utils.constant import SEARCH_DEFAULT_MAX_RESULTS as _DEFAULT_MAX_RESULTS
+from nak_host.utils.constant import SEARCH_MAX_FILE_BYTES as _MAX_FILE_BYTES
+from nak_host.utils.constant import SEARCH_MAX_LINE_CHARS as _MAX_LINE_CHARS
+from nak_host.utils.constant import SEARCH_MAX_RESULTS_CAP as _MAX_RESULTS_CAP
+from nak_host.utils.constant import SEARCH_SKIP_DIRS as _SKIP_DIRS
 
 
 def _root(data: dict) -> str:

@@ -14,17 +14,23 @@ from __future__ import annotations
 
 from typing import Any
 
-from nak.application.create_task import create_task
-from nak.domain.result import ResultStatus
-from nak.domain.state import TaskState
-from nak.domain.task import Task, TaskRun
-
-_FIX_KINDS = frozenset({"test"})
+from nak_host.application.create_task import create_task
+from nak_host.domain.result import ResultStatus
+from nak_host.domain.state import TaskState
+from nak_host.domain.task import Task, TaskRun
+from nak_host.utils.constant import CHAIN_DEFAULT_MAX_ROUNDS
+from nak_host.utils.constant import CHAIN_FIX_KINDS as _FIX_KINDS
 
 
 def run_chain(task: Task, run: TaskRun, steps: Any, *, store: Any,
-              step_runner: Any, max_rounds: int = 3) -> dict[str, Any]:
-    """Run steps sequentially. Returns {ok, results, rounds, run, reason}."""
+              step_runner: Any, max_rounds: int = CHAIN_DEFAULT_MAX_ROUNDS,
+              on_event: Any = None) -> dict[str, Any]:
+    """Run steps sequentially. Returns {ok, results, rounds, run, reason}.
+
+    ``on_event`` streams step-level events {type: step_finished, ...};
+    per-tool streaming stays in the step_runner closure. Failures in the
+    callback never break the chain.
+    """
     queue = [_check_step(s, i) for i, s in enumerate(list(steps or []))]
     if not queue:
         raise ValueError("run_chain needs at least one step")
@@ -76,6 +82,13 @@ def run_chain(task: Task, run: TaskRun, steps: Any, *, store: Any,
                                      "worker": step["worker"],
                                      "kind": step["kind"],
                                      "status": str(getattr(result, "status", "?"))})
+        if callable(on_event):
+            import contextlib as _ctx
+            with _ctx.suppress(Exception):
+                on_event({"type": "step_finished",
+                          "worker": step["worker"],
+                          "kind": step["kind"],
+                          "status": str(getattr(result, "status", "?"))})
         if (step["kind"] in _FIX_KINDS and result is not None
                 and result.status != ResultStatus.OK and rounds < max_rounds):
             rounds += 1

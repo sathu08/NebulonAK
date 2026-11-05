@@ -8,7 +8,7 @@ The loop is deliberately conservative:
 4. re-vet affected workers with Nunnan in a fresh session;
 5. record the result in ``<workspace_root>/improve/history.json``.
 
-Pushing a candidate into ``nak/harness/craft`` is never automatic — every
+Pushing a candidate into ``nak_host/harness/craft`` is never automatic — every
 record keeps ``push_status: "pending"`` for a human to review.
 """
 

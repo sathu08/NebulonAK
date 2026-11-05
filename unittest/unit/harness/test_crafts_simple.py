@@ -1,5 +1,5 @@
 """SIMPLE craft tests — plan/assign/build load, list, expand, worker mapping."""
-from nak.harness.craft import craft as C
+from nak_host.harness.craft import craft as C
 
 
 def test_load_plan_craft():

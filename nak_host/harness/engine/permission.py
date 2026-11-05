@@ -18,7 +18,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from nak.utils.constant import (
+from nak_host.utils.constant import (
     DEFAULT_PERMISSIONS_JSON as DEFAULT_PERMISSIONS_FILE,
     DEFAULT_WORKERS_JSON as DEFAULT_WORKERS_FILE,
 )
@@ -145,7 +145,7 @@ def assert_worker_known(workers_file: Any = None, worker_name: Optional[str] = N
 def load_worker_role(workers_file: Any = None, worker_name: Optional[str] = None) -> Optional[str]:
     """Map a worker name -> identity.role via workers.json (raw read only).
 
-    None = NAK_WORKERS_FILE env > nak/manifests/workers.json. Returns the
+    None = NAK_WORKERS_FILE env > nak_host/manifests/workers.json. Returns the
     role string, or None when unbound/unknown/unreadable. Never raises.
     """
     name = str(worker_name or "").strip()

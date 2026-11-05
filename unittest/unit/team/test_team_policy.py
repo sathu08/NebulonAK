@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from nak.worker import GenericWorker
-from nak.worker.engine.team import resolve_team
-from nak.wiring import make_harness, run_craft
+from nak_host.worker import GenericWorker
+from nak_host.worker.engine.team import resolve_team
+from nak_host.wiring import make_harness, run_craft
 
-_REAL_CRAFTS = Path(__file__).resolve().parents[3] / "nak" / "manifests" / "crafts.json"
+_REAL_CRAFTS = Path(__file__).resolve().parents[3] / "nak_host" / "manifests" / "crafts.json"
 
 
 class _Brain:

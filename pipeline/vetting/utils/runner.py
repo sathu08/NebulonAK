@@ -14,18 +14,18 @@ from pathlib import Path
 from typing import Any
 from collections.abc import Callable
 
-from nak.harness.craft.craft import crafts_for_worker
-from nak.harness.engine.permission import (
+from nak_host.harness.craft.craft import crafts_for_worker
+from nak_host.harness.engine.permission import (
     load_permissions,
     load_worker_names,
     load_worker_role,
     resolve_workers_file,
     rule_for,
 )
-from nak.harness.tools.assertion import assertion
-from nak.harness.tools.scorecard import scorecard
-from nak.harness.tools.trace import trace
-from nak.wiring import make_brain, make_worker
+from nak_host.harness.tools.assertion import assertion
+from nak_host.harness.tools.scorecard import scorecard
+from nak_host.harness.tools.trace import trace
+from nak_host.wiring import make_brain, make_worker
 
 from .models import (
     AggregateSummary,
@@ -107,7 +107,7 @@ def build_profile(worker_name: str, workers_file: Any = None,
     decision = entry.get("decision") if isinstance(entry.get("decision"), dict) else {}
     memory = entry.get("memory") if isinstance(entry.get("memory"), dict) else {}
     try:
-        from nak.worker.engine.autonomy import _autonomy_from_crafts
+        from nak_host.worker.engine.autonomy import _autonomy_from_crafts
         autonomy = _autonomy_from_crafts(
             entry.get("crafts"), resolve_workers_file(workers_file), worker_name)
     except Exception:  # noqa: BLE001 — profile is best-effort

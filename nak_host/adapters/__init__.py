@@ -1,7 +1,8 @@
-"""nak.adapters — TaskStorePort implementations (no domain changes needed).
+"""nak_host.adapters — TaskStorePort implementations (no domain changes needed).
 
-InMemoryTaskStore: process-local default for tests/offline use.
-NebulonDBTaskStore: durable append-only store on NebulonDB itself.
+InMemoryTaskStore: process-local, test/offline-only reference implementation.
+NebulonDBTaskStore: durable append-only prod store on NebulonDB itself
+(use wiring.make_prod_store(); persistence loss is never silent).
 """
 
 from .credentials_mind import (

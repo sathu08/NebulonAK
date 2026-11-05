@@ -1,9 +1,13 @@
-# NebulonAgentKit — Architecture & Plan
+# NebulonAgentKit — Architecture
 
-Status: **Approved — Plan v2.1**
-Scope: turn NebulonAgentKit (NAK) into a modular agent framework where a user connects to NebulonMind + NebulonDB, gives NAK a task, and NAK plans, delegates, executes, verifies and reports it.
+NebulonAgentKit (NAK) is a modular agent framework where a user connects to
+NebulonMind + NebulonDB, gives NAK a task, and NAK plans, delegates,
+executes, verifies and reports it.
 
-Non-goal: this is a **layering + contracts** migration, not a rewrite. Existing manifests, tools, sandbox, permissions and the "no local LLM in NAK" rule stay unchanged.
+Non-goal: NAK never performs LLM inference itself. Every model call goes via
+`nak_host.brain` → NebulonMD HTTP API. Manifests, tools, sandbox, permissions and
+the "no local LLM in NAK" rule are structural invariants, not migration
+steps.
 
 ---
 
@@ -28,18 +32,20 @@ Non-goal: this is a **layering + contracts** migration, not a rewrite. Existing 
 Dependency direction is inward only.
 
 ```
-Interfaces      CLI (nebuloncode) · HTTP API · TUI
-                     │
-Application     create · plan · assign · run · chain · verify · report
-                orchestrator (coordinates only) · agent loop
-                     │  depends on ports
+Interfaces      nak-worker CLI · server CLI (nebulonak.py) · pipeline CLIs (vetting)
+                HTTP API (laya decision + console dashboard + static web)
+                      │
+Application     create · plan · assign · run · chain · verify · approve · report
+                approval ledger · agent loop · orchestrator (coordinates only)
+                      │  depends on ports
 Domain          Task · TaskRun · Result · Worker · Team · Craft · Tool
                 Policy · Permission · ExecutionContext · errors
-                     ▲  adapters implement ports
+                      ▲  adapters implement ports
 Adapters        Brain/Mind · Memory/DB · JSON registry · SQLite store
-                Sandbox executor · Tools · Laya decision
-                     ▲
+                Sandbox executor · Tools · Laya decision · Mind credentials
+                      ▲
 Composition     wiring.py — builds concretes, injects them
+                nak_host/utils/settings.py (cfg + env) · nak_host/utils/constant.py (values)
 ```
 
 Rules:
@@ -94,6 +100,11 @@ class Task:
         object.__setattr__(self, "acceptance", tuple(self.acceptance))
         object.__setattr__(self, "allowed_tools", frozenset(self.allowed_tools))
 ```
+
+`inputs` is a free-form frozen map. Loop budgets (`max_calls_per_turn`,
+`obs_chars`, `history_keep`, `max_stalls`, `auto_steps`) travel here and
+resolve as explicit kwarg > `task.inputs` > built-in default, so callers
+stay backward compatible.
 
 ### 3.3 TaskRun (mutable execution state)
 
@@ -151,6 +162,10 @@ class Result:
     needs_approval: bool
 ```
 
+`evidence` carries the loop answer (truncated), tool-call counts, the
+failure reason, and `diff_stat` (first `terminal git diff` output) when a
+diff ran.
+
 ### 3.6 Block / recovery metadata
 
 ```python
@@ -162,7 +177,10 @@ class BlockReason:
     recovery: MappingProxyType   # last_step, checkpoint, worker, session_id
 ```
 
-`RUNNING -> BLOCKED(code="interrupted")` on startup recovery is resumable only when a checkpoint exists. An ordinary permission block uses `code="permission_denied", resumable=False`. The application therefore knows whether it can safely resume.
+`RUNNING -> BLOCKED(code="interrupted")` on startup recovery is resumable
+only when a checkpoint exists. An ordinary permission block uses
+`code="permission_denied", resumable=False`. The application therefore knows
+whether it can safely resume.
 
 ---
 
@@ -248,15 +266,20 @@ Security requirements:
 
 ---
 
-## 5. TaskStore (NebulonDB only, append-only, credentials from Mind)
+## 5. TaskStore (NebulonDB, append-only; credentials from Mind)
 
-The TaskStore lives in **NebulonDB itself** — one store, no SQLite. NAK
-configures only its Mind connection; the DB host/username/password resolve
-from Mind's gated `GET /api/NebulonMind/system/db_connection` endpoint
-(bearer-shared-secret only; refused when Mind auth is disabled), cached in
-memory with TTL and refreshed on NDB 401. Explicit per-field overrides
-(kwarg > env > cfg) always win; `resolve_from_mind=false` restores legacy
-direct configuration. One corpus, `cosmos` type (plain JSON, no vectors):
+The production TaskStore lives in **NebulonDB itself** — one store.
+`wiring.make_prod_store()` builds it; `wiring.make_task_store("memory")`
+returns the process-local in-memory port implementation used for unit tests
+and offline runs (`NAK_STORE=memory` selects it; anything else in prod code
+resolves the prod store and fails loud when Mind/DB are down — persistence
+loss is never silent). NAK configures only its Mind connection; the DB
+host/username/password resolve from Mind's gated
+`GET /api/NebulonMind/system/db_connection` endpoint (bearer-shared-secret
+only; refused when Mind auth is disabled), cached in memory with TTL and
+refreshed on NDB 401. Explicit per-field overrides (kwarg > env > cfg)
+always win; `resolve_from_mind=false` restores legacy direct configuration.
+One corpus, `cosmos` type (plain JSON, no vectors):
 
 ```
 corpus: nak_tasks  (cosmos)
@@ -298,9 +321,9 @@ transactions, CAS, or unique constraints):
   single-writer lock: `version` mismatch raises `ConcurrencyError`.
 - **Idempotency.** `idempotency_key` is checked under the same lock before
   insert; deterministic `event_id`s make retries safe to re-issue.
-- **Single-writer rule.** Exactly one TaskStore instance owns all writes (CLI
-  and API both go through it). Concurrent writer *processes* are unsupported
-  in v1 (documented; a lease design is reserved for later).
+- **Single-writer rule.** Exactly one TaskStore instance owns all writes.
+  Concurrent writer *processes* are unsupported in v1 (documented; a lease
+  design is reserved for later).
 - **Doc shape.** All metadata values are JSON scalars; nested structures
   travel as JSON-string fields (bulletproof against storage encoding).
   Reserved `add_records` keys (`text`, `lang`, `type`, `created_at`, `label`,
@@ -320,6 +343,8 @@ PLANNED        -> APPROVED | NEEDS_APPROVAL | FAILED
 NEEDS_APPROVAL -> APPROVED | FAILED            (rejected)
 APPROVED       -> ASSIGNED | FAILED
 ASSIGNED       -> RUNNING | FAILED
+CREATED        -> ASSIGNED                     (chain children / named calls:
+                                                assigned slices of a planned parent)
 RUNNING        -> NEEDS_APPROVAL | VERIFIED | BLOCKED | FAILED
 BLOCKED        -> RUNNING (resume) | FAILED     (terminal)
 VERIFIED       -> REPORTED | FAILED
@@ -335,50 +360,93 @@ FAILED         -> terminal
 
 ## 7. Application use-cases
 
-No giant orchestrator. `orchestrator.py` only coordinates the use-cases below.
+`nak_host/application/` holds one module per use-case plus the shared agent loop:
 
 ```
-nak/application/
+nak_host/application/
 ├── create_task.py      # validate, dedupe by idempotency key, persist
 ├── plan_task.py        # plan craft -> steps -> approval gate
 ├── assign_task.py      # auto-assign OR explicit worker call
 ├── run_task.py         # build ExecutionContext, run one worker loop
 ├── run_chain.py        # e.g. arivu -> ezhilan (+ bounded fix loop)
-├── verify_task.py      # tests/review evidence
-├── approve_task.py     # human/approver decision
-├── report_task.py      # diff + report artifact
-├── orchestrator.py     # coordinates only
-└── loop.py             # agent loop: brain -> tool -> observe -> repeat
+├── verify_task.py      # test/review evidence
+├── call.py             # depth-1 named worker call (no further delegation)
+├── loop.py             # agent loop: brain -> tool -> observe -> repeat
+└── approval.py         # mint/grant/revoke/expiry/scope ledger
 ```
 
-Explicit worker calls:
+The agent loop (`loop.py`) is ReAct through prompt + parse: Mind's chat
+returns text (no native tool calls), so tools are offered in the prompt and
+called back as fenced JSON blocks. Every Brain call uses `raw=True` (the
+project's own prompt protocol) with a `TypeError` fallback for older
+brains; history uses user/assistant/tool roles only (Mind rejects `system` —
+the identity block goes in as `tool`). Budgets (`max_calls_per_turn`,
+`obs_chars`, `history_keep`, `max_stalls`, `auto_steps`) resolve as explicit
+kwarg > `task.inputs` > built-in default. An optional `on_event` callback
+fires after every tool call for live streaming; failures in the callback
+never break the loop. Task-scoped auto-grant covers the first `auto_steps`
+`ASK` verdicts via the ledger; the rest go through the approver, and the
+authority is re-consulted at execution time.
+
+Named calls and chains (Python API — the supported surface):
+
+```python
+from nak_host.wiring import call_worker, make_prod_store, make_registry
+
+store = make_prod_store()
+call_worker("arivu", "write log_analyzer.py", store=store,
+            registry=make_registry(), approver=lambda info: True)
+```
 
 ```bash
-nebuloncode call arivu --task "write log_analyzer.py + cli.py"
-nebuloncode call ezhilan --task "run the required tests" --from <arivu_task_id>
-nebuloncode chain --goal "build and verify log analyzer" \
-  --steps arivu:write,ezhilan:test,thiran:review
+# One-shot craft from the CLI: plan -> write nak_plan.md -> approve ->
+# assigned workers run as peers in threads
+python -m nak_host.worker --worker vizhi --craft "write log_analyzer.py" --approve
+python -m nak_host.worker --team-name core --craft "build and verify log analyzer"
+
+# Serve the API + web console; observe status, pipeline and settings
+python nebulonak.py start
+# open http://127.0.0.1:8000/api/NebulonAK/dashboard/
 ```
 
 Workspace is shared; context is isolated. Handoff is an explicit `Result`, not shared memory.
 
 ---
 
-## 8. Target layout (incremental, backward compatible)
+## 8. Layout
 
 ```
-nak/
+nak_host/
   domain/        task.py worker.py team.py craft.py tool.py
                  policy.py permission.py ports.py state.py errors.py
   application/   the use-cases above + loop.py
   adapters/      brain_nebulon.py memory_nebulon.py registry_json.py
-                 store_nebulondb.py store_memory.py decision_laya.py tools/
-  interfaces/    cli/ (nebuloncode) · api/
-  config/        settings.py
-  wiring.py      composition root only
+                 store_nebulondb.py store_memory.py credentials_mind.py
+                 executor_harness.py
+  harness/       engine/ (execution, sandbox, permission, approval,
+                 capability, registry, limits) · tools/ · craft/ · ml/ · mcp/
+  worker/        engine/ (worker, identity, prompt, chat, session, team,
+                 dispatch, triage, autonomy, registry, memory)
+   decision/      decider + policy + batch
+   brain/         HTTP client over NebulonMD (the only LLM path)
+   api/           laya decision endpoint + console dashboard
+                  (routes/status|pipeline|settings_view|dashboard + web/ console)
+   cli/           server ops: start|stop|restart|status (no TUI)
+   manifests/     workers.json teams.json crafts.json tools.json permissions.json
+   utils/         settings.py (cfg + env) · constant.py (all fallback values)
+   wiring.py      composition root only
+nebulonak.py     server entry point (mirrors nebulondb.py / nebulonmd.py)
+nebulonagentkit.py  foreground API runner (same app, no daemon)
+pipeline/
+  vetting/       worker evaluation CLIs + runners (nak-vetting)
+unittest/        unit · integration · live · server
 ```
 
-Existing packages (`nak/brain`, `nak/worker`, `nak/harness`, `nak/decision`, `nak/api`) stay in place and become adapters/domain behind shims. `wiring.run_craft` and `propose_plan` remain as facades.
+`wiring.py` exposes `make_brain / make_harness / make_worker / make_registry /
+make_memory / make_executor / make_task_store / make_prod_store /
+call_worker / run_craft / decide`. `run_craft` is a facade over the
+application use-cases with an unchanged return shape, plus `RUNNING`
+transition, saved `Result`, and dispatch event.
 
 ---
 
@@ -395,128 +463,48 @@ Existing packages (`nak/brain`, `nak/worker`, `nak/harness`, `nak/decision`, `na
 
 ---
 
-## 10. Migration phases
-
-Every phase must preserve backward compatibility and pass the existing `unittest/` suite before the next phase begins.
-
-| Phase | Priority | Deliverable | Gate |
-|---|---|---|---|
-| A | Critical | `nak/domain/` models, enums, ports, `ExecutionContext`, `deep_freeze`, `ResultStatus`, `BlockReason`, state-transition validator, manifest schemas | existing tests green |
-| B | Critical | `TaskStorePort` + NebulonDB append-only adapter (+ in-memory default for tests/offline); `create_task` / `plan_task` / `assign_task`; `run_craft` becomes a facade; event-first transitions + idempotency + replay recovery | existing + store tests green |
-| C | High | Registry/memory/harness adapters behind ports (no rewrite of the 28 KB engine yet); typed permission/approval adapters; execution-time re-checks | existing tests green |
-| D | High | `application/loop.py` agent loop + tool executor using `ExecutionContext`; `call_worker` / `run_chain` | arivu -> ezhilan integration green |
-| E | High | `nebuloncode` CLI + API share the use-cases; approval/diff UX; revocation visible mid-run | CLI/API parity tests |
-| F | Critical | import-linter/ruff boundary rules; transition/recovery/contract tests in CI | CI gate |
-
-Do **not** start by splitting the 28 KB harness engine or rewriting worker memory. Establish contracts first, then extract existing functionality behind them.
-
----
-
-## 11. Testing requirements
+## 10. Testing requirements
 
 - **Domain:** frozen `Task` (deep-frozen inputs), legal/illegal state transitions, no IO imports.
 - **Ports:** contract tests run against fakes and real adapters.
 - **TaskStore:** idempotent create, stale `version` rejected, state+event rollback on failure, crash recovery, resume approval, concurrent updates, event replay.
 - **ExecutionContext:** out-of-workspace denied, disallowed tool denied, revoked approval denied mid-run, cancellation honored.
-- **Integration:** `arivu -> ezhilan` on `tasks/log_analyzer.md`; restart mid-run; duplicate submission; permission-denial path.
-- **Boundaries:** import-linter rules — "domain imports no adapters/interfaces" and "only wiring constructs adapters".
+- **Approval:** first-N auto-grant, approver fallback, revocation mid-run, `step_finished` streaming events.
+- **Integration:** `arivu -> ezhilan` chain; restart mid-run; duplicate submission; permission-denial path.
+- **Boundaries:** import-linter/ruff rules — "domain imports no adapters/interfaces" and "only wiring constructs adapters".
 
-Required checks: `pytest -q` and `ruff check .` green after every phase.
+Required checks: `pytest -q` and `ruff check .` green. Live tests skip
+without a DB; with one, Brain connectivity, prod-store round-trip and the
+laya decision endpoint are exercised.
 
 ---
 
-## 12. What stays unchanged
+## 11. Invariants (never change these)
 
-- `nak/manifests/*.json` (workers, teams, crafts, tools, permissions).
-- Sandbox and permission model.
+- `nak_host/manifests/*.json` (workers, teams, crafts, tools, permissions).
+- Sandbox and permission model (fail-closed; deny-lists hold in any workspace).
 - Crafts and craft markdown.
 - NebulonMind HTTP boundary and the "no local LLM in NAK" rule.
 - `make_brain`, `make_worker`, `make_harness` factories.
+- `InMemoryTaskStore` is test/offline-only; prod runs use `make_prod_store()`.
 
 ---
 
-## 13. Current mapping
+## 12. Module map
 
-| Concern | Current location | Target layer |
+| Concern | Location | Layer |
 |---|---|---|
-| Brain client | `nak/brain/client.py` | Adapter (BrainPort) |
-| Decision/policy | `nak/decision/` | Domain policy + Laya adapter |
-| Worker entity | `nak/worker/engine/worker.py` | Domain |
-| Worker memory/registry IO | `nak/worker/engine/memory.py`, `registry.py` | Split -> Adapters |
-| Tools/sandbox/permissions | `nak/harness/` | Domain policy + Tool adapters |
-| Plan/assign/dispatch | `nak/wiring.py:417`, `dispatch.py` | Application |
-| Team roster | `nak/worker/engine/team.py` | Domain |
-| API | `nak/api/` | Interface |
-| CLI | `nak/worker/__main__.py` | Interface |
-| `nebuloncode` | declared in `pyproject.toml:25`, missing | Interface |
-| Config | `nebulonak.cfg` + `nak/utils/settings.py` | Config |
-| Manifests | `nak/manifests/*.json` | Config/Registry adapter |
-
----
-
-## 14. Status
-
-**Phase A is done** (`nak/domain/` + 10 contract tests, full suite green).
-
-**Phase B is done** (NebulonDB-only, append-only):
-
-- `nak/adapters/store_nebulondb.py` — inserts + reads only (never the broken
-  cosmos `update_records`); event-first + idempotent replay; single-writer
-  lock; crash/call healing; replay recovery;
-- `nak/adapters/store_memory.py` — same port, in-memory default for
-  tests/offline and `run_craft`'s default store;
-- `Settings` (+ optional `[nebulonmind]`/`[nebulondb]` overrides)
-  + `wiring.make_task_store("memory" | "nebulondb")` (the `[nebulondb]`
-  section was removed — all defaults; only re-add it to override);
-- `nak/application/` use-cases (`create_task`, `plan_task`, `assign_task`)
-  with injected (duck-typed) planner/harness/routing;
-- `wiring.run_craft` is a facade over the use-cases with an identical return
-  shape, plus `RUNNING` transition, saved `Result`, and dispatch event.
-- Gate met: full suite 423 passed / 2 skipped (live NDB test skips without
-  a DB); new files ruff-clean except one intentional SIM105 kept byte-identical
-  to the legacy approval block.
-- **Credentials from Mind (done):** `GET /api/NebulonMind/system/db_connection`
-  (NebulonMD, bearer-gated, refused when Mind auth is off, audit-logged) +
-  `nak/adapters/credentials_mind.py` (memory-only TTL cache) +
-  401-refresh in the store/client + `resolve_from_mind` flag. Chain of trust:
-  DB password rests only in Mind's `.env`; NAK holds it in memory.
-
-Next: **Phase C** — registry/memory/harness adapters behind ports (no engine
-rewrite yet).
-
-**Phase C is done** (seams, not rewrites — full suite 451 passed / 2 skipped):
-
-- `nak/adapters/registry_json.py` — `RegistryPort` over existing loaders;
-  mtime-checked shared cache (deep-copied), `refresh()`, fail-loud entry
-  shape for teams; `wiring._workers_loader`/`_tools_loader` delegate to it;
-- `nak/adapters/memory_nebulon.py` — `MemoryPort` over injected brain
-  (worker mixin untouched; only new code uses it);
-- `nak/adapters/executor_harness.py` — `ToolExecutorPort` over
-  `ExecutionHarness`: inspect→Verdict, run→ToolResult, authority-bound
-  approver (TOCTOU-safe), revocation/cancel honored, ASK/DENY as results;
-- `make_registry()` / `make_memory()` / `make_executor()` factories.
-- Deferred to Phase D per YAGNI (no consumer yet): `decision_laya` adapter.
-
-Next: **Phase D** — agent loop + `run_task`/`run_chain`/`call_worker`.
-
-**Phase D is done** (full suite 477 passed / 2 skipped; one live-timing
-flake passes on retry; new files ruff-clean):
-
-- `nak/application/approval.py` — mint/grant/revoke/expiry/scope ledger;
-- `nak/application/loop.py` — ReAct via prompt+parse (`raw=True`, no
-  `system` role), arg schemas + worked example in the prompt, reason-bearing
-  observations, honesty-check turn, stall/timeout/cancel budgets;
-- `nak/application/run_task.py` — ASSIGNED->RUNNING, ctx build, Result with
-  extracted files/commands evidence;
-- `nak/application/run_chain.py` — child tasks + handoff + bounded fix loop
-  with failed-step re-verification (supersede semantics);
-- `nak/application/verify_task.py` — test/review step + VERIFIED transition;
-- `nak/application/call.py` + `wiring.call_worker` — depth-1 named calls.
-- State machine: `CREATED->ASSIGNED` added (chain children/named calls are
-  assigned slices of a planned parent).
-- **Live-verified**: real LLM + harness loop wrote, read and executed code
-  (`hi` confirmed) with approval grants; hallucination guardrails held
-  (honest stall/FAILED, no false success).
-- **Deferred (explicit): Phase E (CLI/API) and Phase F (enforcement).**
-  Python-level connection is the supported surface; if a CLI is ever needed,
-  it goes in `pipeline/` (the reserved `nebuloncode` entry point).
+| Brain client | `nak_host/brain/client.py` | Adapter (BrainPort) |
+| Decision/policy | `nak_host/decision/` | Domain policy + Laya adapter |
+| Worker entity | `nak_host/worker/engine/worker.py` | Domain |
+| Worker memory/registry IO | `nak_host/worker/engine/memory.py`, `registry.py` | Split: domain shape + adapters |
+| Tools/sandbox/permissions | `nak_host/harness/` | Domain policy + Tool adapters |
+| Plan/assign/dispatch | `nak_host/wiring.py`, `dispatch.py` | Application |
+| Team roster | `nak_host/worker/engine/team.py` | Domain |
+| API | `nak_host/api/` (laya + console routes + `web/`) | Interface |
+| Worker CLI | `nak_host/worker/__main__.py` | Interface |
+| Server CLI | `nak_host/cli/` + `nebulonak.py` (start/stop/restart/status) | Interface |
+| Vetting pipeline | `pipeline/vetting/` (`nak-vetting`) | Interface |
+| Config | `nebulonak.cfg` (`[paths]/[server]/[decision]/…`) + `nak_host/utils/settings.py` | Config |
+| Shared values | `nak_host/utils/constant.py` (single source) | Config |
+| Manifests | `nak_host/manifests/*.json` | Config/Registry adapter |

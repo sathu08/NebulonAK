@@ -10,8 +10,8 @@ from __future__ import annotations
 import pytest
 import requests
 
-from nak.adapters.store_nebulondb import NDBError, NebulonDBTaskStore, _NDBClient
-from nak.domain import (
+from nak_host.adapters.store_nebulondb import NDBError, NebulonDBTaskStore, _NDBClient
+from nak_host.domain import (
     ConcurrencyError,
     DuplicateTask,
     Result,

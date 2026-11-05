@@ -1,12 +1,12 @@
-"""nak.api.laya_backend — laya Router holder for api.
+"""nak_host.api.laya_backend — laya Router holder for api.
 
-This is the ONLY module in `nak.api` allowed to import the `laya`
+This is the ONLY module in `nak_host.api` allowed to import the `laya`
 model lib:
   * decider / worker / routes NEVER import `laya` directly.
   * they call `predict()` here instead.
 
 Usage:
-    from nak.api.laya_backend import predict, run_laya
+    from nak_host.api.laya_backend import predict, run_laya
 
     answers = predict("read notes.txt", {"route": {...}})
 """

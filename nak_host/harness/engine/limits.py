@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from nak.utils.constant import DEFAULT_LIMITS
+from nak_host.utils.constant import DEFAULT_LIMITS
 
 
 def norm_limits(value: Any) -> Dict[str, float]:

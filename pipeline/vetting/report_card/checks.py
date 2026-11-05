@@ -7,17 +7,17 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from nak.harness.craft.craft import (
+from nak_host.harness.craft.craft import (
     crafts_for_worker,
     expand_craft,
     load_craft,
 )
-from nak.harness.engine.permission import (
+from nak_host.harness.engine.permission import (
     load_permissions,
     load_worker_role,
     rule_for,
 )
-from nak.wiring import make_worker
+from nak_host.wiring import make_worker
 
 from ..utils.models import Answer, Case, Judgement
 from ..utils.probes import probe_tools

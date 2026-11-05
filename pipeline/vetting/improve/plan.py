@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from nak.utils.settings import load_settings
+from nak_host.utils.settings import load_settings
 
 from .constants import IMPROVE_DIR
 from .paths import craft_source, load_summary, resolve_workspace, slug

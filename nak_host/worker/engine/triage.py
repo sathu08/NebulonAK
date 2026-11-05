@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from nak.utils.constant import (
+from nak_host.utils.constant import (
     WORKER_DECISION_ROLE_CHARS,
     WORKER_DECISION_TEXT_CHARS,
     WORKER_MEMORY_SNIPPET_CHARS,
@@ -19,7 +19,7 @@ class TriageMixin:
 
     def build_decision_input(self, text: str,
                                session_id: Optional[str] = None) -> Dict[str, Any]:
-        """decision_input for nak.decision — NO workers/tools here.
+        """decision_input for nak_host.decision — NO workers/tools here.
 
         Workers/tools resolve inside decide_task (None = all from
         workers.json / ToolEngine), so they are deliberately excluded
@@ -112,7 +112,7 @@ class TriageMixin:
             return {"ok": False, "enabled": False, "reason": "decision disabled"}
         if self._decider is None:
             return {"ok": False, "enabled": True,
-                    "error": "no decider injected — build via nak/wiring.py make_worker()"}
+                    "error": "no decider injected — build via nak_host/wiring.py make_worker()"}
         try:
             observation = (context if isinstance(context, dict)
                            else self.build_decision_input(text, session_id=session_id))
@@ -145,8 +145,8 @@ class TriageMixin:
     ) -> Dict[str, Any]:
         """Run triage via INJECTED decider (llm=True, Brain -> NebulonMD) + policy gate.
 
-        BOUNDARY: never `from nak.decision import ...` here — the decider
-        callable arrives via the constructor (see nak/wiring.py).
+        BOUNDARY: never `from nak_host.decision import ...` here — the decider
+        callable arrives via the constructor (see nak_host/wiring.py).
         Returns decide_task() dict + policy verdict:
         {ok, worker, tool, arguments, decision: {...},
          policy: {action: chat|clarify|escalate, allowed, reasons}}.
@@ -160,7 +160,7 @@ class TriageMixin:
             return {"ok": False, "enabled": False, "reason": "decision disabled"}
         if self._decider is None:
             return {"ok": False, "enabled": True,
-                    "error": "no decider injected — build via nak/wiring.py make_worker()"}
+                    "error": "no decider injected — build via nak_host/wiring.py make_worker()"}
         try:
             decision_input = self.build_decision_input(text, session_id=session_id)
             res = self._decider(

@@ -1,8 +1,8 @@
 """LLM router parsing: triage fields must reach policy.evaluate()."""
 import json
 
-from nak.decision.decider import _llm_prompt, _parse_llm_answer, decide_task
-from nak.decision.policy import evaluate
+from nak_host.decision.decider import _llm_prompt, _parse_llm_answer, decide_task
+from nak_host.decision.policy import evaluate
 
 WORKERS = ["vizhi", "arivu"]
 TOOLS = ["file", "terminal"]

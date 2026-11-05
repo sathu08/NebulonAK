@@ -1,4 +1,4 @@
-"""nak.api.router.laya — laya API endpoint for api.
+"""nak_host.api.router.laya — laya API endpoint for api.
 
 Thin FastAPI layer over `..laya_backend` (which owns the `laya` import).
 
@@ -7,11 +7,11 @@ Thin FastAPI layer over `..laya_backend` (which owns the `laya` import).
 Fixed routes — add new ones here in code, never at runtime.
 
 Usage (server):
-    from nak.api.router.laya import router as laya_router
+    from nak_host.api.router.laya import router as laya_router
     app.include_router(laya_router)
 
 Usage (direct def call, no HTTP):
-    from nak.api.router import laya
+    from nak_host.api.router import laya
     laya.run_laya("read notes.txt", {"route": {...}})
 """
 

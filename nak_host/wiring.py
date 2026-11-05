@@ -1,14 +1,14 @@
 """Composition root — the ONLY place that wires brain + decision + worker.
 
 BOUNDARY:
-  * nak/decision NEVER imports nak.worker / nak.brain / nak.harness.
-  * nak/worker NEVER imports nak.brain / nak.decision (runtime or lazy).
+  * nak_host/decision NEVER imports nak_host.worker / nak_host.brain / nak_host.harness.
+  * nak_host/worker NEVER imports nak_host.brain / nak_host.decision (runtime or lazy).
   * THIS module is the single exception: it imports all three sides and
     connects them via constructor injection (duck-typed, no subclassing).
 
 Use:
-    from nak.wiring import make_worker, make_brain, make_harness, decide, run_craft
-    from nak.wiring import make_task_store
+    from nak_host.wiring import make_worker, make_brain, make_harness, decide, run_craft
+    from nak_host.wiring import make_task_store
     w = make_worker("vizhi")            # brain + decider + policy injected
     w.chat("hello")                     # triage auto-runs (decision.enabled)
     h = make_harness(worker="vizhi")    # sandboxed file/directory/terminal tools
@@ -27,13 +27,17 @@ import re
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
+from nak_host.utils.constant import CALL_DEFAULT_MAX_STEPS
+from nak_host.utils.constant import CALL_DEFAULT_TIMEOUT
+from nak_host.utils.constant import STORE_DEFAULT_BACKEND
+
 _ASSIGN_TAG = re.compile(r"\[\s*worker\s*=\s*([^\]\s]+)\s*\]", re.IGNORECASE)
 _STEP_LINE = re.compile(r"^(\s*\d+[.)]\s+)(\S.*)$")
 
 
 def make_brain(**kwargs: Any) -> Any:
-    """Create a nak.brain.Brain (all LLM lives in NebulonMD)."""
-    from nak.brain import Brain
+    """Create a nak_host.brain.Brain (all LLM lives in NebulonMD)."""
+    from nak_host.brain import Brain
 
     return Brain(**kwargs)
 
@@ -55,10 +59,10 @@ def make_harness(worker: Optional[str] = None,
     approver=... (e.g. CLI y/n) or 'ask' verdicts deny with need_approval.
 
     extra_tools/ml/mcp are passing-only placeholders (stored on the
-    engine, never executed here): nak/harness/ml/ and nak/harness/mcp/
+    engine, never executed here): nak_host/harness/ml/ and nak_host/harness/mcp/
     are empty reserves for future helpers.
     """
-    from nak.harness.engine import ExecutionHarness
+    from nak_host.harness.engine import ExecutionHarness
 
     return ExecutionHarness(registry=registry, workspace_root=workspace_root,
                             user=user, permissions=permissions, worker=worker,
@@ -75,7 +79,7 @@ def new_session(user: Any = None, label: Any = None, when: Any = None) -> str:
     ``user``/``label`` only seed the filename-safe prefix; ``when`` exists
     for deterministic tests. Collision-safe (see make_session_id).
     """
-    from nak.harness.engine.sandbox import make_session_id
+    from nak_host.harness.engine.sandbox import make_session_id
 
     who = str(user or label or "team").strip() or "team"
     return make_session_id(who, when=when)
@@ -85,7 +89,7 @@ def make_registry(workers_file: Any = None, teams_file: Any = None,
                   tools_file: Any = None,
                   permissions_file: Any = None) -> Any:
     """Create the JSON registry adapter (RegistryPort over manifests)."""
-    from nak.adapters.registry_json import JsonRegistry
+    from nak_host.adapters.registry_json import JsonRegistry
 
     return JsonRegistry(workers_file=workers_file, teams_file=teams_file,
                         tools_file=tools_file, permissions_file=permissions_file)
@@ -93,7 +97,7 @@ def make_registry(workers_file: Any = None, teams_file: Any = None,
 
 def make_memory(brain: Any = None, user: Any = None) -> Any:
     """Create the memory adapter (MemoryPort over an injected brain)."""
-    from nak.adapters.memory_nebulon import NebulonMemory
+    from nak_host.adapters.memory_nebulon import NebulonMemory
 
     return NebulonMemory(brain=brain, user=user)
 
@@ -105,7 +109,7 @@ def make_executor(harness: Any = None, worker: Any = None,
     Pass a built harness, or a worker name (+ make_harness kwargs) to build
     one. Phase D's agent loop drives tool calls through this.
     """
-    from nak.adapters.executor_harness import HarnessExecutor
+    from nak_host.adapters.executor_harness import HarnessExecutor
 
     if harness is None:
         harness = make_harness(worker=worker, **kwargs)
@@ -114,21 +118,27 @@ def make_executor(harness: Any = None, worker: Any = None,
 
 def call_worker(name: str, goal: str, *, store: Any = None,
                 approver: Any = None, workspace: str = "",
-                max_steps: int = 8, timeout: int = 300,
+                max_steps: int = CALL_DEFAULT_MAX_STEPS,
+                timeout: int = CALL_DEFAULT_TIMEOUT,
                 allowed_tools: Any = None, registry: Any = None,
-                harness_kwargs: Any = None, **kwargs: Any) -> Any:
+                harness_kwargs: Any = None, on_event: Any = None,
+                max_calls_per_turn: Any = None, obs_chars: Any = None,
+                history_keep: Any = None, max_stalls: Any = None,
+                auto_steps: Any = None,
+                **kwargs: Any) -> Any:
     """Call one named worker on one task (depth-1 delegation).
 
-    Convenience over nak.application.call_worker with real factories: a fresh
+    Convenience over nak_host.application.call_worker with real factories: a fresh
     brain per call, worker + harness + executor + memory built and injected.
     Returns {task, run, result, loop}. Extra kwargs are ignored.
+    ``on_event`` streams per-tool events; budget kwargs (including
+    ``auto_steps``) resolve as explicit > task.inputs > loop default.
     """
-    from nak.adapters.store_memory import InMemoryTaskStore
-    from nak.application.call import call_worker as _app_call
+    from nak_host.application.call import call_worker as _app_call
 
     _ = kwargs
     return _app_call(
-        name, goal, store=store or InMemoryTaskStore(),
+        name, goal, store=_default_store(store),
         worker_factory=lambda n, b: make_worker(n, brain=b),
         brain_factory=make_brain,
         harness_factory=lambda **k: make_harness(**k),
@@ -137,12 +147,15 @@ def call_worker(name: str, goal: str, *, store: Any = None,
         registry=registry or make_registry(),
         approver=approver, workspace=workspace, max_steps=max_steps,
         timeout=timeout, allowed_tools=frozenset(allowed_tools or ()),
-        harness_kwargs=harness_kwargs)
+        harness_kwargs=harness_kwargs, on_event=on_event,
+        max_calls_per_turn=max_calls_per_turn, obs_chars=obs_chars,
+        history_keep=history_keep, max_stalls=max_stalls,
+        auto_steps=auto_steps)
 
 
 def _workers_loader(workers_file: Any = None) -> Callable[[], List[Dict[str, Any]]]:
     def _load() -> List[Dict[str, Any]]:
-        from nak.adapters.registry_json import JsonRegistry
+        from nak_host.adapters.registry_json import JsonRegistry
 
         return list(JsonRegistry(workers_file=workers_file).workers())
 
@@ -159,7 +172,7 @@ def _tools_loader(engine: Any = None, registry: Any = None) -> Callable[[], List
         # Registry names only — never build a ToolEngine here (its
         # constructor creates a session dir on disk as a side effect).
         try:
-            from nak.adapters.registry_json import JsonRegistry
+            from nak_host.adapters.registry_json import JsonRegistry
 
             names = [str(e.get("name", "")).strip()
                      for e in JsonRegistry(tools_file=registry).tools()
@@ -169,14 +182,14 @@ def _tools_loader(engine: Any = None, registry: Any = None) -> Callable[[], List
                 return names
         except Exception:
             pass
-        return ["file"]
+        return ["file", "directory", "search", "terminal", "observe"]
 
     return _load
 
 
 def _decision_config(worker: Any, decision: Any, craft: Optional[str]) -> Optional[Dict[str, Any]]:
     """Resolve a craft decision block: explicit dict > craft name > sole craft."""
-    from nak.harness.craft.craft import load_craft, normalize_decision
+    from nak_host.harness.craft.craft import load_craft, normalize_decision
 
     if isinstance(decision, dict):
         return normalize_decision(decision, "run_craft")
@@ -216,7 +229,7 @@ def _apply_decisions(goal: str, answer: str, cfg: Dict[str, Any], worker: Any,
     serialized. Returns (new_answer, evidence, meta). Never raises for
     decision errors.
     """
-    from nak.decision import decide_many
+    from nak_host.decision import decide_many
 
     try:
         if callable(getattr(worker, "decision_enabled", None)) \
@@ -345,7 +358,7 @@ def decide(
     timeout: Optional[float] = None,
     auth_token: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Decide via nak.decision with registry loaders + explicit brain.
+    """Decide via nak_host.decision with registry loaders + explicit brain.
 
     No hidden construction: llm=True without a brain falls back to the
     endpoint scorer with a clear reason (never auto-builds a Brain —
@@ -354,7 +367,7 @@ def decide(
     endpoint/timeout/auth_token override workers.json decision block
     (None = entry value / Settings default).
     """
-    from nak.decision import decide_task
+    from nak_host.decision import decide_task
 
     return decide_task(
         goal,
@@ -405,16 +418,16 @@ def make_worker(
     Craft check (fail-loud): explicit crafts must be a list of
     {name, description} dicts with a non-empty name; bad shape raises
     ValueError here instead of silently rendering. Existence against
-    crafts.json is validated in nak.harness.craft.load_craft().
+    crafts.json is validated in nak_host.harness.craft.load_craft().
 
     endpoint/timeout/auth_token bake decision-endpoint defaults into this
     worker's decider (None = entry value in workers.json). Explicit per-call
     values in triage()/route() still win over these. Per-call decision_cfg
     (the calling worker's own block) is forwarded unchanged.
     """
-    from nak.decision import decide_task
-    from nak.decision.policy import evaluate as evaluate_policy
-    from nak.worker import GenericWorker
+    from nak_host.decision import decide_task
+    from nak_host.decision.policy import evaluate as evaluate_policy
+    from nak_host.worker import GenericWorker
 
     if crafts is not None:
         if not isinstance(crafts, list):
@@ -477,11 +490,46 @@ def make_worker(
     )
 
 
-def make_task_store(backend: str = "memory", **kwargs: Any) -> Any:
+def _default_store(store: Any = None) -> Any:
+    """Resolve the effective TaskStore: explicit wins, else env-selected.
+
+    NAK_STORE=nebulondb (or ndb/db) routes to make_prod_store() and fails
+    loud when Mind/DB are down. Anything else keeps the throwaway in-memory
+    store so unit tests and offline runs stay dependency-free.
+    """
+    if store is not None:
+        return store
+    import os as _os
+
+    backend = str(_os.environ.get("NAK_STORE", "") or "").strip().lower()
+    if backend in ("nebulondb", "ndb", "db"):
+        return make_prod_store()
+    from nak_host.adapters.store_memory import InMemoryTaskStore
+
+    return InMemoryTaskStore()
+
+
+def make_prod_store(**kwargs: Any) -> Any:
+    """Create the durable prod TaskStore (NebulonDB only, fail-loud).
+
+    Thin wrapper over make_task_store("nebulondb"): Mind is required first
+    (fail fast with the start-order hint), then the NebulonDB store is
+    built. InMemoryTaskStore is test/offline-only and is never returned
+    here. Infrastructure failures propagate — persistence loss is never
+    silent. Pass check_mind=False only in offline unit tests.
+    """
+    check_mind = kwargs.pop("check_mind", True)
+    if check_mind:
+        make_brain().require_mind()
+    return make_task_store("nebulondb", **kwargs)
+
+
+def make_task_store(backend: str = STORE_DEFAULT_BACKEND, **kwargs: Any) -> Any:
     """Create a TaskStorePort: in-memory default or durable NebulonDB.
 
     backend "memory" (default) needs no services — unit tests and offline
-    runs use it. backend "nebulondb" builds NebulonDBTaskStore: base_url,
+    runs use it; prod runs must use make_prod_store() (NebulonDB only).
+    backend "nebulondb" builds NebulonDBTaskStore: base_url,
     user and password resolve from NebulonMD (single configured connection)
     unless overridden — precedence per field is kwarg > env > cfg >
     Mind-resolved > built-in default. A default-valued base_url counts as
@@ -491,17 +539,17 @@ def make_task_store(backend: str = "memory", **kwargs: Any) -> Any:
     """
     import os as _os
 
-    name = str(backend or "memory").strip().lower()
+    name = str(backend or STORE_DEFAULT_BACKEND).strip().lower()
     if name in ("memory", "off", "none"):
-        from nak.adapters.store_memory import InMemoryTaskStore
+        from nak_host.adapters.store_memory import InMemoryTaskStore
 
         return InMemoryTaskStore()
     if name in ("nebulondb", "ndb", "db"):
-        from nak.adapters.credentials_mind import MindCredentialsResolver
-        from nak.adapters.store_nebulondb import NebulonDBTaskStore
+        from nak_host.adapters.credentials_mind import MindCredentialsResolver
+        from nak_host.adapters.store_nebulondb import NebulonDBTaskStore
 
         try:
-            from nak.utils.settings import DEFAULT_NDB_BASE_URL, load_settings
+            from nak_host.utils.settings import DEFAULT_NDB_BASE_URL, load_settings
 
             settings = load_settings()
         except Exception:
@@ -567,7 +615,7 @@ def run_craft(goal: str, worker: Any = None, harness: Any = None,
               store: Any = None) -> Dict[str, Any]:
     """Worker crafts a plan; approved assignments run as peer workers.
 
-    Facade over nak.application use-cases (create_task -> plan_task ->
+    Facade over nak_host.application use-cases (create_task -> plan_task ->
     assign_task); the peer-dispatch tail stays here until Phase D moves
     execution into run_task/run_chain. Every stage is recorded in the
     TaskStore (``store``; default in-memory, or make_task_store("nebulondb")
@@ -625,13 +673,12 @@ def run_craft(goal: str, worker: Any = None, harness: Any = None,
     Task-store (infrastructure) failures propagate — persistence loss is
     never silent.
     """
-    from nak.adapters.store_memory import InMemoryTaskStore
-    from nak.application import assign_task as _app_assign
-    from nak.application import create_task as _app_create
-    from nak.application import plan_task as _app_plan
-    from nak.domain.state import TaskState
-    from nak.worker import GenericWorker as _GW
-    from nak.worker.engine.team import (
+    from nak_host.application import assign_task as _app_assign
+    from nak_host.application import create_task as _app_create
+    from nak_host.application import plan_task as _app_plan
+    from nak_host.domain.state import TaskState
+    from nak_host.worker import GenericWorker as _GW
+    from nak_host.worker.engine.team import (
         ensure_planner_allowed,
         resolve_team,
         split_assignments,
@@ -692,7 +739,7 @@ def run_craft(goal: str, worker: Any = None, harness: Any = None,
         return {"planned": False, "approved": False, "answer": "",
                 "reason": "missing goal", "session_id": sid, **meta}
     if store is None:
-        store = InMemoryTaskStore()
+        store = _default_store(None)
     try:
         max_steps = int((getattr(worker, "autonomy", {}) or {}).get("max_steps", 3))
     except (TypeError, ValueError):
@@ -759,7 +806,7 @@ def run_craft(goal: str, worker: Any = None, harness: Any = None,
     except Exception as exc:
         out["reason"] = f"task store failed: {str(exc)[:150]}"
         return out
-    from nak.worker.engine.dispatch import run_workers
+    from nak_host.worker.engine.dispatch import run_workers
 
     cap = max_workers
     if cap is None and team_spec:
@@ -784,8 +831,8 @@ def run_craft(goal: str, worker: Any = None, harness: Any = None,
         except Exception:
             pass
     try:
-        from nak.domain.result import Result as _Result
-        from nak.domain.result import ResultStatus as _ResultStatus
+        from nak_host.domain.result import Result as _Result
+        from nak_host.domain.result import ResultStatus as _ResultStatus
 
         runs = list(fan["runs"])
         bad = [str(r.get("worker", "")) for r in runs if not r.get("ok")]

@@ -1,7 +1,7 @@
 """Plan a task with an injected planner + harness.
 
 Duck-typed dependencies (no concrete imports, same boundary rule as
-``nak.worker.engine.dispatch``):
+``nak_host.worker.engine.dispatch``):
 
 * ``planner`` — ``.chat(text, session_id)`` reply plus ``.extract_plan()``,
   ``.extract_assigned()`` and ``.needs_plan_approval()`` (GenericWorker
@@ -21,8 +21,8 @@ from __future__ import annotations
 from typing import Any
 from collections.abc import Callable
 
-from nak.domain.state import TaskState
-from nak.domain.task import Task, TaskRun
+from nak_host.domain.state import TaskState
+from nak_host.domain.task import Task, TaskRun
 
 
 def plan_task(task: Task, run: TaskRun, *, store: Any, planner: Any,

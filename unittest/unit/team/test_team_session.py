@@ -10,9 +10,9 @@ from datetime import datetime, timezone
 
 import pytest
 
-from nak.worker import GenericWorker
-from nak.worker.engine.dispatch import run_workers
-from nak.wiring import new_session, run_craft
+from nak_host.worker import GenericWorker
+from nak_host.worker.engine.dispatch import run_workers
+from nak_host.wiring import new_session, run_craft
 
 
 class TeamBrain:
@@ -62,7 +62,7 @@ def test_new_session_ids_are_unique_and_filename_safe():
 
 
 def test_run_craft_reports_shared_session_id(worker_vizhi, tmp_workspace):
-    from nak.wiring import make_harness
+    from nak_host.wiring import make_harness
 
     worker_vizhi.brain.answer = "1. read notes\n2. summarize"
     h = make_harness(worker="vizhi", workspace_root=tmp_workspace)
@@ -133,7 +133,7 @@ def test_run_workers_does_not_drop_when_max_workers_is_one():
 
 
 def test_run_craft_dispatches_assigned_workers(tmp_workspace):
-    from nak.wiring import make_harness
+    from nak_host.wiring import make_harness
 
     brain = TeamBrain(answer="Plan:\n1. review login [worker=arivu]")
     coordinator = GenericWorker("vizhi", brain=brain)
@@ -150,7 +150,7 @@ def test_run_craft_dispatches_assigned_workers(tmp_workspace):
 
 
 def test_run_craft_pending_does_not_dispatch(tmp_workspace):
-    from nak.wiring import make_harness
+    from nak_host.wiring import make_harness
 
     brain = TeamBrain(answer="Plan:\n1. review login [worker=arivu]")
     coordinator = GenericWorker("vizhi", brain=brain)
@@ -164,7 +164,7 @@ def test_run_craft_pending_does_not_dispatch(tmp_workspace):
 
 
 def test_run_craft_plan_only_worker_does_not_dispatch(tmp_workspace):
-    from nak.wiring import make_harness
+    from nak_host.wiring import make_harness
 
     brain = TeamBrain(answer="Plan:\n1. review login [worker=arivu]")
     coordinator = GenericWorker("aayan", brain=brain)
@@ -179,7 +179,7 @@ def test_run_craft_plan_only_worker_does_not_dispatch(tmp_workspace):
 
 def test_run_craft_uses_one_brain_and_thread_per_peer(monkeypatch,
                                                       tmp_workspace):
-    from nak.wiring import make_harness
+    from nak_host.wiring import make_harness
 
     seen = []
     docs = {}
@@ -202,7 +202,7 @@ def test_run_craft_uses_one_brain_and_thread_per_peer(monkeypatch,
 
     plan_brain = PeerBrain("Plan:\n1. a [worker=aayan]\n2. b [worker=arivu]")
 
-    import nak.wiring as wiring
+    import nak_host.wiring as wiring
 
     monkeypatch.setattr(wiring, "make_brain", lambda **k: PeerBrain("ack"))
     monkeypatch.setattr(

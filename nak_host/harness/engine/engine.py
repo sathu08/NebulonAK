@@ -11,7 +11,7 @@ Orchestrator only. One focused module per concern (same folder):
   Tool Execution (execution.py): lazy resolve + run/suggest_and_run.
 
 The harness NEVER imports a tool module directly and NEVER calls any
-LLM itself — tool locations come from nak/manifests/tools.json and
+LLM itself — tool locations come from nak_host/manifests/tools.json and
 functions load lazily via importlib only at run time (execution.py).
 
 Sandbox: every run is scoped to a session dir
@@ -21,7 +21,7 @@ create_session(). File paths must resolve inside the session root;
 .. / absolute / symlink escapes and .env, *.key/*.pem, secrets/ +
 .git/ are denied even inside root (shared rules in sandbox.py).
 
-Permissions (nak/manifests/permissions.json) — worker <-> harness
+Permissions (nak_host/manifests/permissions.json) — worker <-> harness
 boundary, fail-closed. Enforced in inspect() BEFORE any run, in order:
 worker entry exists+enabled (unbound -> "default" entry;
 named-but-unlisted -> deny) -> tool known -> tool verdict allow
@@ -69,7 +69,6 @@ from .registry import DEFAULT_REGISTRY as _DEFAULT_REGISTRY
 from .sandbox import check_resources as _check_resources_fn
 from .sandbox import create_session_dir, record_session_history
 from .sandbox import default_workspace, safe_join, sanitize_user
-from .sandbox import glob_hit as _glob_hit_fn
 from .sandbox import resource_bases as _resource_bases_fn
 
 
@@ -96,12 +95,6 @@ class ExecutionHarness:
         self.registry_path = str(Path(registry).expanduser() if registry else _DEFAULT_REGISTRY)
         self._specs: Dict[str, Dict[str, Any]] = {e["name"]: e for e in _load_registry(registry)}
         self.permissions: Dict[str, Any] = _load_permissions(permissions)
-        # Read-only coverage report (no auto-tagging): registry tools/caps
-        # missing from an entry stay fail-closed deny; see
-        # permission.audit_tool_coverage().
-        from .permission import audit_tool_coverage as _audit_coverage_fn
-        self.coverage_gaps = _audit_coverage_fn(
-            self.permissions, list(self._specs.values()))
         self.workers_file: str = str(workers_file).strip() if str(workers_file or "").strip() else ""
         _w = str(worker).strip() if str(worker or "").strip() else ""
         if _w:
@@ -114,7 +107,7 @@ class ExecutionHarness:
         self._calls = 0
         self._exec_seconds = 0.0
         # Placeholders for future packages (stored, never executed here):
-        # nak/harness/ml/ and nak/harness/mcp/ are empty reserves.
+        # nak_host/harness/ml/ and nak_host/harness/mcp/ are empty reserves.
         self.ml = ml
         self.mcp = mcp
         self._overrides: Dict[str, Callable[[Dict[str, Any]], str]] = {}
@@ -165,7 +158,7 @@ class ExecutionHarness:
 
         return _prune_fn(self.workspace_root, keep=keep)
 
-    from nak.utils.constant import PLAN_FILENAME as PLAN_FILENAME
+    from nak_host.utils.constant import PLAN_FILENAME as PLAN_FILENAME
 
     def start_plan(self, goal: str, steps: List[str],
                    assigned_workers: Optional[List[str]] = None,
@@ -353,11 +346,6 @@ class ExecutionHarness:
     def _resource_bases(self) -> List[Path]:
         """See sandbox.resource_bases (session + workspace + project root)."""
         return _resource_bases_fn(self.session_dir, self.workspace_root, __file__)
-
-    @staticmethod
-    def _glob_hit(pattern: str, form: str) -> bool:
-        """See sandbox.glob_hit (kept as a thin wrapper)."""
-        return _glob_hit_fn(pattern, form)
 
     def _check_resources(self, resolved: str, op: str,
                          entry: Dict[str, Any]) -> Optional[str]:

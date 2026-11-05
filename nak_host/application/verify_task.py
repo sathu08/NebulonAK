@@ -9,15 +9,19 @@ from __future__ import annotations
 
 from typing import Any
 
-from nak.application.run_chain import run_chain
-from nak.domain.state import TaskState
-from nak.domain.task import Task, TaskRun
+from nak_host.application.run_chain import run_chain
+from nak_host.domain.state import TaskState
+from nak_host.domain.task import Task, TaskRun
 
 
 def verify_task(task: Task, run: TaskRun, *, store: Any,
                 tester: str = "ezhilan", kind: str = "test",
+                on_event: Any = None,
                 **chain_kwargs: Any) -> dict[str, Any]:
-    """Run one verification step. Returns {verified, result, run, chain}."""
+    """Run one verification step. Returns {verified, result, run, chain}.
+
+    ``on_event`` streams chain step events; forwarded to run_chain.
+    """
     worker = str(tester or "").strip()
     if not worker:
         raise ValueError("verify_task needs a tester worker name")
@@ -36,7 +40,7 @@ def verify_task(task: Task, run: TaskRun, *, store: Any,
         raise ValueError(f"unknown verify kind {kind!r} (want test|review)")
     chain = run_chain(task, run, [{"worker": worker, "kind": mode,
                                    "goal": goal}],
-                      store=store, **chain_kwargs)
+                      store=store, on_event=on_event, **chain_kwargs)
     verified = bool(chain.get("ok")) and bool(chain.get("results"))
     if verified:
         fresh = chain["run"]

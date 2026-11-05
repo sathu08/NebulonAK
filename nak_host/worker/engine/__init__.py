@@ -1,6 +1,6 @@
 """Worker engine: GenericWorker + peer dispatch, one mixin per concern.
 
-Nothing here imports nak.brain / nak.decision / nak.harness.
+Nothing here imports nak_host.brain / nak_host.decision / nak_host.harness.
 """
 
 from .autonomy import (

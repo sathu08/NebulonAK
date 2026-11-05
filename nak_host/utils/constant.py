@@ -1,9 +1,9 @@
-"""Shared constants for NebulonAK_1 (single source of truth).
+"""Shared constants for NebulonAK (single source of truth).
 
-Decision constants moved here from nak/decision/ so worker / harness /
-api read the same values without importing nak.decision (boundary rule:
-nak.decision never imports worker/brain/harness; everyone may import
-nak.utils.constant — it has no package deps).
+Decision constants moved here from nak_host/decision/ so worker / harness /
+api read the same values without importing nak_host.decision (boundary rule:
+nak_host.decision never imports worker/brain/harness; everyone may import
+nak_host.utils.constant — it has no package deps).
 
 Sections:
   workers   — fallback workers/tools + default workers.json path
@@ -30,12 +30,13 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 # --- workers -----------------------------------------------------------
-# Worker entries (nak/worker): identity shape, forbidden keys, decision
+# Worker entries (nak_host/worker): identity shape, forbidden keys, decision
 # question types, crafts-derived behavior defaults + unreadable-registry
-# fallbacks. Single truth here — nak/worker/worker.py imports these
+# fallbacks. Single truth here — nak_host/worker/worker.py imports these
 # (thin aliases kept there so old imports keep working).
 FALLBACK_WORKERS: List[str] = ["vizhi"]
-FALLBACK_TOOLS: List[str] = ["file"]
+FALLBACK_TOOLS: List[str] = ["file", "directory", "search", "terminal",
+                             "observe"]
 DEFAULT_WORKERS_JSON: Path = (
     Path(__file__).resolve().parents[1] / "manifests" / "workers.json"
 )
@@ -139,7 +140,7 @@ DECISION_DEFAULTS: Dict[str, Any] = {
     "on_error": "block",
 }
 
-# Built-in policy fallbacks (nak/utils/settings.py mirrors these as
+# Built-in policy fallbacks (nak_host/utils/settings.py mirrors these as
 # DEFAULT_POLICY_* for new-worker stamping; entry policy wins).
 DEFAULT_POLICY: Dict[str, Any] = {
     "enabled": True,
@@ -169,7 +170,6 @@ POLICY_TYPES: Dict[str, Any] = {
 _MANIFESTS_DIR: Path = Path(__file__).resolve().parents[1] / "manifests"
 DEFAULT_TOOLS_JSON: Path = _MANIFESTS_DIR / "tools.json"
 DEFAULT_PERMISSIONS_JSON: Path = _MANIFESTS_DIR / "permissions.json"
-DEFAULT_CRAFTS_JSON: Path = _MANIFESTS_DIR / "crafts.json"
 DEFAULT_TEAMS_JSON: Path = _MANIFESTS_DIR / "teams.json"
 
 # --- sandbox -------------------------------------------------------------
@@ -202,7 +202,7 @@ TERMINAL_MAX_TIMEOUT: int = 120
 TERMINAL_ALLOW_BINARIES = {
     "uv", "python", "python3", "ls", "cat", "head", "tail",
     "wc", "echo", "mkdir", "touch", "pdfinfo", "pdftotext",
-    "grep", "git",
+    "grep", "git", "pytest", "ruff", "node", "npm", "npx",
 }
 # Read-only git subcommands (a coder needs status/diff/log, not push/commit).
 TERMINAL_ALLOW_GIT_SUBCOMMANDS = {
@@ -239,10 +239,103 @@ PLAN_FILENAME: str = "nak_plan.md"
 
 # --- crafts --------------------------------------------------------------
 # Fallback-only: truth lives in JSON (craft modes in crafts.json via
-# nak.worker._craft_modes; worker types in workers.json via
-# nak.worker._worker_types). These apply only when registries are unreadable.
+# nak_host.worker._craft_modes; worker types in workers.json via
+# nak_host.worker._worker_types). These apply only when registries are unreadable.
 CRAFT_VALID_APPROVALS = ("all", "small", "none")
 CRAFT_WORKER_MODES = ("assist", "plan", "assign", "build")
 CRAFT_DEFAULT_MODES = ["plan"]
 CRAFT_MIN_STEPS: int = 1
-CRAFT_MAX_STEPS: int = 8
+CRAFT_MAX_STEPS: int = 20
+
+# --- agent loop (single source; nak_host/application/loop.py imports these) ----
+LOOP_MAX_CALLS_FALLBACK: int = 3
+LOOP_OBS_CHARS: int = 6000
+LOOP_HISTORY_KEEP: int = 30
+LOOP_MAX_STALLS: int = 2
+LOOP_FORMAT_RETRIES: int = 2
+LOOP_FOLLOWUP: tuple = ("Continue: make the next tool calls, or reply with the final "
+                        "answer (no tool block).",)
+
+# --- task store (single source; store adapters import these) --------------
+NDB_CORPUS_DEFAULT: str = "nak_tasks"
+NDB_SEG_TASKS: str = "tasks"
+NDB_SEG_RUNS: str = "task_runs"
+NDB_SEG_EVENTS: str = "task_events"
+NDB_SEG_RESULTS: str = "task_results"
+STORE_RUN_FIELDS = frozenset({"assigned_worker", "attempt", "block_reason", "result"})
+HTTP_RETRYABLE_STATUS = frozenset({429, 502, 503, 504})
+
+# --- search tool budgets (single source; nak_host/harness/tools/search.py) ------
+SEARCH_DEFAULT_MAX_RESULTS: int = 200
+SEARCH_MAX_RESULTS_CAP: int = 500
+SEARCH_MAX_FILE_BYTES: int = 1_000_000
+SEARCH_MAX_LINE_CHARS: int = 400
+SEARCH_SKIP_DIRS = {
+    ".git", ".libs", ".uv-cache", ".venv", "node_modules", "__pycache__",
+    "secrets",
+}
+
+# --- call/chain/store invocation defaults (single source) -----------------
+CALL_DEFAULT_MAX_STEPS: int = 12
+CALL_DEFAULT_TIMEOUT: int = 600
+CHAIN_DEFAULT_MAX_ROUNDS: int = 3
+CHAIN_FIX_KINDS = frozenset({"test"})
+STORE_DEFAULT_BACKEND: str = "memory"
+
+# --- config defaults (single source; nak_host/utils/settings.py imports these) --
+# Settings fields still resolve per field (kwarg > env > cfg > Mind > default);
+# only the built-in fallback values live here.
+CFG_FILENAME: str = "nebulonak.cfg"
+
+# --- project + server (single source; Settings wires them) ----------------
+# [paths] nebulonak_home empty = folder holding nebulonak.cfg.
+DEFAULT_HOME: str = ""
+SERVE_DEFAULT_HOST: str = "127.0.0.1"
+SERVE_DEFAULT_PORT: int = 8000
+SERVE_DEFAULT_WORKERS: int = 1
+SERVE_DEFAULT_TIMEOUT: int = 120
+SERVE_DEFAULT_KEEP_ALIVE: int = 5
+SERVE_DEFAULT_GRACEFUL_TIMEOUT: int = 10
+SERVE_DEFAULT_LOG_LEVEL: str = "info"
+
+DEFAULT_BASE_URL: str = "http://localhost:9696/api/NebulonMind"
+DEFAULT_USER: str = "nmd_user_01"
+DEFAULT_TIMEOUT: float = 60.0
+DEFAULT_MAX_RETRIES: int = 2
+DEFAULT_RETRY_BACKOFF: float = 1.0
+# Relative to the project root (folder holding nebulonak.cfg).
+DEFAULT_WORKERS_FILE: str = "nak_host/manifests/workers.json"
+DEFAULT_CRAFTS: str = "nak_host/manifests/crafts.json"
+DEFAULT_CRAFTS_PROMPT: str = "nak_host/harness/craft"
+DEFAULT_REGISTRY: str = "nak_host/manifests/tools.json"
+DEFAULT_PERMISSIONS: str = "nak_host/manifests/permissions.json"
+DEFAULT_STORE_BACKEND: str = STORE_DEFAULT_BACKEND
+# --- nebulondb (task store) defaults --------------------------------------
+DEFAULT_NDB_BASE_URL: str = "http://localhost:6969/api/NebulonDB"
+DEFAULT_NDB_USER: str = ""
+DEFAULT_NDB_CORPUS: str = NDB_CORPUS_DEFAULT
+DEFAULT_NDB_TIMEOUT: float = 30.0
+DEFAULT_NDB_MAX_RETRIES: int = 2
+DEFAULT_NDB_RETRY_BACKOFF: float = 1.0
+DEFAULT_NDB_RESOLVE_FROM_MIND: bool = True
+# --- decision (laya System-1) defaults (mirrors DEFAULT_POLICY above) -----
+DEFAULT_DECISION_ENABLED: bool = True
+DEFAULT_DECISION_MODEL: str = "laya"
+DEFAULT_DECISION_ENDPOINT: str = "http://localhost:8000/api/NebulonAgentKit"
+DEFAULT_DECISION_TIMEOUT: float = DECISION_TIMEOUT
+DEFAULT_DECISION_PARALLEL: bool = DECISION_DEFAULTS["parallel"]
+DEFAULT_DECISION_MAX_PARALLEL: int = DECISION_MAX_PARALLEL
+DEFAULT_DECISION_AUTH_TOKEN: str = ""
+DEFAULT_POLICY_ENABLED: bool = DEFAULT_POLICY["enabled"]
+DEFAULT_POLICY_MIN_CONFIDENCE: float = DEFAULT_POLICY["min_confidence"]
+DEFAULT_POLICY_MAX_RISK: float = DEFAULT_POLICY["max_risk"]
+DEFAULT_POLICY_MAX_PRIORITY_AUTO: float = DEFAULT_POLICY["max_priority_auto"]
+DEFAULT_POLICY_CLARIFY_ON_NEEDS_CLARIFICATION: bool = DEFAULT_POLICY[
+    "clarify_on_needs_clarification"
+]
+DEFAULT_POLICY_ESCALATE_ON_HIGH_RISK: bool = DEFAULT_POLICY["escalate_on_high_risk"]
+# --- permission seed (single source; settings.default_permission_entry) ---
+RESOURCE_DENY_SEED = ["**/.env", "**/.git/**", "**/.ssh/**",
+                      "**/*password*", "**/*secret*", "**/*credential*"]
+DEFAULT_LIMITS_BLOCK = {"max_tool_calls": 30, "max_execution_time": 120,
+                        "max_file_size": 10485760}

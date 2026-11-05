@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>NebulonAK — Status</title>
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<nav><a href="/">Status</a><a href="pipeline">Pipeline</a><a href="settings">Settings</a></nav>
+<h1>NebulonAK console — status</h1>
+<div id="error"></div>
+<div class="grid" id="cards"></div>
+<h2>Checks</h2>
+<table id="checks"><tr><th>Check</th><th>Status</th><th>ms</th><th>Detail</th></tr></table>
+<footer>NebulonAK web console · read-only · refreshes every 15 s</footer>
+<script src="/assets/api.js"></script>
+<script>
+"use strict";
+async function load() {
+  try {
+    banner("");
+    const s = await nakApi.status();
+    const cards = document.getElementById("cards");
+    cards.innerHTML = "";
+    const head = [
+      ["Serving", s.serving ? s.host + ":" + s.port : "not serving"],
+      ["Overall", null],
+    ];
+    const tbl = document.getElementById("checks");
+    tbl.querySelectorAll("tr.data").forEach(r => r.remove());
+    (s.checks || []).forEach(c => {
+      const tr = document.createElement("tr");
+      tr.className = "data";
+      tr.appendChild(el("td", "mono", c.label));
+      const td = document.createElement("td");
+      td.appendChild(pill(c.ok));
+      tr.appendChild(td);
+      tr.appendChild(el("td", "mono", String(c.ms)));
+      let d = c.detail;
+      if (d && typeof d === "object") d = JSON.stringify(d).slice(0, 220);
+      tr.appendChild(el("td", "mono", String(d === undefined ? "" : d).slice(0, 220)));
+      tbl.appendChild(tr);
+    });
+    const overall = el("div", "card");
+    overall.appendChild(el("h3", null, "Overall"));
+    overall.appendChild(pill(s.ok));
+    cards.appendChild(overall);
+    const srv = el("div", "card");
+    srv.appendChild(el("h3", null, "Server"));
+    srv.appendChild(el("div", "mono", (s.host || "") + ":" + (s.port || "")));
+    cards.appendChild(srv);
+    void head;
+  } catch (e) {
+    banner("status failed: " + e.message);
+  }
+}
+load();
+setInterval(load, 15000);
+</script>
+</body>
+</html>

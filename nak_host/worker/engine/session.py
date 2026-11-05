@@ -9,7 +9,7 @@ import threading
 import contextlib
 from typing import Any, Dict, List
 
-from nak.utils.constant import (
+from nak_host.utils.constant import (
     WORKER_SESSION_LOCK_DIR,
     WORKER_SESSION_LOCKS_MAX,
 )

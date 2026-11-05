@@ -6,8 +6,8 @@ import uuid
 
 from typing import Any
 
-from nak.domain.errors import DuplicateTask
-from nak.domain.task import Task, TaskRun
+from nak_host.domain.errors import DuplicateTask
+from nak_host.domain.task import Task, TaskRun
 
 
 def create_task(goal: str, *, store: Any, task_id: str | None = None,

@@ -13,7 +13,7 @@ from pipeline.vetting.utils.models import Case, RunSummary, WorkerResult
 from pipeline.vetting.utils.prompting import validate_plan
 from pipeline.vetting.utils.runner import _aggregate, _run_one, repeat_vetting
 
-MANIFESTS = Path(__file__).resolve().parents[3] / "nak" / "manifests"
+MANIFESTS = Path(__file__).resolve().parents[3] / "nak_host" / "manifests"
 
 
 class _FakeTarget:
@@ -63,7 +63,7 @@ def test_bank_version_selection_and_errors(tmp_path):
 
 
 def test_banks_are_grounded_in_their_workers_crafts():
-    from nak.harness.craft.craft import crafts_for_worker
+    from nak_host.harness.craft.craft import crafts_for_worker
     from pipeline.vetting.utils.runner import build_profile
 
     for name in ("arivu", "ezhilan", "aayan"):

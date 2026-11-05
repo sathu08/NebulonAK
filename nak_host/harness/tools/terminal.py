@@ -38,9 +38,9 @@ from typing import Any, List
 try:
     from ..engine.sandbox import default_workspace, safe_join
 except Exception:  # pragma: no cover — direct-path import fallback
-    from nak.harness.engine.sandbox import default_workspace, safe_join  # type: ignore
+    from nak_host.harness.engine.sandbox import default_workspace, safe_join  # type: ignore
 
-from nak.utils.constant import (
+from nak_host.utils.constant import (
     TERMINAL_ALLOW_BINARIES as ALLOW_BINARIES,
     TERMINAL_ALLOW_GIT_SUBCOMMANDS as ALLOW_GIT_SUBCOMMANDS,
     TERMINAL_DEFAULT_TIMEOUT as DEFAULT_TIMEOUT,

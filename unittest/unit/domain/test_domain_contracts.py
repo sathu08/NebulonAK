@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from nak.domain import (
+from nak_host.domain import (
     ApprovalRef,
     BlockReason,
     ConcurrencyError,
@@ -24,7 +24,7 @@ from nak.domain import (
     ensure_transition,
     is_terminal,
 )
-from nak.domain.ports import ToolResult
+from nak_host.domain.ports import ToolResult
 
 
 def _task(**overrides):

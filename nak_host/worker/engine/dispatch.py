@@ -6,9 +6,9 @@ module runs; dispatch only sees the allowed names. ``run_craft`` plans, then
 dispatches each ``[worker=name]`` in its own thread, each built with its own
 brain. All turns merge into the SAME session doc, so workers share memory.
 
-BOUNDARY (strict): this module never imports nak.brain / nak.decision /
-nak.harness. Workers arrive INJECTED via ``factory`` (callable name ->
-worker) or a prebuilt ``workers`` mapping. nak/wiring.py owns building
+BOUNDARY (strict): this module never imports nak_host.brain / nak_host.decision /
+nak_host.harness. Workers arrive INJECTED via ``factory`` (callable name ->
+worker) or a prebuilt ``workers`` mapping. nak_host/wiring.py owns building
 them.
 """
 

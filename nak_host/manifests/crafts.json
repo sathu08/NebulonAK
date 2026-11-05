@@ -42,9 +42,10 @@
         "file",
         "directory",
         "terminal",
-        "observe"
+        "observe",
+        "search"
       ],
-      "max_steps": 3,
+      "max_steps": 12,
       "approval": "small",
       "auto_steps": 2
     },
@@ -113,6 +114,7 @@
         "trace",
         "report"
       ],
+      "max_steps": 12,
       "approval": "all",
       "roles": [
         "developer"

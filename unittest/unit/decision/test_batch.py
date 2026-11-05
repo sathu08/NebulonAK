@@ -1,7 +1,7 @@
 """Parallel decision batches: order, dedupe, isolation, bounds, timeout."""
 import time
 
-from nak.decision import decide_many
+from nak_host.decision import decide_many
 
 
 def test_empty_batch_returns_empty():

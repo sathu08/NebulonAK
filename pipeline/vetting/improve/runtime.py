@@ -27,7 +27,7 @@ def craft_root_env(root: str | Path) -> Iterator[None]:
 
 def default_core_runner(goal: str, craft: str, staged_root: Path, *,
                         workers_file: Any, workspace_root: Path) -> dict[str, Any]:
-    from nak.wiring import make_harness, run_craft
+    from nak_host.wiring import make_harness, run_craft
 
     with craft_root_env(staged_root):
         harness = make_harness(workspace_root=str(workspace_root),

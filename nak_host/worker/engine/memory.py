@@ -5,7 +5,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from nak.utils.constant import (
+from nak_host.utils.constant import (
     WORKER_MEMORY_SNIPPET_CHARS,
     WORKER_RECALL_TOP_K,
     WORKER_SESSION_CONTEXT_CHARS,

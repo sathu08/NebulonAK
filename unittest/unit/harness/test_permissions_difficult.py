@@ -2,8 +2,8 @@
 import json
 import pytest
 
-from nak.harness.engine import ExecutionHarness
-from nak.harness.engine.permission import (
+from nak_host.harness.engine import ExecutionHarness
+from nak_host.harness.engine.permission import (
     load_permissions, deny_all_permissions, audit_tool_coverage, merge_entries,
 )
 
@@ -119,7 +119,7 @@ def test_disabled_worker_denied(tmp_workspace):
 
 
 def test_audit_coverage_runs():
-    from nak.harness.engine.registry import load_registry
+    from nak_host.harness.engine.registry import load_registry
     perms = load_permissions()
     specs = load_registry()
     gaps = audit_tool_coverage(perms, specs)

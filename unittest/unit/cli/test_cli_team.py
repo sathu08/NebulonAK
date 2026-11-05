@@ -1,11 +1,11 @@
 """CLI --team is a deprecated alias for --craft (team is part of craft).
 
-Drives nak.worker.__main__.main() end-to-end offline by patching the
+Drives nak_host.worker.__main__.main() end-to-end offline by patching the
 composition root's make_brain/make_worker/make_harness.
 """
 import json
 
-from nak.worker import __main__ as cli
+from nak_host.worker import __main__ as cli
 
 
 class PersistentBrain:
@@ -45,8 +45,8 @@ class PersistentBrain:
 
 def _patch(monkeypatch, brain, workspace):
     """Build offline workers + a real harness rooted in tmp_workspace."""
-    import nak.wiring as wiring
-    from nak.worker import GenericWorker
+    import nak_host.wiring as wiring
+    from nak_host.worker import GenericWorker
 
     real_make_harness = wiring.make_harness
 

@@ -1,6 +1,6 @@
 """Registry — moved out of engine.py.
 
-Tool catalog (nak/manifests/tools.json): name / module / function /
+Tool catalog (nak_host/manifests/tools.json): name / module / function /
 capabilities / args. Validated on load; functions resolve lazily
 in execution.py via importlib only at run time.
 """
@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 from typing import Dict, List
 
-from nak.utils.constant import DEFAULT_TOOLS_JSON as DEFAULT_REGISTRY
+from nak_host.utils.constant import DEFAULT_TOOLS_JSON as DEFAULT_REGISTRY
 
 
 def load_registry(registry: str | Path | None = None) -> List[Dict]:

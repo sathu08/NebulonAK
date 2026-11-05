@@ -1,7 +1,7 @@
 """DIFFICULT craft tests — fail-closed validation, flat-only, inputs, allowlists."""
 import pytest
 
-from nak.harness.craft import craft as C
+from nak_host.harness.craft import craft as C
 
 
 def test_unknown_craft_raises():

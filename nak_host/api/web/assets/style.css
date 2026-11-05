@@ -1,0 +1,54 @@
+/* NebulonAK console — dark, dense, no framework. */
+:root {
+  color-scheme: dark;
+  --bg: #0b0f14;
+  --panel: #11161d;
+  --line: #263238;
+  --text: #cfd8dc;
+  --dim: #78909c;
+  --good: #00e676;
+  --bad: #ff5252;
+  --accent: #00bcd4;
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, sans-serif;
+  margin: 0;
+  padding: 16px;
+}
+nav a { color: var(--accent); margin-right: 16px; }
+h1 { font-size: 20px; }
+h2 { font-size: 16px; color: var(--dim); margin-top: 24px; }
+.grid { display: flex; flex-wrap: wrap; gap: 12px; }
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 12px;
+  min-width: 240px;
+  flex: 1;
+}
+.card h3 { margin: 0 0 8px 0; font-size: 14px; }
+.pill {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: bold;
+}
+.pill.ok { background: #003b24; color: var(--good); }
+.pill.bad { background: #3b0000; color: var(--bad); }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { border: 1px solid var(--line); padding: 6px 8px; text-align: left; }
+th { color: var(--dim); font-weight: normal; }
+.mono { font-family: monospace; font-size: 12px; }
+.dim { color: var(--dim); }
+#error {
+  display: none;
+  background: #3b0000;
+  border: 1px solid var(--bad);
+  padding: 8px;
+  margin-bottom: 12px;
+}
+footer { margin-top: 32px; color: var(--dim); font-size: 12px; }

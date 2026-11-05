@@ -1,6 +1,6 @@
-"""nak.domain — pure domain contracts (no IO, no adapters).
+"""nak_host.domain — pure domain contracts (no IO, no adapters).
 
-Phase A of ``ARCHITECTURE.md``: immutable Task data, mutable TaskRun state,
+Per ``docs/ARCHITECTURE.md`` §3: immutable Task data, mutable TaskRun state,
 typed ports and the explicit state machine. This package imports nothing
 outward; adapters implement the ports.
 """

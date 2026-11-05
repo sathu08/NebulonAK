@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from nak.utils.constant import (
+from nak_host.utils.constant import (
     WORKER_CHAT_HISTORY_TURNS,
     WORKER_SESSION_PROMOTE,
 )
@@ -18,7 +18,7 @@ class ChatMixin:
         """
         if self.brain is None:
             raise RuntimeError(
-                "no brain injected — build via nak/wiring.py make_worker() "
+                "no brain injected — build via nak_host/wiring.py make_worker() "
                 "or GenericWorker(name, brain=...)."
             )
         preflight = getattr(self.brain, "require_mind", None)

@@ -1,7 +1,7 @@
 """Craft decision block: normalization, fail-loud validation, defaults."""
 import pytest
 
-from nak.harness.craft import craft as C
+from nak_host.harness.craft import craft as C
 
 
 def test_decisions_default_off_and_normalized():

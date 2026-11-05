@@ -10,7 +10,7 @@ User sets it free per worker in workers.json:
   "decision": {"enabled": true, "model": "laya", "questions": [...],
                "policy": {"min_confidence": 0.7, "max_risk": 2.0, ...}}
 
-Defaults live in nak/utils/settings.py (DEFAULT_DECISION_*) so a newly
+Defaults live in nak_host/utils/settings.py (DEFAULT_DECISION_*) so a newly
 created worker automatically gets a policy block. Entry policy wins over
 Settings defaults (entry > Settings > built-in).
 """
@@ -19,9 +19,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from nak.utils.constant import DEFAULT_POLICY, POLICY_TYPES
+from nak_host.utils.constant import DEFAULT_POLICY, POLICY_TYPES
 
-# Backward-compat alias (same object as nak.utils.constant.POLICY_TYPES).
+# Backward-compat alias (same object as nak_host.utils.constant.POLICY_TYPES).
 _POLICY_TYPES = POLICY_TYPES
 
 

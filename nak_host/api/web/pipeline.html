@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>NebulonAK — Pipeline</title>
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<nav><a href="/">Status</a><a href="pipeline">Pipeline</a><a href="settings">Settings</a></nav>
+<h1>Pipeline</h1>
+<div id="error"></div>
+<h2>Pending tasks</h2>
+<div id="backend" class="dim"></div>
+<table id="tasks"><tr><th>Task</th><th>State</th><th>Worker</th><th>Attempt</th></tr></table>
+<h2>Vetting runs</h2>
+<div id="runsdir" class="dim"></div>
+<table id="runs"><tr><th>Stamp</th><th>Summary</th><th>Path</th></tr></table>
+<h2>Sessions</h2>
+<div id="ws" class="dim"></div>
+<table id="sessions"><tr><th>Time</th><th>Worker</th><th>Session</th><th>Event</th></tr></table>
+<script src="/assets/api.js"></script>
+<script>
+"use strict";
+async function load() {
+  try {
+    banner("");
+    const t = await nakApi.tasks(20);
+    document.getElementById("backend").textContent =
+      "backend: " + (t.backend || "?") + (t.notice ? " — " + t.notice : "");
+    const tt = document.getElementById("tasks");
+    tt.querySelectorAll("tr.data").forEach(r => r.remove());
+    (t.pending || []).forEach(p => {
+      const tr = document.createElement("tr");
+      tr.className = "data";
+      tr.appendChild(el("td", "mono", p.task_id));
+      tr.appendChild(el("td", null, p.state));
+      tr.appendChild(el("td", null, p.worker || "-"));
+      tr.appendChild(el("td", "mono", String(p.attempt)));
+      tt.appendChild(tr);
+    });
+    const v = await nakApi.vetting(10);
+    document.getElementById("runsdir").textContent = v.runs_dir || "";
+    const rt = document.getElementById("runs");
+    rt.querySelectorAll("tr.data").forEach(r => r.remove());
+    (v.runs || []).forEach(r => {
+      const tr = document.createElement("tr");
+      tr.className = "data";
+      tr.appendChild(el("td", "mono", r.stamp));
+      const rep = r.report ? JSON.stringify(r.report).slice(0, 160) : "(no summary)";
+      tr.appendChild(el("td", "mono", rep));
+      tr.appendChild(el("td", "mono dim", r.path));
+      rt.appendChild(tr);
+    });
+    const s = await nakApi.sessions(20);
+    document.getElementById("ws").textContent = s.workspace || "";
+    const st = document.getElementById("sessions");
+    st.querySelectorAll("tr.data").forEach(r => r.remove());
+    (s.sessions || []).slice().reverse().forEach(e => {
+      const tr = document.createElement("tr");
+      tr.className = "data";
+      tr.appendChild(el("td", "mono", (e.time || "").slice(0, 19).replace("T", " ")));
+      tr.appendChild(el("td", null, e.worker || "-"));
+      tr.appendChild(el("td", "mono", (e.session_id || "").slice(0, 32)));
+      tr.appendChild(el("td", null, e.event || "-"));
+      st.appendChild(tr);
+    });
+  } catch (e) {
+    banner("pipeline failed: " + e.message);
+  }
+}
+load();
+</script>
+</body>
+</html>

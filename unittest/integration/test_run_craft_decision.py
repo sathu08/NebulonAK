@@ -7,7 +7,7 @@ DECISION = {"enabled": True, "scope": "per_step", "mode": "endpoint",
 
 def _worker(answer, name="vizhi"):
     from conftest import FakeBrain
-    from nak.wiring import make_worker
+    from nak_host.wiring import make_worker
 
     return make_worker(name, brain=FakeBrain(answer=answer))
 
@@ -23,14 +23,14 @@ def _must_not_route(*_args, **_kwargs):
 
 
 def _harness(name, tmp_workspace, approver=None):
-    from nak.wiring import make_harness
+    from nak_host.wiring import make_harness
 
     return make_harness(worker=name, workspace_root=tmp_workspace,
                         approver=approver)
 
 
 def test_decision_fills_missing_and_keeps_tags(tmp_workspace):
-    from nak.wiring import run_craft
+    from nak_host.wiring import run_craft
 
     w = _worker("1. read notes\n2. summarize [worker=aayan]")
     calls = []
@@ -59,7 +59,7 @@ def test_decision_fills_missing_and_keeps_tags(tmp_workspace):
 
 
 def test_tags_win_needs_no_decisions_when_every_step_is_tagged(tmp_workspace):
-    from nak.wiring import run_craft
+    from nak_host.wiring import run_craft
 
     w = _worker("1. read notes [worker=aayan]\n2. summarize [worker=arivu]")
 
@@ -77,7 +77,7 @@ def test_tags_win_needs_no_decisions_when_every_step_is_tagged(tmp_workspace):
 
 
 def test_failed_decision_blocks_step_and_forces_approval(tmp_workspace):
-    from nak.wiring import run_craft
+    from nak_host.wiring import run_craft
 
     w = _worker("1. read notes\n2. summarize", name="aayan")
     w.route = lambda *_a, **_k: {"ok": False, "error": "endpoint down"}
@@ -96,7 +96,7 @@ def test_failed_decision_blocks_step_and_forces_approval(tmp_workspace):
 
 
 def test_decision_parallel_false_is_visible_in_evidence(tmp_workspace):
-    from nak.wiring import run_craft
+    from nak_host.wiring import run_craft
 
     w = _worker("1. read notes\n2. summarize")
     w.route = lambda *_a, **_k: {"ok": True, "worker": "arivu"}
@@ -110,7 +110,7 @@ def test_decision_parallel_false_is_visible_in_evidence(tmp_workspace):
 
 
 def test_decision_off_leaves_untagged_steps_alone(tmp_workspace):
-    from nak.wiring import run_craft
+    from nak_host.wiring import run_craft
 
     w = _worker("1. read notes\n2. summarize")
     w.route = _must_not_route
@@ -127,7 +127,7 @@ def test_decision_off_leaves_untagged_steps_alone(tmp_workspace):
 
 
 def test_worker_decision_disabled_skips_enabled_craft_block(tmp_workspace):
-    from nak.wiring import run_craft
+    from nak_host.wiring import run_craft
 
     w = _worker("1. read notes\n2. summarize")
     w.entry["decision"] = dict(w.entry["decision"], enabled=False)
@@ -143,7 +143,7 @@ def test_worker_decision_disabled_skips_enabled_craft_block(tmp_workspace):
 
 def test_decision_off_still_dispatches_existing_tags(tmp_workspace):
     from conftest import FakeBrain
-    from nak.wiring import make_worker, run_craft
+    from nak_host.wiring import make_worker, run_craft
 
     w = _worker("1. research API [worker=aayan]\n2. fix login [worker=arivu]")
     w.route = _must_not_route
@@ -163,7 +163,7 @@ def test_decision_off_still_dispatches_existing_tags(tmp_workspace):
 
 def test_core_team_assign_craft_routes_multiple_workers_in_parallel(tmp_workspace):
     from conftest import FakeBrain
-    from nak.wiring import make_worker, run_craft
+    from nak_host.wiring import make_worker, run_craft
 
     w = _worker("1. research API\n2. fix login\n3. summarize")
     seen = []
@@ -195,7 +195,7 @@ def test_core_team_assign_craft_routes_multiple_workers_in_parallel(tmp_workspac
 
 
 def test_decision_only_overrides_existing_tag(tmp_workspace):
-    from nak.wiring import run_craft
+    from nak_host.wiring import run_craft
 
     w = _worker("1. read notes [worker=aayan]")
     w.route = lambda *_a, **_k: {"ok": True, "worker": "arivu"}

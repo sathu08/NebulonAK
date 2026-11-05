@@ -26,9 +26,9 @@ from typing import Optional
 try:
     from ..engine.sandbox import default_workspace, safe_join
 except Exception:  # pragma: no cover — direct-path import fallback
-    from nak.harness.engine.sandbox import default_workspace, safe_join  # type: ignore
+    from nak_host.harness.engine.sandbox import default_workspace, safe_join  # type: ignore
 
-from nak.utils.constant import (
+from nak_host.utils.constant import (
     FILE_LIST_MAX_ENTRIES as MAX_ENTRIES,
     FILE_READ_MAX_CHARS as MAX_CHARS,
 )

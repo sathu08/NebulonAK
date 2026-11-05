@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from nak.application import ApprovalLedger, mint_approval
+from nak_host.application import ApprovalLedger, mint_approval
 
 
 def test_grant_validate_revoke():

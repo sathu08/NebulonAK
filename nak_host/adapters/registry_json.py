@@ -2,10 +2,10 @@
 
 Delegation only — no validation or loading logic is re-implemented here:
 
-* workers/teams -> ``nak.worker.engine.registry`` (list_workers/list_teams/get_team)
-* crafts        -> ``nak.harness.craft.craft`` (validated list_crafts)
-* tools         -> ``nak.harness.engine.registry`` (validated load_registry)
-* permissions   -> ``nak.harness.engine.permission`` (fail-closed load_permissions)
+* workers/teams -> ``nak_host.worker.engine.registry`` (list_workers/list_teams/get_team)
+* crafts        -> ``nak_host.harness.craft.craft`` (validated list_crafts)
+* tools         -> ``nak_host.harness.engine.registry`` (validated load_registry)
+* permissions   -> ``nak_host.harness.engine.permission`` (fail-closed load_permissions)
 
 Added value over calling the loaders directly: one seam, mtime-checked
 shared cache (deep-copied on return, so callers can never pollute it), an
@@ -22,7 +22,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from nak.domain.errors import ValidationError
+from nak_host.domain.errors import ValidationError
 
 _MANIFESTS_DIR = Path(__file__).resolve().parents[1] / "manifests"
 
@@ -32,7 +32,7 @@ _CACHE_LOCK = threading.Lock()
 
 def _default_workers() -> Path:
     try:
-        from nak.utils.constant import DEFAULT_WORKERS_JSON as default
+        from nak_host.utils.constant import DEFAULT_WORKERS_JSON as default
 
         return Path(default).expanduser()
     except Exception:
@@ -43,7 +43,7 @@ def _resolve_workers(explicit: Any) -> Path:
     if str(explicit or "").strip():
         return Path(str(explicit)).expanduser()
     try:
-        from nak.utils.settings import load_settings
+        from nak_host.utils.settings import load_settings
 
         return Path(load_settings().workers_path()).expanduser()
     except Exception:
@@ -54,7 +54,7 @@ def _resolve_tools(explicit: Any) -> Path:
     if str(explicit or "").strip():
         return Path(str(explicit)).expanduser()
     try:
-        from nak.utils.settings import load_settings
+        from nak_host.utils.settings import load_settings
 
         return Path(load_settings().registry_path()).expanduser()
     except Exception:
@@ -65,7 +65,7 @@ def _resolve_permissions(explicit: Any) -> Path:
     if str(explicit or "").strip():
         return Path(str(explicit)).expanduser()
     try:
-        from nak.utils.settings import load_settings
+        from nak_host.utils.settings import load_settings
 
         return Path(load_settings().permissions_path()).expanduser()
     except Exception:
@@ -111,14 +111,14 @@ class JsonRegistry:
 
     def workers(self) -> list:
         """Worker entries (the loader validates shape + membership itself)."""
-        from nak.worker.engine.registry import list_workers
+        from nak_host.worker.engine.registry import list_workers
 
         return self._cached("workers", self._workers,
                             lambda: list_workers(self._workers))
 
     def teams(self) -> list:
         """Team entries (validated roster + entry shape)."""
-        from nak.worker.engine.registry import list_teams
+        from nak_host.worker.engine.registry import list_teams
 
         def _load() -> list:
             entries = list_teams(self._teams, self._workers)
@@ -135,26 +135,26 @@ class JsonRegistry:
 
     def team(self, name: str) -> dict:
         """One normalized team (unknown name raises ValueError)."""
-        from nak.worker.engine.registry import get_team
+        from nak_host.worker.engine.registry import get_team
 
         return get_team(name, teams_file=self._teams, workers_file=self._workers)
 
     def crafts(self) -> list:
         """Validated crafts (ambient registry resolution, as today)."""
-        from nak.harness.craft.craft import list_crafts
+        from nak_host.harness.craft.craft import list_crafts
 
         return list_crafts()
 
     def tools(self) -> list:
         """Tool catalog entries (validated name/module/function)."""
-        from nak.harness.engine.registry import load_registry
+        from nak_host.harness.engine.registry import load_registry
 
         return self._cached("tools", self._tools,
                             lambda: load_registry(self._tools))
 
     def permissions(self) -> dict:
         """Worker<->harness boundary (fail-closed; never raises)."""
-        from nak.harness.engine.permission import load_permissions
+        from nak_host.harness.engine.permission import load_permissions
 
         return self._cached("permissions", self._permissions,
                             lambda: load_permissions(str(self._permissions)))

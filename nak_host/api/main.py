@@ -1,26 +1,34 @@
 """
-NAK Main Application
+NAK Server Application
 ==========================================================
 
-This module handles the initialization of the NebulonAK API.
-It provides endpoints for laya decisions.
+Hosts the NebulonAK API (laya decisions + console dashboard).
+Mirrors NebulonDB's `ndb_host/main.py` composition pattern.
 
-Mirrors NebulonDB's `ndb_host/main.py`.
+Run it with:  python nebulonak.py start
+Foreground:   python nebulonak.py start --foreground
+Direct:       python -m nak_host.api.main  (reads the same Settings)
 """
 
 # === Import routers from API layer ===
 
 from contextlib import asynccontextmanager
-from urllib.parse import urlparse
 
-from nak.api import create_app
-from nak.utils.settings import DEFAULT_DECISION_ENDPOINT
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 
-from nak.api.router.laya import router as laya_router
+from nak_host.api import create_app
+from nak_host.api.router.laya import router as laya_router
+from nak_host.api.routes import dashboard as dashboard_routes
+from nak_host.api.routes import pipeline as pipeline_routes
+from nak_host.api.routes import settings_view as settings_routes
+from nak_host.api.routes import status as status_routes
+from nak_host.utils.settings import load_settings
 
 
 @asynccontextmanager
-async def _lifespan(_app):
+async def _lifespan(_app: FastAPI):
     """Warm the laya weights at boot so the FIRST real score is fast.
 
     Without this, first inference (weights load) exceeds the client's
@@ -31,7 +39,7 @@ async def _lifespan(_app):
     import asyncio
 
     try:
-        from nak.api.laya_backend import run_laya
+        from nak_host.api.laya_backend import run_laya
 
         def _warm() -> None:
             run_laya("warmup", {
@@ -47,33 +55,70 @@ async def _lifespan(_app):
     yield
 
 
-# Endpoint (host/port/prefix) comes from settings.py — single source of truth.
-# e.g. DEFAULT_DECISION_ENDPOINT="http://localhost:8000/api/NebulonAgentKit"
-#   -> _API_PREFIX="/api/NebulonAgentKit", laya mounted at
-#      "/api/NebulonAgentKit/laya" to match workers.json decision.endpoint.
-_endpoint = urlparse(DEFAULT_DECISION_ENDPOINT)
-_API_PREFIX = (_endpoint.path or "").rstrip("/") 
-_SERVE_HOST = _endpoint.hostname
-_SERVE_PORT = _endpoint.port
+class NoCacheConsoleMiddleware(BaseHTTPMiddleware):
+    """Prevent browsers from serving stale HTML/JS/CSS for the web console."""
 
-app = create_app()
+    _NO_CACHE_PATHS = ("/assets", "/api/NebulonAK/dashboard",
+                       "/dashboard", "/pipeline", "/settings", "/")
 
-app.include_router(laya_router, prefix=f"{_API_PREFIX}/laya", tags=["Laya"])
-app.router.lifespan_context = _lifespan
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        path = request.url.path
+        if path.startswith("/assets") or path.startswith("/api/NebulonAK") \
+                or path in self._NO_CACHE_PATHS:
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        return response
+
+
+def _api_prefix() -> str:
+    """Decision API prefix from Settings (matches workers.json endpoints)."""
+    from urllib.parse import urlparse
+
+    try:
+        return (urlparse(load_settings().decision_endpoint).path or "").rstrip("/") \
+            or "/api/NebulonAgentKit"
+    except Exception:
+        return "/api/NebulonAgentKit"
+
+
+def create_server_app() -> FastAPI:
+    """Full server app: laya decisions + console dashboard + static web."""
+    from pathlib import Path
+
+    app = create_app()
+    # Laya stays on the decision prefix (workers.json endpoints point here).
+    prefix = _api_prefix()
+    app.include_router(laya_router, prefix=f"{prefix}/laya", tags=["Laya"])
+    # Console is fixed at /api/NebulonAK/* regardless of the decision prefix.
+    console = "/api/NebulonAK"
+    app.include_router(status_routes.router, prefix=f"{console}/status", tags=["Status"])
+    app.include_router(pipeline_routes.router, prefix=f"{console}/pipeline", tags=["Pipeline"])
+    app.include_router(settings_routes.router, prefix=f"{console}/settings", tags=["Settings"])
+    app.include_router(dashboard_routes.router, prefix=f"{console}/dashboard", tags=["Console"])
+    app.router.lifespan_context = _lifespan
+    app.add_middleware(NoCacheConsoleMiddleware)
+    try:
+        web_dir = Path(load_settings().web_dir())
+        assets = web_dir / "assets"
+        if assets.is_dir():
+            app.mount("/assets", StaticFiles(directory=str(assets)), name="assets")
+    except Exception:
+        pass
+    return app
+
+
+app = create_server_app()
 
 
 def main() -> None:
-    """Serve the API. Run: python nak/api/main.py."""
-    import os
-
+    """Serve the API. Run: python nebulonak.py start (or this module direct)."""
     import uvicorn
 
-    host = os.environ.get("NAK_SERVE_HOST", "").strip() or _SERVE_HOST
-    try:
-        port = int(os.environ.get("NAK_SERVE_PORT", "").strip() or _SERVE_PORT)
-    except ValueError:
-        port = _SERVE_PORT
-    uvicorn.run(app, host=host, port=port, log_level="info")
+    settings = load_settings()
+    uvicorn.run(app, host=settings.serve_host, port=int(settings.serve_port),
+                log_level=settings.serve_log_level or "info")
 
 
 if __name__ == "__main__":

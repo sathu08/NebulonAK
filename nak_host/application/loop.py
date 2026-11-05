@@ -20,17 +20,16 @@ import time
 
 from typing import Any
 
-from nak.domain.permission import Verdict
-from nak.domain.task import Task, TaskRun
+from nak_host.domain.permission import Verdict
+from nak_host.domain.task import Task, TaskRun
+from nak_host.utils.constant import LOOP_FOLLOWUP as FOLLOWUP
+from nak_host.utils.constant import LOOP_FORMAT_RETRIES as FORMAT_RETRIES
+from nak_host.utils.constant import LOOP_HISTORY_KEEP as HISTORY_KEEP
+from nak_host.utils.constant import LOOP_MAX_CALLS_FALLBACK as MAX_CALLS_FALLBACK
+from nak_host.utils.constant import LOOP_MAX_STALLS as MAX_STALLS
+from nak_host.utils.constant import LOOP_OBS_CHARS as OBS_CHARS
 
 _FENCE = re.compile(r"```(?:json)?\s*\n(.*?)```", re.DOTALL | re.IGNORECASE)
-MAX_CALLS_FALLBACK = 3
-OBS_CHARS = 6000
-HISTORY_KEEP = 30
-MAX_STALLS = 2
-FORMAT_RETRIES = 2
-FOLLOWUP = ("Continue: make the next tool calls, or reply with the final "
-            "answer (no tool block).")
 
 
 def render_tool_prompt(tools: Any, max_calls: int = MAX_CALLS_FALLBACK) -> str:
@@ -129,22 +128,65 @@ def allowed_tool_schemas(worker_name: str, registry: Any) -> list:
     return out
 
 
+def _resolve_budget(value: Any, inputs: Any, key: str, default: int,
+                    minimum: int = 1) -> int:
+    """Resolution order: explicit kwarg > task.inputs[key] > default."""
+    if value is not None:
+        try:
+            return max(minimum, int(value))
+        except (TypeError, ValueError):
+            return default
+    try:
+        raw = (inputs or {}).get(key, None)
+    except Exception:
+        raw = None
+    if raw is not None:
+        try:
+            return max(minimum, int(raw))
+        except (TypeError, ValueError):
+            pass
+    return default
+
+
 def run_loop(task: Task, run: TaskRun, *, store: Any, brain: Any,
              executor: Any, ctx: Any, ledger: Any = None, memory: Any = None,
              tools: Any = None, identity: str = "",
              worker_name: str = "", approver: Any = None,
-             session_id: Any = None, max_calls_per_turn: int = MAX_CALLS_FALLBACK,
-             obs_chars: int = OBS_CHARS, history_keep: int = HISTORY_KEEP,
-             max_stalls: int = MAX_STALLS,
+             session_id: Any = None, max_calls_per_turn: Any = None,
+             obs_chars: Any = None, history_keep: Any = None,
+             max_stalls: Any = None, auto_steps: Any = None,
+             on_event: Any = None,
              clock: Any = None) -> dict[str, Any]:
     """Run one worker's tool loop. See module docstring for the protocol.
 
     ``ledger`` grants human approvals (defaults to a fresh ApprovalLedger;
     pass it as ``ctx.authority`` too so grants validate — run_task does this
     by construction). Returns {status, answer, steps, tool_calls, reason}.
-    """
-    from nak.application.approval import ApprovalLedger as _Ledger
 
+    ``on_event`` is an optional callable(event) fired after every tool call
+    (and once on finish) for live streaming. Events are plain dicts
+    {step, tool, ok, verdict, detail, reason}; failures in the callback
+    never break the loop. Budget kwargs resolve as explicit > task.inputs
+    > built-in default so callers stay backward compatible.
+    """
+    from nak_host.application.approval import ApprovalLedger as _Ledger
+
+    def _emit(event: dict[str, Any]) -> None:
+        if callable(on_event):
+            with contextlib.suppress(Exception):
+                on_event(dict(event))
+
+    eff_calls = _resolve_budget(max_calls_per_turn, task.inputs,
+                                "max_calls_per_turn", MAX_CALLS_FALLBACK)
+    eff_obs = _resolve_budget(obs_chars, task.inputs, "obs_chars", OBS_CHARS)
+    eff_history = _resolve_budget(history_keep, task.inputs, "history_keep",
+                                  HISTORY_KEEP)
+    eff_stalls = _resolve_budget(max_stalls, task.inputs, "max_stalls",
+                                 MAX_STALLS)
+    eff_auto = _resolve_budget(auto_steps, task.inputs, "auto_steps", 2,
+                               minimum=0)
+    eff_auto = max(0, eff_auto)
+    auto_used = 0
     now = clock or time.monotonic
     if ledger is None:
         ledger = _Ledger()
@@ -165,7 +207,7 @@ def run_loop(task: Task, run: TaskRun, *, store: Any, brain: Any,
                      "tools until the work is done.")
     history: list[dict[str, str]] = [
         {"role": "tool", "content": system_block},
-        {"role": "tool", "content": render_tool_prompt(tools, max_calls_per_turn)},
+        {"role": "tool", "content": render_tool_prompt(tools, eff_calls)},
         {"role": "user", "content": task.goal},
     ]
     if memory is not None:
@@ -173,7 +215,7 @@ def run_loop(task: Task, run: TaskRun, *, store: Any, brain: Any,
             recalled = memory.recall(task.goal)
             hits = (recalled or {}).get("hits", []) if isinstance(recalled, dict) else []
             if hits:
-                blob = json.dumps(hits, ensure_ascii=False, default=str)[:obs_chars]
+                blob = json.dumps(hits, ensure_ascii=False, default=str)[:eff_obs]
                 history.append({"role": "tool",
                                 "content": f"Recalled context:\n{blob}"})
         except Exception:
@@ -197,6 +239,8 @@ def run_loop(task: Task, run: TaskRun, *, store: Any, brain: Any,
                                          "status": status, "steps": steps,
                                          "tool_calls": len(calls),
                                          "reason": reason})
+        _emit({"type": "loop_finished", "status": status, "steps": steps,
+               "tool_calls": len(calls), "reason": str(reason or "")})
         if memory is not None:
             with contextlib.suppress(Exception):
                 memory.store(text=f"Task {task.id} finished {status} after "
@@ -266,7 +310,7 @@ def run_loop(task: Task, run: TaskRun, *, store: Any, brain: Any,
                 continue
             return _finish("done", answer, step, calls_log)
         progressed = False
-        for call in calls[:max(1, int(max_calls_per_turn))]:
+        for call in calls[:max(1, eff_calls)]:
             name, args = call["tool"], call["arguments"]
             verdict, reason = _check(name, args, granted_ctx)
             if verdict == "deny":
@@ -276,37 +320,56 @@ def run_loop(task: Task, run: TaskRun, *, store: Any, brain: Any,
                                            f"denied by policy{note}"})
                 calls_log.append({"step": step, "tool": name, "ok": False,
                                   "verdict": "deny",
-                                  "detail": _detail(name, args)})
+                                  "detail": _detail(name, args),
+                                  "reason": str(reason or "")})
+                _emit({"step": step, "tool": name, "ok": False,
+                       "verdict": "deny", "detail": _detail(name, args),
+                       "reason": str(reason or "")})
                 continue
             if verdict == "ask" and not granted:
                 approval_blocked = True
                 approved = False
-                need_note = f": {reason}" if reason else " (no approver)"
-                if callable(approver):
-                    try:
-                        approved = bool(approver({"task": task.id, "worker": who,
-                                                  "tool": name, "arguments": args,
-                                                  "step": step}))
-                    except Exception:
-                        approved = False
-                if not approved:
-                    history.append({"role": "tool",
-                                    "content": f"## Observation ({name}): "
-                                               f"needs approval{need_note}"})
-                    calls_log.append({"step": step, "tool": name,
-                                      "ok": False, "verdict": "ask",
-                                      "detail": _detail(name, args)})
-                    continue
-                from nak.application.approval import mint_approval as _mint
+                auto = False
+                if auto_used < eff_auto:
+                    approved = True
+                    auto = True
+                else:
+                    need_note = f": {reason}" if reason else " (no approver)"
+                    if callable(approver):
+                        try:
+                            approved = bool(approver({"task": task.id,
+                                                      "worker": who,
+                                                      "tool": name,
+                                                      "arguments": args,
+                                                      "step": step}))
+                        except Exception:
+                            approved = False
+                    if not approved:
+                        history.append({"role": "tool",
+                                        "content": f"## Observation ({name}): "
+                                                   f"needs approval{need_note}"})
+                        calls_log.append({"step": step, "tool": name,
+                                          "ok": False, "verdict": "ask",
+                                          "detail": _detail(name, args),
+                                          "reason": str(reason or "")})
+                        _emit({"step": step, "tool": name, "ok": False,
+                               "verdict": "ask", "detail": _detail(name, args),
+                               "reason": str(reason or "")})
+                        continue
+                from nak_host.application.approval import mint_approval as _mint
 
                 granted_ctx = ledger.derive(
                     ctx, ledger.grant(_mint(scope="task",
-                                            granted_by="human")))
+                                            granted_by="auto" if auto
+                                            else "human")))
                 granted = True
                 approval_blocked = False
+                if auto:
+                    auto_used += 1
                 with contextlib.suppress(Exception):
                     store.append_event(task.id, {"type": "task.approval_granted",
-                                                 "tool": name})
+                                                 "tool": name,
+                                                 "auto": bool(auto)})
             try:
                 result = executor.run(name, args, granted_ctx)
             except Exception as exc:
@@ -315,7 +378,11 @@ def run_loop(task: Task, run: TaskRun, *, store: Any, brain: Any,
                                            f"error: {exc}"})
                 calls_log.append({"step": step, "tool": name, "ok": False,
                                   "verdict": "error",
-                                  "detail": _detail(name, args)})
+                                  "detail": _detail(name, args),
+                                  "reason": str(exc)[:300]})
+                _emit({"step": step, "tool": name, "ok": False,
+                       "verdict": "error", "detail": _detail(name, args),
+                       "reason": str(exc)[:300]})
                 continue
             ok = bool(getattr(result, "ok", False))
             data = getattr(result, "data", {})
@@ -323,19 +390,26 @@ def run_loop(task: Task, run: TaskRun, *, store: Any, brain: Any,
             body = (json.dumps(data, ensure_ascii=False, default=str)
                     if ok else f"failed: {error}")
             history.append({"role": "tool",
-                            "content": f"## Observation ({name}):\n{body[:obs_chars]}"})
-            calls_log.append({"step": step, "tool": name, "ok": ok,
-                              "verdict": "allow",
-                              "detail": _detail(name, args)})
+                            "content": f"## Observation ({name}):\n{body[:eff_obs]}"})
+            entry: dict[str, Any] = {"step": step, "tool": name, "ok": ok,
+                                     "verdict": "allow",
+                                     "detail": _detail(name, args),
+                                     "reason": "" if ok else str(error)[:300]}
+            if str(name) == "terminal":
+                entry["output"] = str(body)[:500]
+            calls_log.append(entry)
+            _emit({"step": step, "tool": name, "ok": ok,
+                   "verdict": "allow", "detail": _detail(name, args),
+                   "reason": entry["reason"]})
             progressed = progressed or ok
-        history = history[:2] + history[-(max(4, int(history_keep))):] \
-            if len(history) > max(4, int(history_keep)) + 2 else history
+        history = history[:2] + history[-(max(4, eff_history)):] \
+            if len(history) > max(4, eff_history) + 2 else history
         if progressed:
             stalls = 0
             approval_blocked = False
         else:
             stalls += 1
-            if stalls > max_stalls:
+            if stalls > eff_stalls:
                 if approval_blocked:
                     return _finish("needs_approval", answer, step, calls_log,
                                    "waiting on approval")

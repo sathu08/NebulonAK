@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from nak.adapters.store_memory import InMemoryTaskStore
-from nak.application import create_task, run_chain
-from nak.domain import Result, ResultStatus, TaskState
+from nak_host.adapters.store_memory import InMemoryTaskStore
+from nak_host.application import create_task, run_chain
+from nak_host.domain import Result, ResultStatus, TaskState
 
 
 def _parent(store, **overrides):
@@ -107,7 +107,7 @@ def test_bad_steps_rejected():
 def test_verify_transitions_on_success(monkeypatch):
     import importlib
 
-    verify_module = importlib.import_module("nak.application.verify_task")
+    verify_module = importlib.import_module("nak_host.application.verify_task")
 
     store = InMemoryTaskStore()
     task, run = _parent(store)
@@ -129,7 +129,7 @@ def test_verify_transitions_on_success(monkeypatch):
 def test_verify_leaves_state_on_failure(monkeypatch):
     import importlib
 
-    verify_module = importlib.import_module("nak.application.verify_task")
+    verify_module = importlib.import_module("nak_host.application.verify_task")
 
     store = InMemoryTaskStore()
     task, run = _parent(store)

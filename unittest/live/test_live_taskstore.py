@@ -13,8 +13,8 @@ import uuid
 
 import pytest
 
-from nak.adapters.store_nebulondb import NDBError, NebulonDBTaskStore
-from nak.domain import Task, TaskState
+from nak_host.adapters.store_nebulondb import NDBError, NebulonDBTaskStore
+from nak_host.domain import Task, TaskState
 
 
 def _settings():

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from nak.utils.constant import (
+from nak_host.utils.constant import (
     WORKER_FALLBACK_IDENTITY as _INLINE_DEFAULT_IDENTITY,
     WORKER_IDENTITY_FIELDS as IDENTITY_FIELDS,
 )
@@ -44,7 +44,7 @@ class IdentityMixin:
         if "harness" in self.entry:
             data["harness"] = self.entry["harness"]  # passthrough, not executed
         if "decision" in self.entry:
-            data["decision"] = self.entry["decision"]  # laya System-1 config, read by nak.decision
+            data["decision"] = self.entry["decision"]  # laya System-1 config, read by nak_host.decision
         if self.tools:
             data["tools_passed"] = sorted(self.tools)
         return data

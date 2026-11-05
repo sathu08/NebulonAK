@@ -21,9 +21,9 @@ import json
 
 from typing import Any
 
-from nak.domain.errors import ApprovalRevoked
-from nak.domain.ports import ExecutionContext, ToolResult
-from nak.domain.permission import Verdict
+from nak_host.domain.errors import ApprovalRevoked
+from nak_host.domain.ports import ExecutionContext, ToolResult
+from nak_host.domain.permission import Verdict
 
 
 class HarnessExecutor:

@@ -1,12 +1,12 @@
-"""nak.worker — JSON-defined workers + ONE individual engine (worker.py).
+"""nak_host.worker — JSON-defined workers + ONE individual engine (worker.py).
 
 workers.json holds WHO + WHAT (inline identity per entry). teams.json holds
 named rosters and shared-memory policy. brain/ owns all LLM. Tools are
-placeholders only (caller-passed). The harness is owned by nak/wiring.py and
+placeholders only (caller-passed). The harness is owned by nak_host/wiring.py and
 is never passed into a worker — workers receive only a session id + approver.
 """
 
-from nak.utils.constant import WORKER_IDENTITY_FIELDS as IDENTITY_FIELDS
+from nak_host.utils.constant import WORKER_IDENTITY_FIELDS as IDENTITY_FIELDS
 
 from .engine.autonomy import _autonomy_from_crafts, _craft_modes, _worker_types
 from .engine.dispatch import run_workers

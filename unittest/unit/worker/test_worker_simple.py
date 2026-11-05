@@ -4,7 +4,7 @@ Covers: list_workers truth, show(), prompt() rendering,
 can(), needs_plan_approval(), extract_plan/extract_assigned.
 crafts is the ONLY source of truth (no autonomy block).
 """
-from nak.worker import GenericWorker, list_workers, IDENTITY_FIELDS
+from nak_host.worker import GenericWorker, list_workers, IDENTITY_FIELDS
 
 
 def test_list_workers_has_vizhi_and_arivu():

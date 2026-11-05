@@ -12,8 +12,8 @@ from __future__ import annotations
 from typing import Any
 from collections.abc import Callable
 
-from nak.domain.state import TaskState
-from nak.domain.task import Task, TaskRun
+from nak_host.domain.state import TaskState
+from nak_host.domain.task import Task, TaskRun
 
 
 def assign_task(task: Task, run: TaskRun, *, store: Any,

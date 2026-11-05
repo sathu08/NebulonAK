@@ -7,8 +7,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from nak.harness.craft.craft import crafts_for_worker, expand_craft, load_craft
-from nak.harness.engine.permission import (
+from nak_host.harness.craft.craft import crafts_for_worker, expand_craft, load_craft
+from nak_host.harness.engine.permission import (
     load_permissions,
     load_worker_role,
     rule_for,
@@ -139,7 +139,7 @@ def probe_tools(worker_name: str, workers_file: Any = None,
         return [ProbeResult("tools", "tool", "skip",
                             "no tools declared in the effective permission entry")]
 
-    from nak.wiring import make_harness
+    from nak_host.wiring import make_harness
 
     try:
         harness = make_harness(

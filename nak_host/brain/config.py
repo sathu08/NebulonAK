@@ -1,8 +1,8 @@
 """Brain config — thin compat layer over the central settings hub.
 
-All values live in nebulonak.cfg and connect via nak/utils/settings.py.
+All values live in nebulonak.cfg and connect via nak_host/utils/settings.py.
 This module keeps the old names (NAKConfig / load_config) working:
-new code may import from nak.utils.settings directly.
+new code may import from nak_host.utils.settings directly.
 """
 
 from __future__ import annotations

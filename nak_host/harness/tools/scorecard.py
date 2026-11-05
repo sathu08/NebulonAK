@@ -20,7 +20,7 @@ import json
 
 from typing import Any, Dict, List
 
-from nak.utils.constant import SCORECARD_MAX_RULES as MAX_RULES
+from nak_host.utils.constant import SCORECARD_MAX_RULES as MAX_RULES
 
 
 def _number(value: Any) -> bool:

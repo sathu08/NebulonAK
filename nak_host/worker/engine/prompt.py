@@ -1,6 +1,6 @@
 """Prompt rendering + prompt-file loading.
 
-Templates stay markdown in nak/worker/prompts/; this module only fills the
+Templates stay markdown in nak_host/worker/prompts/; this module only fills the
 double-brace values from an entry's identity.
 """
 from __future__ import annotations
@@ -12,7 +12,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from nak.utils.constant import (
+from nak_host.utils.constant import (
     DEFAULT_WORKERS_JSON as _DEFAULT_WORKERS,
     WORKER_DEFAULT_AUTONOMY as _DEFAULT_AUTONOMY,
 )
@@ -104,10 +104,10 @@ def _render_prompt_template(template: str, identity: Dict[str, Any], entry_name:
 
 
 def _crafts_from_entry(entry: Dict[str, Any], workers_file: str | Path) -> List[Dict[str, str]]:
-    """Craft set from JSON files only (no nak.harness.craft import — boundary).
+    """Craft set from JSON files only (no nak_host.harness.craft import — boundary).
 
     User sets the allowlist in workers.json entry "crafts" ONLY; names +
-    descriptions resolve from nak/manifests/crafts.json next to workers.json.
+    descriptions resolve from nak_host/manifests/crafts.json next to workers.json.
     Missing key = all crafts; explicit [] = none. Never raises.
     """
     try:
@@ -143,9 +143,9 @@ def _crafts_from_entry(entry: Dict[str, Any], workers_file: str | Path) -> List[
 def _load_prompt_template(entry: Dict[str, Any], workers_file: str | Path) -> Optional[str]:
     """Read the entry's prompt_file (relative to workers.json). None = use built-in.
 
-    workers.json now lives in nak/manifests/ while prompt files stay in
-    nak/worker/prompts/. Resolve: workers.json parent first, then
-    nak/worker/prompts/ fallback (handles both old + new layouts).
+    workers.json now lives in nak_host/manifests/ while prompt files stay in
+    nak_host/worker/prompts/. Resolve: workers.json parent first, then
+    nak_host/worker/prompts/ fallback (handles both old + new layouts).
     """
     rel = str(entry.get("prompt_file") or "").strip()
     if not rel:

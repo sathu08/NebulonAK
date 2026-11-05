@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>NebulonAK — Settings</title>
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<nav><a href="/">Status</a><a href="pipeline">Pipeline</a><a href="settings">Settings</a></nav>
+<h1>Settings <span class="dim">(effective config — secrets redacted)</span></h1>
+<div id="error"></div>
+<h2>Sections</h2>
+<table id="cfg"><tr><th>Section</th><th>Key</th><th>Value</th></tr></table>
+<h2>Manifests</h2>
+<div id="manifests"></div>
+<h2>Craft gaps</h2>
+<div id="gaps" class="mono"></div>
+<script src="/assets/api.js"></script>
+<script>
+"use strict";
+async function load() {
+  try {
+    banner("");
+    const s = await nakApi.settings();
+    const tbl = document.getElementById("cfg");
+    Object.entries(s.settings || {}).forEach(([section, kv]) => {
+      Object.entries(kv || {}).forEach(([k, v]) => {
+        const tr = document.createElement("tr");
+        tr.appendChild(el("td", "dim", section));
+        tr.appendChild(el("td", "mono", k));
+        tr.appendChild(el("td", "mono", String(v)));
+        tbl.appendChild(tr);
+      });
+    });
+    const m = await nakApi.manifests();
+    const box = document.getElementById("manifests");
+    box.innerHTML = "";
+    ["workers", "teams", "crafts", "tools"].forEach(k => {
+      const d = el("div", null, k + " (" + ((m[k] || []).length) + "): ");
+      d.appendChild(el("span", "mono dim", (m[k] || []).join(", ")));
+      box.appendChild(d);
+    });
+    document.getElementById("gaps").textContent = JSON.stringify(m.craft_gaps || {});
+  } catch (e) {
+    banner("settings failed: " + e.message);
+  }
+}
+load();
+</script>
+</body>
+</html>

@@ -3,17 +3,17 @@
 from __future__ import annotations
 
 
-from nak.adapters.store_memory import InMemoryTaskStore
-from nak.application import ApprovalLedger, create_task
-from nak.application.loop import (
+from nak_host.adapters.store_memory import InMemoryTaskStore
+from nak_host.application import ApprovalLedger, create_task
+from nak_host.application.loop import (
     allowed_tool_schemas,
     parse_tool_calls,
     render_tool_prompt,
     run_loop,
 )
-from nak.domain import ExecutionContext, Verdict
-from nak.domain.errors import TaskCancelled
-from nak.domain.ports import ToolResult
+from nak_host.domain import ExecutionContext, Verdict
+from nak_host.domain.errors import TaskCancelled
+from nak_host.domain.ports import ToolResult
 
 
 class ScriptBrain:
@@ -139,11 +139,11 @@ def test_deny_ask_grant_and_stall():
                        verdicts={"terminal": Verdict.DENY}), ctx=_ctx(),
                    max_stalls=2)
     assert out["status"] == "stalled"
-    # ASK with no approver -> needs_approval stop (stalls beat max_steps).
+    # ASK with no approver and no auto budget -> needs_approval stop.
     out = run_loop(task, None, store=store, brain=ScriptBrain([block] * 6),
                    executor=FakeExecutor(
                        verdicts={"terminal": Verdict.ASK}), ctx=_ctx(),
-                   max_stalls=1)
+                   max_stalls=1, auto_steps=0)
     assert out["status"] == "needs_approval"
     # ASK + approver -> grant flows into the executed ctx.
     ledger = ApprovalLedger()

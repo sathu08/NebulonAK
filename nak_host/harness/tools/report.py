@@ -29,9 +29,9 @@ from typing import Any, Dict
 try:
     from ..engine.sandbox import default_workspace, safe_join
 except Exception:  # pragma: no cover — direct-path import fallback
-    from nak.harness.engine.sandbox import default_workspace, safe_join  # type: ignore
+    from nak_host.harness.engine.sandbox import default_workspace, safe_join  # type: ignore
 
-from nak.utils.constant import (
+from nak_host.utils.constant import (
     REPORT_DEFAULT_DIR as DEFAULT_DIR,
     REPORT_MAX_BYTES as MAX_BYTES,
 )

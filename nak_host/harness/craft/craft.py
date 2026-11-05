@@ -1,16 +1,16 @@
-"""nak.harness.craft — craft library (registry + markdown crafts).
+"""nak_host.harness.craft — craft library (registry + markdown crafts).
 
 Layout (flat, reviewable units):
-  nak/manifests/crafts.json  registry: craft profiles (plan, assign, ...)
+  nak_host/manifests/crafts.json  registry: craft profiles (plan, assign, ...)
     single truth for tools + approval + limits (max_steps/auto_steps)
-  nak/harness/craft/<mode>/craft.md  one craft: frontmatter (name/version/
+  nak_host/harness/craft/<mode>/craft.md  one craft: frontmatter (name/version/
     description only) + body (Purpose/Inputs/Steps/...)
 
 craft.py is COMMON code only: discover + parse + validate + expand.
 It NEVER executes anything and NEVER imports the engine, tools, worker,
 brain or decision packages (raw JSON reads only — same boundary rule as
-nak.decision). Execution stays in harness.run() per step; proposal stays
-in nak.wiring.run_craft().
+nak_host.decision). Execution stays in harness.run() per step; proposal stays
+in nak_host.wiring.run_craft().
 
 Flat-only rule: craft steps are plain tool steps. A step containing a
 [worker=...] tag or a Craft: reference is refused at load — no nesting,
@@ -31,7 +31,7 @@ from typing import Any, Dict, List, Optional
 def _cfg_path(attr: str) -> Optional[str]:
     """cfg-backed path for a harness setting (None when no cfg is found)."""
     try:
-        from nak.utils.settings import load_settings
+        from nak_host.utils.settings import load_settings
 
         settings = load_settings()
         if settings.cfg_path is None:
@@ -69,7 +69,7 @@ def _craft_root() -> Path:
 REGISTRY = _default_registry()
 BASE = Path(__file__).resolve().parent
 
-from nak.utils.constant import (
+from nak_host.utils.constant import (
     CRAFT_VALID_APPROVALS as _VALID_APPROVALS,
     DECISION_ASSIGNMENTS as _DECISION_ASSIGNMENTS,
     DECISION_DEFAULTS as _DECISION_DEFAULTS,
@@ -102,7 +102,7 @@ def _registry() -> Dict[str, Any]:
 
 
 def _tools_registry() -> Path:
-    """tools.json path: NAK_REGISTRY env > nak/manifests/tools.json."""
+    """tools.json path: NAK_REGISTRY env > nak_host/manifests/tools.json."""
     import os as _os
 
     cand = (_os.environ.get("NAK_REGISTRY", "") or "").strip()
@@ -112,7 +112,7 @@ def _tools_registry() -> Path:
 
 
 def _workers_path(explicit: Any = None) -> Path:
-    """workers.json path: explicit > NAK_WORKERS_FILE env > nak/manifests/workers.json."""
+    """workers.json path: explicit > NAK_WORKERS_FILE env > nak_host/manifests/workers.json."""
     import os as _os
 
     if explicit:
@@ -405,7 +405,7 @@ def expand_craft(name: str, inputs: Optional[Dict[str, Any]] = None) -> List[str
     return [_fill(s) for s in craft["steps"]]
 
 
-from nak.utils.constant import (
+from nak_host.utils.constant import (
     CRAFT_DEFAULT_MODES as _DEFAULT_MODES,
     CRAFT_WORKER_MODES as _WORKER_MODES,
 )
@@ -429,7 +429,7 @@ def _registry_modes() -> List[str]:
 
 
 def _worker_modes(entry: Any) -> List[str]:
-    """Worker's modes from its crafts allowlist (no nak.worker import).
+    """Worker's modes from its crafts allowlist (no nak_host.worker import).
 
     crafts is the ONLY source of truth (no autonomy block): entry "crafts"
     ["plan", "build"] -> modes ["plan", "build"]; missing key = all
@@ -458,8 +458,8 @@ def crafts_for_worker(worker_name: str,
                       workers_file: Any = None) -> List[Dict[str, str]]:
     """[{name, description}] for a worker (crafts allowlist + role/modes applied).
 
-    Reads workers.json raw (never `from nak.worker import ...` — same
-    boundary rule as nak.decision). A worker entry with a non-empty "crafts"
+    Reads workers.json raw (never `from nak_host.worker import ...` — same
+    boundary rule as nak_host.decision). A worker entry with a non-empty "crafts"
     list only sees those crafts; missing/empty = all crafts. Unknown
     worker -> []. Never raises.
     """

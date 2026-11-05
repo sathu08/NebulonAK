@@ -1,5 +1,5 @@
 """worker.route(): reusable decision call with no chat/memory side effects."""
-from nak.worker import GenericWorker, list_workers
+from nak_host.worker import GenericWorker, list_workers
 
 
 def test_every_worker_decision_block_enables_parallel_decisions():

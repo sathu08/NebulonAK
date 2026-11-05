@@ -1,4 +1,4 @@
-from nak.utils.settings import (
+from nak_host.utils.settings import (
     DEFAULT_CRAFTS,
     DEFAULT_CRAFTS_PROMPT,
     load_settings,
@@ -46,3 +46,15 @@ def test_env_overrides_and_legacy_fallback(tmp_path, monkeypatch):
     monkeypatch.setenv("NAK_CRAFTS_FILE", "legacy/crafts.json")
     settings = load_settings(cfg)
     assert settings.crafts == "legacy/crafts.json"
+
+
+def test_validate_store_offline(tmp_path, monkeypatch):
+    monkeypatch.delenv("NAK_STORE", raising=False)
+    settings = load_settings(_cfg(tmp_path, "[harness]\n"))
+    assert settings.validate_store() == []
+    monkeypatch.setenv("NAK_STORE", "nebulondb")
+    assert load_settings(_cfg(tmp_path, "[harness]\n")).store_backend == "nebulondb"
+    assert load_settings(_cfg(tmp_path, "[harness]\n")).validate_store() == []
+    bad = load_settings(_cfg(tmp_path, "[harness]\n"))
+    bad.ndb_base_url = "not-a-url"
+    assert bad.validate_store() != []

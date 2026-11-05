@@ -34,9 +34,9 @@ from pathlib import Path
 try:
     from ..engine.sandbox import default_workspace, safe_join
 except Exception:  # pragma: no cover — direct-path import fallback
-    from nak.harness.engine.sandbox import default_workspace, safe_join  # type: ignore
+    from nak_host.harness.engine.sandbox import default_workspace, safe_join  # type: ignore
 
-from nak.utils.constant import OBSERVE_MAX_CHARS as MAX_CHARS
+from nak_host.utils.constant import OBSERVE_MAX_CHARS as MAX_CHARS
 
 
 def _root(data: dict) -> str:

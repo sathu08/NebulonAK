@@ -12,17 +12,16 @@ import threading
 from dataclasses import replace
 from typing import Any
 
-from nak.domain.errors import ConcurrencyError, DuplicateTask, TaskNotFound
-from nak.domain.state import (
+from nak_host.domain.errors import ConcurrencyError, DuplicateTask, TaskNotFound
+from nak_host.domain.state import (
     TaskState,
     ensure_transition,
     is_pending_state,
 )
-from nak.domain.permission import BlockReason
-from nak.domain.result import Result
-from nak.domain.task import Task, TaskRun
-
-_RUN_FIELDS = frozenset({"assigned_worker", "attempt", "block_reason", "result"})
+from nak_host.domain.permission import BlockReason
+from nak_host.domain.result import Result
+from nak_host.domain.task import Task, TaskRun
+from nak_host.utils.constant import STORE_RUN_FIELDS as _RUN_FIELDS
 
 
 class InMemoryTaskStore:

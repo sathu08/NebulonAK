@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from nak.utils.constant import CAP_MAP
+from nak_host.utils.constant import CAP_MAP
 
 
 def required_caps(spec: Dict[str, Any]) -> List[str]:

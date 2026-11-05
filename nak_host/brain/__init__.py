@@ -1,4 +1,4 @@
-"""nak.brain — the ONLY path to any LLM in NebulonAK_1.
+"""nak_host.brain — the ONLY path to any LLM in NebulonAK.
 
 Every method below is a plain HTTP call to NebulonMD. No inference,
 no provider SDK, no API key handling for any LLM vendor happens here.

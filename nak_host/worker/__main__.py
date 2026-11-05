@@ -1,4 +1,4 @@
-"""CLI: python -m nak.worker (installed as `nak-worker`).
+"""CLI: python -m nak_host.worker (installed as `nak-worker`).
 
 Individual worker: each worker runs standalone via one Brain call.
 Tools/harness are placeholders — pass values in code, not bundled here.
@@ -25,7 +25,7 @@ import argparse
 import json
 import sys
 
-from nak.worker.engine.worker import list_workers
+from nak_host.worker.engine.worker import list_workers
 
 
 def _prompt_template(entry: dict) -> str:
@@ -106,7 +106,7 @@ def main(argv=None) -> int:
     if args.create:
         from pathlib import Path
 
-        from nak.utils.settings import (
+        from nak_host.utils.settings import (
             default_permission_entry, default_worker_entry, load_settings,
         )
 
@@ -151,7 +151,7 @@ def main(argv=None) -> int:
                   file=sys.stderr)
             return 2
         # Prompt file: first existing prompts dir in loader order
-        # (workers.json parent, then nak/worker/prompts fallback).
+        # (workers.json parent, then nak_host/worker/prompts fallback).
         rel = str(entry.get("prompt_file") or f"prompts/{entry['name']}.md")
         cands = [wpath.parent / rel,
                  wpath.parent.parent / "worker" / rel]
@@ -182,7 +182,7 @@ def main(argv=None) -> int:
     name = (args.worker or "").strip()
     if not name and team_name and craft_goal:
         # Section 4: no --worker -> the team leader plans for the roster.
-        from nak.worker.engine.team import team_by_name
+        from nak_host.worker.engine.team import team_by_name
 
         try:
             name = str(team_by_name(team_name).get("leader", "")).strip()
@@ -199,7 +199,7 @@ def main(argv=None) -> int:
     brain = None
     if args.chat or args.session or craft_goal:
         try:
-            from nak.wiring import make_brain
+            from nak_host.wiring import make_brain
 
             brain = make_brain()
         except Exception as exc:
@@ -207,7 +207,7 @@ def main(argv=None) -> int:
             return 2
 
     try:
-        from nak.wiring import make_worker  # composition root: brain+decider injected
+        from nak_host.wiring import make_worker  # composition root: brain+decider injected
 
         worker = make_worker(name, brain=brain)
     except ValueError as exc:
@@ -231,7 +231,7 @@ def main(argv=None) -> int:
         print(worker.prompt())
         return 0
     if craft_goal:
-        from nak.wiring import make_harness, run_craft
+        from nak_host.wiring import make_harness, run_craft
 
         try:
             harness = make_harness(worker=name)

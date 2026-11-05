@@ -10,8 +10,8 @@ import threading
 
 import pytest
 
-from nak.worker import GenericWorker
-from nak.worker.engine.session import _strip_prompt_dump
+from nak_host.worker import GenericWorker
+from nak_host.worker.engine.session import _strip_prompt_dump
 
 
 class PersistentBrain:

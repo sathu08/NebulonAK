@@ -1,8 +1,8 @@
-"""nak.application — task use-cases (depend on ports, never on concretes).
+"""nak_host.application — task use-cases (depend on ports, never on concretes).
 
 create_task / plan_task / assign_task coordinate one step of the pipeline
 each. Workers, harnesses, deciders and stores arrive injected (duck-typed);
-this package imports only nak.domain.
+this package imports only nak_host.domain.
 """
 
 from .approval import ApprovalLedger, mint_approval

@@ -14,7 +14,7 @@ from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Any
 
-from nak.domain.permission import ApprovalRef
+from nak_host.domain.permission import ApprovalRef
 
 
 def mint_approval(scope: str = "task", granted_by: str = "approver",

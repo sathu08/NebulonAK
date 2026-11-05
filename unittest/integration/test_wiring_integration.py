@@ -15,8 +15,8 @@ def test_workers_have_no_direct_harness_access():
     """Harness stays in the composition root; workers get session id only."""
     import inspect
 
-    from nak.worker import GenericWorker
-    from nak.wiring import make_worker
+    from nak_host.worker import GenericWorker
+    from nak_host.wiring import make_worker
 
     assert "harness" not in inspect.signature(GenericWorker.__init__).parameters
     assert "harness" not in inspect.signature(make_worker).parameters
@@ -30,7 +30,7 @@ def test_make_worker_injects_decider_and_policy(worker_vizhi):
 
 
 def test_make_worker_bad_crafts_shape_raises():
-    from nak.wiring import make_worker
+    from nak_host.wiring import make_worker
     with pytest.raises(ValueError, match="'crafts' must be a list"):
         make_worker("vizhi", crafts="plan")
 
@@ -43,7 +43,7 @@ def test_make_harness_lists_tools(harness_vizhi):
 def test_run_craft_merges_into_harness_session_doc(tmp_workspace):
     """Harness session key is unknown to Mind -> AK owns the transcript and
     merges shared turns into the doc named by harness.session_id."""
-    from nak.wiring import make_worker, make_harness, run_craft
+    from nak_host.wiring import make_worker, make_harness, run_craft
     from conftest import FakeBrain
 
     brain = FakeBrain(answer="1. read notes\n2. summarize")
@@ -58,7 +58,7 @@ def test_run_craft_merges_into_harness_session_doc(tmp_workspace):
 def test_run_craft_auto_approved_small(tmp_workspace):
     """Small plan (<= auto_steps) with approval=small runs ahead — aayan
     crafts=[plan] derives approval=small, so a 2-step plan auto-approves."""
-    from nak.wiring import make_worker, make_harness, run_craft
+    from nak_host.wiring import make_worker, make_harness, run_craft
     from conftest import FakeBrain
 
     brain = FakeBrain(answer="1. read notes\n2. summarize")
@@ -73,7 +73,7 @@ def test_run_craft_auto_approved_small(tmp_workspace):
 
 def test_run_craft_build_craft_auto_approved(tmp_workspace):
     """arivu developer crafts=[plan, build] (both small) auto-approves small builds."""
-    from nak.wiring import make_worker, make_harness, run_craft
+    from nak_host.wiring import make_worker, make_harness, run_craft
     from conftest import FakeBrain
 
     brain = FakeBrain(answer="1. read app.py\n2. fix bug")
@@ -88,7 +88,7 @@ def test_run_craft_build_craft_auto_approved(tmp_workspace):
 
 
 def test_run_craft_pending_without_approver(worker_vizhi, tmp_workspace):
-    from nak.wiring import make_harness, run_craft
+    from nak_host.wiring import make_harness, run_craft
     worker_vizhi.brain.answer = "1. step one\n2. step two\n3. step three\n4. step four"
     h = make_harness(worker="vizhi", workspace_root=tmp_workspace)
     res = run_craft("big task", worker_vizhi, h, approver=None)
@@ -99,7 +99,7 @@ def test_run_craft_pending_without_approver(worker_vizhi, tmp_workspace):
 
 
 def test_run_craft_no_steps(worker_vizhi, tmp_workspace):
-    from nak.wiring import make_harness, run_craft
+    from nak_host.wiring import make_harness, run_craft
     worker_vizhi.brain.answer = "hello, just chatting, no plan"
     h = make_harness(worker="vizhi", workspace_root=tmp_workspace)
     res = run_craft("chat", worker_vizhi, h)
@@ -108,7 +108,7 @@ def test_run_craft_no_steps(worker_vizhi, tmp_workspace):
 
 
 def test_run_craft_blocked_by_policy(worker_vizhi, tmp_workspace):
-    from nak.wiring import make_harness, run_craft
+    from nak_host.wiring import make_harness, run_craft
     worker_vizhi._policy_evaluator = lambda t, p: {"action": "clarify", "allowed": False,
                                                    "reasons": ["vague"], "policy": p}
     worker_vizhi._decider = lambda *a, **k: {"ok": True, "decision": {}}
@@ -120,8 +120,8 @@ def test_run_craft_blocked_by_policy(worker_vizhi, tmp_workspace):
 
 def test_end_to_end_worker_tool_permission_craft(tmp_workspace):
     """vizhi: chat (plan) -> harness file write needs approval -> craft expand."""
-    from nak.wiring import make_worker, make_harness
-    from nak.harness.craft import craft as Craft
+    from nak_host.wiring import make_worker, make_harness
+    from nak_host.harness.craft import craft as Craft
     from conftest import FakeBrain
 
     brain = FakeBrain(answer="Plan:\n1. read input\n2. write output [worker=vizhi]")
@@ -162,7 +162,7 @@ def test_end_to_end_worker_tool_permission_craft(tmp_workspace):
 
 
 def test_decide_helper_offline_llm_false():
-    from nak.wiring import decide
+    from nak_host.wiring import decide
     res = decide("read notes.txt", llm=False)
     assert isinstance(res, dict)
     assert "ok" in res

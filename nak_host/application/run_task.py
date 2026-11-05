@@ -10,11 +10,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from nak.application.approval import ApprovalLedger
-from nak.application.loop import allowed_tool_schemas, run_loop
-from nak.domain.result import Result, ResultStatus
-from nak.domain.state import TaskState
-from nak.domain.task import Task, TaskRun
+from nak_host.application.approval import ApprovalLedger
+from nak_host.application.loop import allowed_tool_schemas, run_loop
+from nak_host.domain.result import Result, ResultStatus
+from nak_host.domain.state import TaskState
+from nak_host.domain.task import Task, TaskRun
 
 _STATUS_MAP = {
     "done": (ResultStatus.OK, False),
@@ -36,13 +36,17 @@ def run_task(task: Task, run: TaskRun, *, store: Any, brain: Any,
              executor: Any, memory: Any = None, registry: Any = None,
              tools: Any = None, worker_name: str = "", identity: str = "",
              approver: Any = None, policy: Any = None, authority: Any = None,
-             cancel: Any = None, session_id: Any = None) -> dict[str, Any]:
+             cancel: Any = None, session_id: Any = None,
+             on_event: Any = None, max_calls_per_turn: Any = None,
+             obs_chars: Any = None, history_keep: Any = None,
+             max_stalls: Any = None, auto_steps: Any = None) -> dict[str, Any]:
     """Execute the loop for one worker. Returns {result, run, loop}.
 
     ``policy`` is reserved for future policy engines (the harness enforces
     policy today) and may be None; ``authority`` defaults to a fresh ledger
     (pass it as both authority and grants source); ``cancel`` defaults to a
-    never-cancel token.
+    never-cancel token. ``on_event`` streams per-tool events; budget kwargs
+    resolve as explicit > task.inputs > loop default.
     """
     if run.state != TaskState.ASSIGNED:
         raise ValueError(f"run_task needs an ASSIGNED run, got {run.state}")
@@ -58,7 +62,11 @@ def run_task(task: Task, run: TaskRun, *, store: Any, brain: Any,
     loop_out = run_loop(task, run, store=store, brain=brain, executor=executor,
                         ctx=ctx, ledger=ledger, memory=memory, tools=schemas,
                         identity=identity, worker_name=worker,
-                        approver=approver, session_id=session_id)
+                        approver=approver, session_id=session_id,
+                        on_event=on_event,
+                        max_calls_per_turn=max_calls_per_turn,
+                        obs_chars=obs_chars, history_keep=history_keep,
+                        max_stalls=max_stalls, auto_steps=auto_steps)
     status, needs = _STATUS_MAP.get(loop_out["status"],
                                     (ResultStatus.FAILED, False))
     calls = loop_out.get("tool_calls", [])
@@ -67,6 +75,13 @@ def run_task(task: Task, run: TaskRun, *, store: Any, brain: Any,
                     if c.get("tool") == "file" and c.get("detail")})
     commands = [str(c.get("detail", "")) for c in calls
                 if c.get("tool") == "terminal" and c.get("detail")]
+    diff_stat = ""
+    for c in calls:
+        if c.get("tool") == "terminal" and c.get("ok") \
+                and "git diff" in str(c.get("detail", "")):
+            diff_stat = str(c.get("output", "") or "")[:2000]
+            if diff_stat:
+                break
     result = Result(
         task_id=task.id, worker=worker, status=status,
         summary=(f"loop {loop_out['status']} after {loop_out.get('steps', 0)} "
@@ -74,7 +89,8 @@ def run_task(task: Task, run: TaskRun, *, store: Any, brain: Any,
         files_changed=tuple(files), commands_run=tuple(commands),
         evidence={"answer": str(loop_out.get("answer", ""))[:2000],
                   "tool_calls": len(calls), "ok_calls": len(ok_calls),
-                  "reason": str(loop_out.get("reason", ""))},
+                  "reason": str(loop_out.get("reason", "")),
+                  "diff_stat": diff_stat},
         blockers=() if status == ResultStatus.OK else ("loop did not complete",),
         needs_approval=needs)
     store.save_result(task.id, result)
@@ -86,7 +102,7 @@ def run_task(task: Task, run: TaskRun, *, store: Any, brain: Any,
 
 def _build_context(task: Task, run: TaskRun, worker: str, policy: Any,
                    authority: Any, cancel: Any) -> Any:
-    from nak.domain.ports import ExecutionContext
+    from nak_host.domain.ports import ExecutionContext
 
     return ExecutionContext(
         task_id=task.id, worker_id=worker, workspace=task.workspace,

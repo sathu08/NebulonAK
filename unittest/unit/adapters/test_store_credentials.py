@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 import requests
 
-from nak.adapters.credentials_mind import CredentialsError, NDBCredentials
-from nak.adapters.store_nebulondb import (
+from nak_host.adapters.credentials_mind import CredentialsError, NDBCredentials
+from nak_host.adapters.store_nebulondb import (
     NDBAuthError,
     NebulonDBTaskStore,
     _NDBClient,

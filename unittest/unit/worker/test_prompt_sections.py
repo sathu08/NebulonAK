@@ -2,8 +2,8 @@
 import json
 from pathlib import Path
 
-from nak.worker import GenericWorker
-from nak.worker.engine.prompt import _render_prompt_template, _render_sections
+from nak_host.worker import GenericWorker
+from nak_host.worker.engine.prompt import _render_prompt_template, _render_sections
 
 
 def _identity():

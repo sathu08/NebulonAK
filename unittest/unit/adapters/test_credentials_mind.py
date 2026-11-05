@@ -7,7 +7,7 @@ import json
 import pytest
 import requests
 
-from nak.adapters.credentials_mind import (
+from nak_host.adapters.credentials_mind import (
     CredentialsError,
     MindCredentialsResolver,
 )

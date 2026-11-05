@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from nak.utils.settings import load_settings
+from nak_host.utils.settings import load_settings
 
 
 def load_summary(run_dir: str | Path) -> dict[str, Any]:
@@ -28,7 +28,7 @@ def resolve_workspace(workspace_root: str | Path | None) -> Path:
     configured = settings.workspace_path()
     if configured:
         return Path(configured).expanduser()
-    from nak.harness.engine.sandbox import default_workspace
+    from nak_host.harness.engine.sandbox import default_workspace
 
     return Path(default_workspace()).expanduser()
 

@@ -1,11 +1,11 @@
-"""nak.decision — task-decision (goal -> worker + tool), not memory-decision.
+"""nak_host.decision — task-decision (goal -> worker + tool), not memory-decision.
 
 Mind's POST /intelligence/decide stays memory-only (leave it).
 THIS package answers: given goal + observation, which worker + tool next?
 
   decision = decide_task(goal, observation, workers, tools, llm=True)
 
-Workers list comes from nak/manifests/workers.json
+Workers list comes from nak_host/manifests/workers.json
 via list_workers().
 """
 

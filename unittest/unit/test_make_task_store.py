@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from nak.adapters.store_memory import InMemoryTaskStore
-from nak.adapters.store_nebulondb import NebulonDBTaskStore
-from nak.wiring import make_task_store
+from nak_host.adapters.store_memory import InMemoryTaskStore
+from nak_host.adapters.store_nebulondb import NebulonDBTaskStore
+from nak_host.wiring import make_task_store
 
 
 def test_memory_backend_and_unknown():

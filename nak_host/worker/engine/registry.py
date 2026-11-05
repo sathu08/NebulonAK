@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List
 
-from nak.utils.constant import (
+from nak_host.utils.constant import (
     DEFAULT_TEAMS_JSON as _DEFAULT_TEAMS,
     DEFAULT_WORKERS_JSON as _DEFAULT_WORKERS,
     WORKER_DECISION_TYPES as _VALID_DECISION_TYPES,
@@ -115,9 +115,9 @@ def _read_workers(workers_file: str | Path) -> List[Dict[str, Any]]:
         #         "questions": [{name, type}, ...],
         #         "policy": {"min_confidence": 0.6, "max_risk": 2.0, ...}}
         # type: score | boolean/noul | choice. Invalid shape -> ValueError.
-        # BOUNDARY: validated INLINE here — never `from nak.decision... import`.
+        # BOUNDARY: validated INLINE here — never `from nak_host.decision... import`.
         # Missing policy -> backfilled from defaults (mirrored in Settings +
-        # nak/decision/policy.py) so old entries keep working.
+        # nak_host/decision/policy.py) so old entries keep working.
         if "decision" in e and e["decision"] is not None:
             dec = e["decision"]
             if not isinstance(dec, dict):
@@ -155,7 +155,7 @@ def _read_workers(workers_file: str | Path) -> List[Dict[str, Any]]:
         # crafts allowlist: which crafts (plan/assign/...) this worker may use.
         # crafts is the ONLY source of truth for behavior (no autonomy block).
         # Missing key = all crafts; explicit [] = assist (answer directly).
-        # Craft existence is checked in nak.harness.craft (no import here).
+        # Craft existence is checked in nak_host.harness.craft (no import here).
         if "crafts" in e and e["crafts"] is not None:
             raw_crafts = e["crafts"]
             if not isinstance(raw_crafts, list):

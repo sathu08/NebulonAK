@@ -26,9 +26,9 @@ from typing import Any, Dict, List
 try:
     from ..engine.sandbox import default_workspace, safe_join
 except Exception:  # pragma: no cover — direct-path import fallback
-    from nak.harness.engine.sandbox import default_workspace, safe_join  # type: ignore
+    from nak_host.harness.engine.sandbox import default_workspace, safe_join  # type: ignore
 
-from nak.utils.constant import (
+from nak_host.utils.constant import (
     ASSERT_MAX_CHECKS as MAX_CHECKS,
     ASSERT_MAX_VALUE_CHARS as MAX_VALUE_CHARS,
 )

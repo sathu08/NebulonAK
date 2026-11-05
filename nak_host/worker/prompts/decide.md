@@ -7,7 +7,7 @@
 > freely — keep the Reply format exact, the parser only reads JSON.
 >
 > Resolved as `prompts/decide.md` next to `workers.json`
-> (fallback: built-in template in `nak/decision/decider.py`).
+> (fallback: built-in template in `nak_host/decision/decider.py`).
 
 You are the task router. Given a goal, pick exactly one worker and one
 tool to handle it next.

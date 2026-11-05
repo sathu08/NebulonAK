@@ -6,10 +6,10 @@ import re
 
 import pytest
 
-from nak.adapters.store_memory import InMemoryTaskStore
-from nak.application import assign_task, create_task, plan_task
-from nak.domain import TaskState
-from nak.worker.engine.team import split_assignments
+from nak_host.adapters.store_memory import InMemoryTaskStore
+from nak_host.application import assign_task, create_task, plan_task
+from nak_host.domain import TaskState
+from nak_host.worker.engine.team import split_assignments
 
 _ASSIGN_RE = re.compile(r"\[\s*worker\s*=\s*([^\]\s]+)\s*\]", re.IGNORECASE)
 

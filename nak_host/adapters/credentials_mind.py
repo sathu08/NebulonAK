@@ -4,7 +4,7 @@ NAK configures only its Mind connection; the DB host/username/password come
 from Mind's gated ``GET /api/NebulonMind/system/db_connection`` endpoint
 (bearer-shared-secret only; the endpoint refuses when Mind auth is disabled).
 
-Security posture (see ARCHITECTURE.md):
+Security posture (see docs/ARCHITECTURE.md §5):
 
 * credentials live in memory only — never logged, never written to disk;
 * in-memory TTL cache (default 15 min); ``refresh()`` forces re-resolution

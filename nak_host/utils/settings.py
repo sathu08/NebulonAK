@@ -1,25 +1,29 @@
-"""Central settings hub for NebulonAK_1.
+"""Central settings hub for NebulonAK.
 
 ALL settings live in ONE cfg file (nebulonak.cfg) and connect through
 here. brain / worker / harness read their defaults from Settings —
 never from scattered files or hardcoded paths.
 
-RULE: No LLM settings anywhere in AK_1. No [llm] section is read here
+RULE: No LLM settings anywhere in NebulonAK. No [llm] section is read here
 (deliberately); LLM provider/model/keys live in NebulonMD only.
 
 Sections in nebulonak.cfg:
+  [paths]        nebulonak_home (empty = folder holding nebulonak.cfg)
+  [server]       the AK API itself: host / port / workers / timeout /
+                 keep_alive / graceful_timeout / log_level
   [nebulonmind]  base_url / user / auth_token / timeout
   [worker]       workers_file / language   (no default worker: call GenericWorker(name))
   [harness]      workspace_root / user / registry / permissions / crafts / crafts_prompt
+  [decision]     endpoint / timeout / auth_token (laya decision endpoint)
   [nebulondb]    resolve_from_mind / base_url / user / corpus / timeout
                  (task store; base_url+user+password resolve from NebulonMD
                  unless overridden; NAK_NDB_PASSWORD is an emergency override,
                  never read from the cfg file)
 
-No [decision] section: decision + policy live ONLY in workers.json
+No [decision]-as-policy section: decision + policy live ONLY in workers.json
 entries (edited in the JSON itself). New workers inherit code defaults
 (DEFAULT_DECISION_* / DEFAULT_POLICY_*) via default_worker_entry().
-[server] holds the user-editable decision endpoint (timeout/auth_token);
+[decision] holds only the user-editable decision endpoint (timeout/auth_token);
 per-worker workers.json decision.endpoint wins over it.
 
 Resolution per field (highest wins):
@@ -38,55 +42,54 @@ import os
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
-CFG_FILENAME = "nebulonak.cfg"
-
-DEFAULT_BASE_URL = "http://localhost:9696/api/NebulonMind"
-DEFAULT_USER = "nmd_user_01"
-DEFAULT_TIMEOUT = 60.0
-DEFAULT_MAX_RETRIES = 2
-DEFAULT_RETRY_BACKOFF = 1.0
-# Relative to the NebulonAK_1 project root (folder holding nebulonak.cfg).
-DEFAULT_WORKERS_FILE = "nak/manifests/workers.json"
-DEFAULT_CRAFTS = "nak/manifests/crafts.json"
-DEFAULT_CRAFTS_PROMPT = "nak/harness/craft"
-DEFAULT_REGISTRY = "nak/manifests/tools.json"
-DEFAULT_PERMISSIONS = "nak/manifests/permissions.json"
-# --- nebulondb (task store) defaults ------------------------------------
-DEFAULT_NDB_BASE_URL = "http://localhost:6969/api/NebulonDB"
-DEFAULT_NDB_USER = ""
-DEFAULT_NDB_CORPUS = "nak_tasks"
-DEFAULT_NDB_TIMEOUT = 30.0
-DEFAULT_NDB_MAX_RETRIES = 2
-DEFAULT_NDB_RETRY_BACKOFF = 1.0
-DEFAULT_NDB_RESOLVE_FROM_MIND = True
-# --- decision (laya System-1) defaults ----------------------------------
-# Mirrors nak/utils/constant.py DEFAULT_POLICY / DEFAULT_DECISION_QUESTIONS.
-# A newly created worker automatically gets decision+policy from
-# default_worker_entry() below. Per-worker workers.json decision.policy
-# wins over these Settings.
-DEFAULT_DECISION_ENABLED = True
-DEFAULT_DECISION_MODEL = "laya"
-DEFAULT_DECISION_QUESTIONS = [
-    {"name": "priority", "type": "score"},
-    {"name": "risk", "type": "score"},
-    {"name": "needs_clarification", "type": "boolean"},
-]
-# Decision now connects via API endpoint (no local laya lib in decider.py).
-# Point this at `laya-serve` (POST /api/NebulonAgentKit) or any compatible scorer.
-# Per-worker workers.json decision.endpoint wins over this default.
-DEFAULT_DECISION_ENDPOINT = "http://localhost:8000/api/NebulonAgentKit"
-DEFAULT_DECISION_TIMEOUT = 30.0
-DEFAULT_DECISION_PARALLEL = True
-DEFAULT_DECISION_MAX_PARALLEL = 4
-DEFAULT_DECISION_AUTH_TOKEN = ""
-DEFAULT_POLICY_ENABLED = True
-DEFAULT_POLICY_MIN_CONFIDENCE = 0.6
-DEFAULT_POLICY_MAX_RISK = 2.0
-DEFAULT_POLICY_MAX_PRIORITY_AUTO = 2.5
-DEFAULT_POLICY_CLARIFY_ON_NEEDS_CLARIFICATION = True
-DEFAULT_POLICY_ESCALATE_ON_HIGH_RISK = True
+# All built-in fallback values live in nak_host.utils.constant (single source);
+# Settings only wires them (kwarg > env > cfg > Mind > default). Imported
+# here so existing `from nak_host.utils.settings import DEFAULT_*` keeps working.
+from nak_host.utils.constant import CFG_FILENAME
+from nak_host.utils.constant import DEFAULT_BASE_URL
+from nak_host.utils.constant import DEFAULT_CRAFTS
+from nak_host.utils.constant import DEFAULT_HOME
+from nak_host.utils.constant import DEFAULT_CRAFTS_PROMPT
+from nak_host.utils.constant import DEFAULT_DECISION_AUTH_TOKEN
+from nak_host.utils.constant import DEFAULT_DECISION_ENABLED
+from nak_host.utils.constant import DEFAULT_DECISION_ENDPOINT
+from nak_host.utils.constant import DEFAULT_DECISION_MAX_PARALLEL
+from nak_host.utils.constant import DEFAULT_DECISION_MODEL
+from nak_host.utils.constant import DEFAULT_DECISION_PARALLEL
+from nak_host.utils.constant import DEFAULT_DECISION_QUESTIONS
+from nak_host.utils.constant import DEFAULT_DECISION_TIMEOUT
+from nak_host.utils.constant import DEFAULT_LIMITS_BLOCK as _DEFAULT_LIMITS_BLOCK
+from nak_host.utils.constant import DEFAULT_MAX_RETRIES
+from nak_host.utils.constant import DEFAULT_NDB_BASE_URL
+from nak_host.utils.constant import DEFAULT_NDB_CORPUS
+from nak_host.utils.constant import DEFAULT_NDB_MAX_RETRIES
+from nak_host.utils.constant import DEFAULT_NDB_RESOLVE_FROM_MIND
+from nak_host.utils.constant import DEFAULT_NDB_RETRY_BACKOFF
+from nak_host.utils.constant import DEFAULT_NDB_TIMEOUT
+from nak_host.utils.constant import DEFAULT_NDB_USER
+from nak_host.utils.constant import DEFAULT_PERMISSIONS
+from nak_host.utils.constant import DEFAULT_POLICY_CLARIFY_ON_NEEDS_CLARIFICATION
+from nak_host.utils.constant import DEFAULT_POLICY_ENABLED
+from nak_host.utils.constant import DEFAULT_POLICY_ESCALATE_ON_HIGH_RISK
+from nak_host.utils.constant import DEFAULT_POLICY_MAX_PRIORITY_AUTO
+from nak_host.utils.constant import DEFAULT_POLICY_MAX_RISK
+from nak_host.utils.constant import DEFAULT_POLICY_MIN_CONFIDENCE
+from nak_host.utils.constant import DEFAULT_REGISTRY
+from nak_host.utils.constant import DEFAULT_RETRY_BACKOFF
+from nak_host.utils.constant import DEFAULT_STORE_BACKEND
+from nak_host.utils.constant import DEFAULT_TIMEOUT
+from nak_host.utils.constant import DEFAULT_USER
+from nak_host.utils.constant import DEFAULT_WORKERS_FILE
+from nak_host.utils.constant import RESOURCE_DENY_SEED as _RESOURCE_DENY_SEED
+from nak_host.utils.constant import SERVE_DEFAULT_GRACEFUL_TIMEOUT
+from nak_host.utils.constant import SERVE_DEFAULT_HOST
+from nak_host.utils.constant import SERVE_DEFAULT_KEEP_ALIVE
+from nak_host.utils.constant import SERVE_DEFAULT_LOG_LEVEL
+from nak_host.utils.constant import SERVE_DEFAULT_PORT
+from nak_host.utils.constant import SERVE_DEFAULT_TIMEOUT
+from nak_host.utils.constant import SERVE_DEFAULT_WORKERS
 
 
 def find_cfg(explicit: Optional[str | Path] = None) -> Optional[Path]:
@@ -120,8 +123,18 @@ def _resolve_near_cfg(value: str, cfg_dir: Optional[Path]) -> str:
 
 @dataclass
 class Settings:
-    """Every AK_1 setting in one object (see module docstring for sources)."""
+    """Every NebulonAK setting in one object (see module docstring for sources)."""
 
+    # [paths] — project home; everything server-side derives from it.
+    home: str = DEFAULT_HOME
+    # [server] — the AK API itself (hosted by `python nebulonak.py start`).
+    serve_host: str = SERVE_DEFAULT_HOST
+    serve_port: int = SERVE_DEFAULT_PORT
+    serve_workers: int = SERVE_DEFAULT_WORKERS
+    serve_timeout: int = SERVE_DEFAULT_TIMEOUT
+    serve_keep_alive: int = SERVE_DEFAULT_KEEP_ALIVE
+    serve_graceful_timeout: int = SERVE_DEFAULT_GRACEFUL_TIMEOUT
+    serve_log_level: str = SERVE_DEFAULT_LOG_LEVEL
     # [nebulonmind]
     base_url: str = DEFAULT_BASE_URL
     user: str = DEFAULT_USER
@@ -163,6 +176,9 @@ class Settings:
     # Resolve base_url/user/password from NebulonMD (single configured
     # connection) unless explicitly overridden per field.
     resolve_from_mind: bool = DEFAULT_NDB_RESOLVE_FROM_MIND
+    # Prod store backend: "memory" (tests/offline) or "nebulondb" (durable).
+    # Env-only (NAK_STORE); never read from the cfg file by design.
+    store_backend: str = DEFAULT_STORE_BACKEND
 
     cfg_path: Optional[Path] = field(default=None, compare=False)
 
@@ -180,11 +196,64 @@ class Settings:
             problems.append(f"max_retries must be >= 0: {self.max_retries!r}")
         if self.retry_backoff < 0:
             problems.append(f"retry_backoff must be >= 0: {self.retry_backoff!r}")
+        if not (self.serve_host or "").strip():
+            problems.append("serve_host must be non-empty")
+        if not 1 <= int(self.serve_port or 0) <= 65535:
+            problems.append(f"serve_port must be 1..65535: {self.serve_port!r}")
+        if int(self.serve_workers or 0) < 1:
+            problems.append(f"serve_workers must be >= 1: {self.serve_workers!r}")
+        return problems
+
+    def validate_store(self) -> List[str]:
+        """Offline store-config check (no network): backend + NDB shape.
+
+        Prod rule: durable runs use backend "nebulondb". "memory" is valid
+        but test/offline-only. Returns problem strings (empty = ok).
+        """
+        problems: List[str] = []
+        backend = str(self.store_backend or "").strip().lower() or DEFAULT_STORE_BACKEND
+        if backend not in ("memory", "nebulondb", "ndb", "db", "off", "none"):
+            problems.append(f"store_backend must be memory|nebulondb, got {self.store_backend!r}")
+            return problems
+        if backend in ("memory", "off", "none"):
+            return problems
+        if not self.ndb_base_url.startswith(("http://", "https://")):
+            problems.append(f"ndb_base_url must be http(s): {self.ndb_base_url!r}")
+        if "/api/NebulonDB" not in self.ndb_base_url:
+            problems.append(f"ndb_base_url must include /api/NebulonDB prefix: {self.ndb_base_url!r}")
+        if not (self.ndb_corpus or "").strip():
+            problems.append("ndb_corpus must be non-empty (want nak_tasks)")
+        if self.ndb_timeout <= 0:
+            problems.append(f"ndb_timeout must be > 0: {self.ndb_timeout!r}")
         return problems
 
     # -- resolved helpers (relative cfg paths -> absolute) -------------- #
     def cfg_dir(self) -> Optional[Path]:
         return self.cfg_path.parent if self.cfg_path else None
+
+    def home_path(self) -> str:
+        """Project home: [paths] nebulonak_home or the cfg folder itself."""
+        explicit = (self.home or "").strip()
+        if explicit:
+            return str(Path(explicit).expanduser())
+        cfg_dir = self.cfg_dir()
+        return str(cfg_dir) if cfg_dir is not None else str(Path.cwd())
+
+    def web_dir(self) -> str:
+        """Static web console root: <home>/nak_host/api/web."""
+        return str(Path(self.home_path()) / "nak_host" / "api" / "web")
+
+    def logs_dir(self) -> str:
+        """Server log root: <home>/logs."""
+        return str(Path(self.home_path()) / "logs")
+
+    def pid_file(self) -> str:
+        """Server PID file: <home>/nebulonak.pid."""
+        return str(Path(self.home_path()) / "nebulonak.pid")
+
+    def runs_dir(self) -> str:
+        """Vetting run history shown on the pipeline page."""
+        return str(Path(self.home_path()) / "pipeline" / "vetting" / "runs")
 
     def workers_path(self) -> str:
         return _resolve_near_cfg(self.workers_file, self.cfg_dir())
@@ -203,10 +272,6 @@ class Settings:
 
     def workspace_path(self) -> str:
         return _resolve_near_cfg(self.workspace_root, self.cfg_dir())
-
-    def session_user(self) -> str:
-        """User owning engine sessions: harness.user > nebulonmind.user."""
-        return (self.harness_user or self.user or DEFAULT_USER).strip()
 
 
 def load_settings(cfg_path: Optional[str | Path] = None) -> Settings:
@@ -248,6 +313,16 @@ def load_settings(cfg_path: Optional[str | Path] = None) -> Settings:
             return raw.strip().lower() not in ("0", "false", "no", "off", "")
 
     s = Settings(
+        home=get("paths", "nebulonak_home", DEFAULT_HOME),
+        serve_host=get("server", "host", SERVE_DEFAULT_HOST) or SERVE_DEFAULT_HOST,
+        serve_port=getint("server", "port", SERVE_DEFAULT_PORT),
+        serve_workers=getint("server", "workers", SERVE_DEFAULT_WORKERS),
+        serve_timeout=getint("server", "timeout", SERVE_DEFAULT_TIMEOUT),
+        serve_keep_alive=getint("server", "keep_alive", SERVE_DEFAULT_KEEP_ALIVE),
+        serve_graceful_timeout=getint("server", "graceful_timeout",
+                                      SERVE_DEFAULT_GRACEFUL_TIMEOUT),
+        serve_log_level=get("server", "log_level", SERVE_DEFAULT_LOG_LEVEL)
+        or SERVE_DEFAULT_LOG_LEVEL,
         base_url=get("nebulonmind", "base_url", DEFAULT_BASE_URL) or DEFAULT_BASE_URL,
         user=get("nebulonmind", "user", DEFAULT_USER) or DEFAULT_USER,
         auth_token=get("nebulonmind", "auth_token", ""),
@@ -256,16 +331,16 @@ def load_settings(cfg_path: Optional[str | Path] = None) -> Settings:
         retry_backoff=getfloat("nebulonmind", "retry_backoff", DEFAULT_RETRY_BACKOFF),
         workers_file=get("worker", "workers_file", DEFAULT_WORKERS_FILE) or DEFAULT_WORKERS_FILE,
         worker_lang=get("worker", "language", ""),
-        # No [decision] cfg section by design — decision + policy live ONLY
-        # in workers.json entries (edited in the JSON). New workers inherit
-        # these code defaults via default_worker_entry().
-        # [server] stays user-editable (endpoint/timeout/auth_token).
+        # No [decision]-as-policy section by design — decision + policy live
+        # ONLY in workers.json entries (edited in the JSON). New workers
+        # inherit these code defaults via default_worker_entry().
+        # [decision] stays user-editable (endpoint/timeout/auth_token).
         decision_enabled=DEFAULT_DECISION_ENABLED,
         decision_model=DEFAULT_DECISION_MODEL,
-        decision_endpoint=get("server", "endpoint", DEFAULT_DECISION_ENDPOINT)
+        decision_endpoint=get("decision", "endpoint", DEFAULT_DECISION_ENDPOINT)
         or DEFAULT_DECISION_ENDPOINT,
-        decision_timeout=getfloat("server", "timeout", DEFAULT_DECISION_TIMEOUT),
-        decision_auth_token=get("server", "auth_token", DEFAULT_DECISION_AUTH_TOKEN),
+        decision_timeout=getfloat("decision", "timeout", DEFAULT_DECISION_TIMEOUT),
+        decision_auth_token=get("decision", "auth_token", DEFAULT_DECISION_AUTH_TOKEN),
         policy_enabled=DEFAULT_POLICY_ENABLED,
         policy_min_confidence=DEFAULT_POLICY_MIN_CONFIDENCE,
         policy_max_risk=DEFAULT_POLICY_MAX_RISK,
@@ -316,8 +391,31 @@ def load_settings(cfg_path: Optional[str | Path] = None) -> Settings:
     s.crafts_prompt = (env("NAK_CRAFTS_PROMPT", "").strip()
                        or s.crafts_prompt)
     s.worker_lang = env("NAK_WORKER_LANG", "").strip() or s.worker_lang
+    # Server socket: env wins over [server] (host/port first, then tuning).
+    s.serve_host = env("NAK_SERVE_HOST", "").strip() or s.serve_host
+    _sp = env("NAK_SERVE_PORT", "").strip()
+    if _sp:
+        try:
+            s.serve_port = int(_sp)
+        except ValueError:
+            pass
+    _sw = env("NAK_SERVE_WORKERS", "").strip()
+    if _sw:
+        try:
+            s.serve_workers = max(1, int(_sw))
+        except ValueError:
+            pass
+    _st = env("NAK_SERVE_TIMEOUT", "").strip()
+    if _st:
+        try:
+            s.serve_timeout = max(1, int(_st))
+        except ValueError:
+            pass
+    s.serve_log_level = env("NAK_SERVE_LOG_LEVEL", "").strip() or s.serve_log_level
+    # Project home: env wins over [paths] (also used for cfg discovery).
+    s.home = env("NAK_HOME", "").strip() or s.home
     # NOTE: no NAK_DECISION_*/NAK_POLICY_* env by design (see above) —
-    # only the user-editable [server] connection fields below.
+    # only the user-editable [decision] connection fields below.
     s.decision_endpoint = env("NAK_DECISION_ENDPOINT", "").strip() or s.decision_endpoint
     s.decision_auth_token = env("NAK_DECISION_AUTH_TOKEN", "").strip() or s.decision_auth_token
     _dt = env("NAK_DECISION_TIMEOUT", "").strip()
@@ -344,6 +442,10 @@ def load_settings(cfg_path: Optional[str | Path] = None) -> Settings:
     _rfm = env("NAK_NDB_RESOLVE_FROM_MIND", "").strip().lower()
     if _rfm:
         s.resolve_from_mind = _rfm not in ("0", "false", "no", "off", "")
+    # Prod store backend is env-only (NAK_STORE=memory|nebulondb).
+    _store = env("NAK_STORE", "").strip().lower()
+    if _store:
+        s.store_backend = _store
 
     # Re-anchor relative paths against the cfg folder after env overrides.
     for attr in ("workers_file", "workspace_root", "registry"):
@@ -457,12 +559,6 @@ def _scan_permission_vocabulary(s: Optional[Settings] = None) -> tuple:
     return sorted(tools), sorted(caps)
 
 
-# Mirrors sandbox.py deny rules (kept in sync by hand).
-_RESOURCE_DENY_SEED = ["**/.env", "**/.git/**", "**/.ssh/**",
-                       "**/*password*", "**/*secret*", "**/*credential*"]
-
-_DEFAULT_LIMITS_BLOCK = {"max_tool_calls": 30, "max_execution_time": 120,
-                         "max_file_size": 10485760}
 
 
 def default_permission_entry(name: str,

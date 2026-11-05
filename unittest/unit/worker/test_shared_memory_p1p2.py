@@ -17,10 +17,10 @@ import time
 
 import pytest
 
-import nak.worker.engine.chat as chat_mod
-import nak.worker.engine.memory as memory_mod
-import nak.worker.engine.session as session_mod
-from nak.worker import GenericWorker
+import nak_host.worker.engine.chat as chat_mod
+import nak_host.worker.engine.memory as memory_mod
+import nak_host.worker.engine.session as session_mod
+from nak_host.worker import GenericWorker
 
 
 class PersistentBrain:
@@ -130,8 +130,8 @@ def test_session_report_no_brain():
 
 
 def test_cli_session_report(monkeypatch, capsys):
-    import nak.wiring as wiring
-    import nak.worker.__main__ as cli
+    import nak_host.wiring as wiring
+    import nak_host.worker.__main__ as cli
 
     brain = PersistentBrain()
     brain.docs["cli_sess"] = [{"role": "user", "content": "hi there"}]

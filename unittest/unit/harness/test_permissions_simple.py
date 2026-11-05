@@ -1,8 +1,8 @@
 """SIMPLE permission tests — verdicts, rule resolution, inspect allow."""
-from nak.harness.engine.permission import (
+from nak_host.harness.engine.permission import (
     verdict, load_permissions, rule_for,
 )
-from nak.harness.engine import ExecutionHarness
+from nak_host.harness.engine import ExecutionHarness
 
 
 def test_verdict_normalization():

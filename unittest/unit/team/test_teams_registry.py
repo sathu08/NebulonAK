@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from nak.worker import list_teams, list_workers
+from nak_host.worker import list_teams, list_workers
 
 _UNSET = object()
 

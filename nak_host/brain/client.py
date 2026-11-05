@@ -1,12 +1,12 @@
 """NAK Brain — thin HTTP adapter over NebulonMD.
 
 GOLDEN RULE (enforced by design):
-  * Every LLM call in NebulonAK_1 goes through THIS class.
+  * Every LLM call in NebulonAK goes through THIS class.
   * This class performs NO LLM inference itself — each method is a
     plain HTTP call to NebulonMD (default http://localhost:9696/api/NebulonMind).
   * There are NO LLM settings here: no provider, no model, no API key,
     no vendor base URL. Configure those in NebulonMD
-    (`nebulonmd.cfg [llm]` + `.env`) — never in NebulonAK_1.
+    (`nebulonmd.cfg [llm]` + `.env`) — never in NebulonAK.
 
 Coverage (Full API, sync `requests` only, Python 3.10+):
   health / live / ready / metrics / llm_status (read-only) |
@@ -16,10 +16,10 @@ Coverage (Full API, sync `requests` only, Python 3.10+):
   agent chat + sessions | chats | evaluation | background | config read
 
 Usage:
-    from nak.brain import Brain
+    from nak_host.brain import Brain
     brain = Brain()  # reads nebulonak.cfg + NAK_* env
     brain.ensure_user()
-    brain.remember("I am building NebulonAK_1 on NebulonMD")
+    brain.remember("I am building NebulonAK on NebulonMD")
     print(brain.search("what am I building?"))
     print(brain.chat("What do you remember about my project?")["answer"])
 """
@@ -34,15 +34,16 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
-from nak.utils.constant import (
+from nak_host.utils.constant import (
     BRAIN_CHAT_TIMEOUT_FLOOR,
     BRAIN_DEFAULT_TOP_K,
     BRAIN_EVAL_TIMEOUT_FLOOR,
+    HTTP_RETRYABLE_STATUS,
 )
 
 from .config import NAKConfig, load_config
 
-logger = logging.getLogger("nak.brain")
+logger = logging.getLogger("nak_host.brain")
 
 
 class BrainError(RuntimeError):
@@ -103,7 +104,7 @@ class Brain:
         return f"{self.base_url}{path}"
 
     #: HTTP statuses worth one more attempt (overload / restart / limiter).
-    RETRYABLE_STATUS = frozenset({429, 502, 503, 504})
+    RETRYABLE_STATUS = HTTP_RETRYABLE_STATUS
 
     def _request(
         self,
@@ -625,7 +626,7 @@ class Brain:
         _step("llm_status", self.llm_status)
         _step("ensure_user", self.ensure_user)
         if probe_write and ok:
-            probe_text = f"nak connectivity probe {int(time.time())}"
+            probe_text = f"nak_host connectivity probe {int(time.time())}"
 
             def _probe():
                 stored = self.remember(probe_text, category="probe", gate=True)
