@@ -1,4 +1,5 @@
 """SIMPLE craft tests — plan/assign/build load, list, expand, worker mapping."""
+
 from nak_host.harness.craft import craft as C
 
 
@@ -33,8 +34,7 @@ def test_expand_plan_with_goal():
 
 
 def test_expand_build_with_goal():
-    steps = C.expand_craft("build", {"goal": "fix login bug",
-                                     "plan": "1. edit login.py"})
+    steps = C.expand_craft("build", {"goal": "fix login bug", "plan": "1. edit login.py"})
     assert isinstance(steps, list) and len(steps) >= 1
 
 

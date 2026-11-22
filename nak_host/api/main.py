@@ -20,9 +20,10 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from nak_host.api import create_app
 from nak_host.api.router.laya import router as laya_router
-from nak_host.api.routes import dashboard as dashboard_routes
+from nak_host.api.routes import console as console_routes
+from nak_host.api.routes import flow as flow_routes
 from nak_host.api.routes import pipeline as pipeline_routes
-from nak_host.api.routes import settings_view as settings_routes
+from nak_host.api.routes import setting as settings_routes
 from nak_host.api.routes import status as status_routes
 from nak_host.utils.settings import load_settings
 
@@ -42,30 +43,29 @@ async def _lifespan(_app: FastAPI):
         from nak_host.api.laya_backend import run_laya
 
         def _warm() -> None:
-            run_laya("warmup", {
-                "ok": {"type": "choice", "instructions": "warmup",
-                       "criteria": {"a": "warmup a", "b": "warmup b"}},
-            })
+            run_laya(
+                "warmup",
+                {
+                    "ok": {"type": "choice", "instructions": "warmup", "criteria": {"a": "warmup a", "b": "warmup b"}},
+                },
+            )
 
         await asyncio.to_thread(_warm)
         print("[laya] warmup complete — first score will be fast", flush=True)
     except Exception as exc:  # noqa: BLE001 — cold start is degraded, not fatal
-        print(f"[laya] warmup skipped ({str(exc)[:150]}); "
-              f"first request pays the model load", flush=True)
+        print(f"[laya] warmup skipped ({str(exc)[:150]}); first request pays the model load", flush=True)
     yield
 
 
 class NoCacheConsoleMiddleware(BaseHTTPMiddleware):
     """Prevent browsers from serving stale HTML/JS/CSS for the web console."""
 
-    _NO_CACHE_PATHS = ("/assets", "/api/NebulonAK/dashboard",
-                       "/dashboard", "/pipeline", "/settings", "/")
+    _NO_CACHE_PATHS = ("/assets", "/api/NebulonAK/dashboard", "/dashboard", "/pipeline", "/builder", "/settings", "/")
 
     async def dispatch(self, request, call_next):
         response = await call_next(request)
         path = request.url.path
-        if path.startswith("/assets") or path.startswith("/api/NebulonAK") \
-                or path in self._NO_CACHE_PATHS:
+        if path.startswith("/assets") or path.startswith("/api/NebulonAK") or path in self._NO_CACHE_PATHS:
             response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
             response.headers["Pragma"] = "no-cache"
             response.headers["Expires"] = "0"
@@ -77,8 +77,7 @@ def _api_prefix() -> str:
     from urllib.parse import urlparse
 
     try:
-        return (urlparse(load_settings().decision_endpoint).path or "").rstrip("/") \
-            or "/api/NebulonAgentKit"
+        return (urlparse(load_settings().decision_endpoint).path or "").rstrip("/") or "/api/NebulonAgentKit"
     except Exception:
         return "/api/NebulonAgentKit"
 
@@ -95,10 +94,19 @@ def create_server_app() -> FastAPI:
     console = "/api/NebulonAK"
     app.include_router(status_routes.router, prefix=f"{console}/status", tags=["Status"])
     app.include_router(pipeline_routes.router, prefix=f"{console}/pipeline", tags=["Pipeline"])
+    app.include_router(flow_routes.router, prefix=f"{console}/pipeline_engine", tags=["PipelineEngine"])
     app.include_router(settings_routes.router, prefix=f"{console}/settings", tags=["Settings"])
-    app.include_router(dashboard_routes.router, prefix=f"{console}/dashboard", tags=["Console"])
+    app.include_router(console_routes.router, prefix=f"{console}/dashboard", tags=["Console"])
     app.router.lifespan_context = _lifespan
     app.add_middleware(NoCacheConsoleMiddleware)
+
+    @app.get("/", include_in_schema=False)
+    async def _root():
+        # Server root has no API: send browsers straight to the console.
+        from fastapi.responses import RedirectResponse
+
+        return RedirectResponse(url="/api/NebulonAK/dashboard/", status_code=307)
+
     try:
         web_dir = Path(load_settings().web_dir())
         assets = web_dir / "assets"
@@ -117,8 +125,9 @@ def main() -> None:
     import uvicorn
 
     settings = load_settings()
-    uvicorn.run(app, host=settings.serve_host, port=int(settings.serve_port),
-                log_level=settings.serve_log_level or "info")
+    uvicorn.run(
+        app, host=settings.serve_host, port=int(settings.serve_port), log_level=settings.serve_log_level or "info"
+    )
 
 
 if __name__ == "__main__":

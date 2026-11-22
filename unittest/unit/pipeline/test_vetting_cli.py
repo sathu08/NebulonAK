@@ -7,8 +7,7 @@ cli_main = importlib.import_module("pipeline.vetting.cli.main")
 
 
 def test_names_splits_and_dedupes():
-    assert _names(["vizhi,aayan", "vizhi", " arivu "]) == [
-        "vizhi", "aayan", "arivu"]
+    assert _names(["vizhi,aayan", "vizhi", " arivu "]) == ["vizhi", "aayan", "arivu"]
 
 
 def test_names_empty_is_none():
@@ -32,8 +31,7 @@ def test_parser_bank_and_repeat_defaults():
     args = _parser().parse_args([])
     assert args.cases_from is None
     assert args.repeat == 1
-    assert _parser().parse_args(
-        ["--cases-from", "arivu", "--repeat", "3"]).cases_from == "arivu"
+    assert _parser().parse_args(["--cases-from", "arivu", "--repeat", "3"]).cases_from == "arivu"
 
 
 def test_run_rejects_bad_repeat():

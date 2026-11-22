@@ -17,13 +17,16 @@ from typing import Any
 from nak_host.domain.permission import ApprovalRef
 
 
-def mint_approval(scope: str = "task", granted_by: str = "approver",
-                  expires_at: Any = None) -> ApprovalRef:
+def mint_approval(scope: str = "task", granted_by: str = "approver", expires_at: Any = None) -> ApprovalRef:
     """Create a fresh approval reference (not yet granted — ledger grants)."""
-    return ApprovalRef(id=f"appr-{uuid.uuid4().hex[:12]}", scope=scope,
-                       granted_by=str(granted_by or "approver"),
-                       granted_at=datetime.now(timezone.utc),
-                       expires_at=expires_at, revoked=False)
+    return ApprovalRef(
+        id=f"appr-{uuid.uuid4().hex[:12]}",
+        scope=scope,
+        granted_by=str(granted_by or "approver"),
+        granted_at=datetime.now(timezone.utc),
+        expires_at=expires_at,
+        revoked=False,
+    )
 
 
 class ApprovalLedger:

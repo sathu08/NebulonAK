@@ -1,4 +1,5 @@
 """DIFFICULT tool tests — sandbox escapes, denials, truncation, bad input."""
+
 import json
 
 
@@ -51,8 +52,9 @@ def test_bad_action_error(harness_vizhi_approved):
 
 def test_write_create_mode_refuses_overwrite(harness_vizhi_approved):
     _run(harness_vizhi_approved, "file", {"action": "write", "path": "once.txt", "content": "1"})
-    out = _run(harness_vizhi_approved, "file", {"action": "write", "path": "once.txt",
-                                       "content": "2", "mode": "create"})
+    out = _run(
+        harness_vizhi_approved, "file", {"action": "write", "path": "once.txt", "content": "2", "mode": "create"}
+    )
     # engine routes write->write_file with mode create; second create must fail
     # (either at tool level already-exists or permission level — both ok=False)
     assert out["ok"] is False

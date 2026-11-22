@@ -4,17 +4,18 @@ Run: uv run --with pytest python -m pytest unittest/live/test_live_mind.py -v -s
 Requires: NebulonDB :6969 + NebulonMD :9696 + LLM key. Skips cleanly when down.
 Each chat is 15-45s+; total ~3-5 min. Writes probe memories + session files.
 """
+
 import sys
+import uuid
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-import uuid
-import pytest
-
-from nak_host.brain import Brain, BrainError
+from nak_host.brain import Brain, BrainError  # noqa: E402 - after sys.path bootstrap for standalone runs
 
 
 def _brain_or_skip():
@@ -55,6 +56,7 @@ def test_live_health_and_llm(brain):
 
 def test_live_vizhi_chat_simple(brain, live_user):
     from nak_host.wiring import make_worker
+
     w = make_worker("vizhi", brain=Brain(user=live_user))
     out = w.chat("Hello, who are you in one sentence?")
     assert out["answer"] and len(out["answer"]) > 10
@@ -65,6 +67,7 @@ def test_live_vizhi_chat_simple(brain, live_user):
 
 def test_live_aayan_plan(brain, live_user):
     from nak_host.wiring import make_worker
+
     w = make_worker("aayan", brain=Brain(user=live_user))
     out = w.chat("Plan in numbered steps: how to organize a project README?")
     assert out["answer"] and len(out["answer"]) > 20
@@ -79,6 +82,7 @@ def test_live_aayan_plan(brain, live_user):
 
 def test_live_arivu_build_plan(brain, live_user):
     from nak_host.wiring import make_worker
+
     w = make_worker("arivu", brain=Brain(user=live_user))
     assert w.can("build") is True
     out = w.chat("Plan in numbered steps: how to fix a login bug with a test?")
@@ -87,13 +91,14 @@ def test_live_arivu_build_plan(brain, live_user):
 
 
 def _triage_action(out):
-    pol = ((out.get("triage") or {}).get("policy") or {})
+    pol = (out.get("triage") or {}).get("policy") or {}
     return str(pol.get("action", "chat")).strip().lower()
 
 
 def test_live_memory_recall_store(brain, live_user):
     from nak_host.wiring import make_worker
     import time
+
     bu = Brain(user=live_user)
     marker = f"live-marker-{uuid.uuid4().hex[:6]} loves filter coffee"
     bu.remember(marker, category="preference")
@@ -114,6 +119,7 @@ def test_live_memory_chat_path_recall_store(brain, live_user):
     """Triage disabled, so this always exercises the real recall+store path."""
     from nak_host.wiring import make_worker
     import time
+
     bu = Brain(user=live_user)
     marker = f"live-marker-{uuid.uuid4().hex[:6]} loves filter coffee"
     bu.remember(marker, category="preference")
@@ -133,6 +139,7 @@ def test_live_parallel_shared_memory(brain, live_user):
     import time
     from nak_host.wiring import make_worker, new_session
     from nak_host.worker.engine.dispatch import run_workers
+
     sid = new_session("live-par")
     codeword = f"CODE-{uuid.uuid4().hex[:4]}"
     workers = {}
@@ -143,11 +150,13 @@ def test_live_parallel_shared_memory(brain, live_user):
     vizhi = workers["vizhi"]
     vizhi.chat(f"Team codeword is {codeword}. Remember it.", session_id=sid)
     fan = run_workers(
-        f"Plan:\n1. State {codeword}. [worker=aayan]\n"
-        f"2. Repeat {codeword}. [worker=arivu]",
-        ["aayan", "arivu"], goal="codeword",
+        f"Plan:\n1. State {codeword}. [worker=aayan]\n2. Repeat {codeword}. [worker=arivu]",
+        ["aayan", "arivu"],
+        goal="codeword",
         workers={"aayan": workers["aayan"], "arivu": workers["arivu"]},
-        session_id=sid, parallel=True)
+        session_id=sid,
+        parallel=True,
+    )
     assert fan["parallel"] is True
     assert all(r["ok"] for r in fan["runs"]), fan["runs"]
     want = 2 + 2 * len(fan["runs"])
@@ -169,13 +178,12 @@ def test_live_tool_permission_craft(brain, live_user):
     import json
     from nak_host.wiring import make_worker, make_harness, run_craft
     from nak_host.harness.craft import craft as Craft
+
     bu = Brain(user=live_user)
     ws = str(REPO_ROOT / "workspace" / f"live-{uuid.uuid4().hex[:6]}")
-    h = make_harness(worker="vizhi", workspace_root=ws, workers_file=None,
-                     approver=lambda *a, **k: True)
+    h = make_harness(worker="vizhi", workspace_root=ws, workers_file=None, approver=lambda *a, **k: True)
     # tool: approved write then read
-    wr = json.loads(h.run("file", {"action": "write", "path": "live-note.txt",
-                                   "content": "live probe hello"}))
+    wr = json.loads(h.run("file", {"action": "write", "path": "live-note.txt", "content": "live probe hello"}))
     assert wr["ok"] is True, wr
     rd = json.loads(h.run("file", {"action": "read", "path": "live-note.txt"}))
     assert rd["ok"] is True and "live probe" in rd["content"]
@@ -186,12 +194,10 @@ def test_live_tool_permission_craft(brain, live_user):
     # craft: expand plan + build
     steps = Craft.expand_craft("plan", {"goal": "live probe", "context": "test"})
     assert len(steps) >= 1
-    bsteps = Craft.expand_craft("build", {"goal": "fix bug",
-                                          "plan": "approved live probe plan"})
+    bsteps = Craft.expand_craft("build", {"goal": "fix bug", "plan": "approved live probe plan"})
     assert len(bsteps) >= 1
     # run_craft live (uses real LLM chat inside)
     w = make_worker("vizhi", brain=bu)
-    res = run_craft("List 2 steps to document a test run", w, h,
-                       approver=lambda info: True)
+    res = run_craft("List 2 steps to document a test run", w, h, approver=lambda info: True)
     print(f"\nrun_craft live: {res}")
     assert "planned" in res

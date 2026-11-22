@@ -44,16 +44,15 @@ class FakeNDBServer:
         if path == "/corpus/create_corpus":
             name = payload["corpus_name"]
             if name in self.corpora:
-                return {"success": False, "exists": True,
-                        "message": f"Corpus '{name}' already exists in the database"}
+                return {"success": False, "exists": True, "message": f"Corpus '{name}' already exists in the database"}
             self.corpora.add(name)
             return {"success": True, "exists": False, "message": "created"}
         if path == "/segment/get_data":
-            docs = self.segments.get(
-                (payload["corpus_name"], payload["segment_name"]), [])
-            return {"success": True,
-                    "data": {"records": [dict(d) for d in docs],
-                             "total_count": len(docs), "limit": None}}
+            docs = self.segments.get((payload["corpus_name"], payload["segment_name"]), [])
+            return {
+                "success": True,
+                "data": {"records": [dict(d) for d in docs], "total_count": len(docs), "limit": None},
+            }
         if path == "/segment/add_records":
             key = (payload["corpus_name"], payload["segment_name"])
             seg = self.segments.setdefault(key, [])
@@ -61,14 +60,16 @@ class FakeNDBServer:
             for rec in payload["records"]:
                 self._ids += 1
                 meta = dict(rec.get("metadata") or {})
-                doc = {"text": rec.get("text") or "",
-                       "type": meta.get("type", "other"),
-                       **meta, "created_at": "2026-01-01T00:00:00+00:00",
-                       "_id": self._ids}
+                doc = {
+                    "text": rec.get("text") or "",
+                    "type": meta.get("type", "other"),
+                    **meta,
+                    "created_at": "2026-01-01T00:00:00+00:00",
+                    "_id": self._ids,
+                }
                 seg.append(doc)
                 ids.append(self._ids)
-            return {"success": True,
-                    "data": {"inserted": len(ids), "record_ids": ids}}
+            return {"success": True, "data": {"inserted": len(ids), "record_ids": ids}}
         raise AssertionError(f"unexpected path {path}")
 
 
@@ -155,8 +156,7 @@ def test_crash_between_event_and_snapshot_heals():
     assert run.state == TaskState.PLANNED
     assert run.version == 1
     # The healed snapshot was persisted, not just returned.
-    assert any(d.get("version") == 1
-               for d in server.segments[("nak_tasks", "task_runs")])
+    assert any(d.get("version") == 1 for d in server.segments[("nak_tasks", "task_runs")])
 
 
 def test_recovery_marks_interrupted():
@@ -177,10 +177,20 @@ def test_recovery_marks_interrupted():
 def test_save_result_roundtrip():
     store = _store()
     store.create_task(_task())
-    store.save_result("t1", Result(
-        task_id="t1", worker="ezhilan", status=ResultStatus.FAILED,
-        summary="2 failed", files_changed=[], commands_run=["pytest"],
-        evidence={"failed": ["a", "b"]}, blockers=["a"], needs_approval=False))
+    store.save_result(
+        "t1",
+        Result(
+            task_id="t1",
+            worker="ezhilan",
+            status=ResultStatus.FAILED,
+            summary="2 failed",
+            files_changed=[],
+            commands_run=["pytest"],
+            evidence={"failed": ["a", "b"]},
+            blockers=["a"],
+            needs_approval=False,
+        ),
+    )
     _, run = store.get_task("t1")
     assert run.result.status == ResultStatus.FAILED
     # Evidence is deep-frozen on read: lists round-trip as tuples.

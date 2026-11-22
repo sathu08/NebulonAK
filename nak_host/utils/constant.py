@@ -35,26 +35,35 @@ from typing import Any, Dict, List
 # fallbacks. Single truth here — nak_host/worker/worker.py imports these
 # (thin aliases kept there so old imports keep working).
 FALLBACK_WORKERS: List[str] = ["vizhi"]
-FALLBACK_TOOLS: List[str] = ["file", "directory", "search", "terminal",
-                             "observe"]
-DEFAULT_WORKERS_JSON: Path = (
-    Path(__file__).resolve().parents[1] / "manifests" / "workers.json"
-)
+FALLBACK_TOOLS: List[str] = ["file", "directory", "search", "terminal", "observe"]
+DEFAULT_WORKERS_JSON: Path = Path(__file__).resolve().parents[1] / "manifests" / "workers.json"
 WORKER_IDENTITY_FIELDS = (
-    "role", "personality", "tone", "formality",
-    "humor", "gender", "values", "do_not", "language",
+    "role",
+    "personality",
+    "tone",
+    "formality",
+    "humor",
+    "gender",
+    "values",
+    "do_not",
+    "language",
 )
 WORKER_FORBIDDEN_KEYS = {"provider", "model", "api_key", "base_url", "llm", "greeting"}
 WORKER_DECISION_TYPES = {"choice", "score", "boolean", "noul"}
-WORKER_DEFAULT_AUTONOMY: Dict[str, Any] = {"modes": ["plan"], "max_steps": 3,
-                                            "approval": "all", "auto_steps": 2}
+WORKER_DEFAULT_AUTONOMY: Dict[str, Any] = {"modes": ["plan"], "max_steps": 3, "approval": "all", "auto_steps": 2}
 WORKER_FALLBACK_TYPES: List[str] = ["coordinator", "researcher", "coder"]
 WORKER_FALLBACK_MODES: List[str] = ["plan", "assign", "build"]
-WORKER_FALLBACK_IDENTITY: Dict[str, Any] = {"role": "project_manager", "language": "en",
-        "personality": ["Calm", "practical", "proactive"],
-        "tone": "Friendly and professional", "formality": "professional",
-        "humor": "none", "gender": "unspecified",
-        "values": ["Quality", "deadlines", "transparency"], "do_not": []}
+WORKER_FALLBACK_IDENTITY: Dict[str, Any] = {
+    "role": "project_manager",
+    "language": "en",
+    "personality": ["Calm", "practical", "proactive"],
+    "tone": "Friendly and professional",
+    "formality": "professional",
+    "humor": "none",
+    "gender": "unspecified",
+    "values": ["Quality", "deadlines", "transparency"],
+    "do_not": [],
+}
 # NOTE: worker approval vocabulary is CRAFT_VALID_APPROVALS (crafts section
 # below) — no separate copy. Worker default path is DEFAULT_WORKERS_JSON.
 
@@ -200,20 +209,56 @@ TERMINAL_MAX_OUTPUT: int = 12000
 TERMINAL_DEFAULT_TIMEOUT: int = 60
 TERMINAL_MAX_TIMEOUT: int = 120
 TERMINAL_ALLOW_BINARIES = {
-    "uv", "python", "python3", "ls", "cat", "head", "tail",
-    "wc", "echo", "mkdir", "touch", "pdfinfo", "pdftotext",
-    "grep", "git", "pytest", "ruff", "node", "npm", "npx",
+    "uv",
+    "python",
+    "python3",
+    "ls",
+    "cat",
+    "head",
+    "tail",
+    "wc",
+    "echo",
+    "mkdir",
+    "touch",
+    "pdfinfo",
+    "pdftotext",
+    "grep",
+    "git",
+    "pytest",
+    "ruff",
+    "node",
+    "npm",
+    "npx",
 }
 # Read-only git subcommands (a coder needs status/diff/log, not push/commit).
 TERMINAL_ALLOW_GIT_SUBCOMMANDS = {
-    "status", "diff", "log", "show", "branch", "rev-parse", "ls-files",
-    "blame", "describe", "remote",
+    "status",
+    "diff",
+    "log",
+    "show",
+    "branch",
+    "rev-parse",
+    "ls-files",
+    "blame",
+    "describe",
+    "remote",
 }
 TERMINAL_DENY_SUBSTRINGS = [
-    "sudo", "su ", "doas", "mkfs", " dd ", "dd if=",
-    "shutdown", "reboot", "halt", "poweroff",
-    ":(){", "fork bomb",
-    ".env", ".ssh/", ".git/",
+    "sudo",
+    "su ",
+    "doas",
+    "mkfs",
+    " dd ",
+    "dd if=",
+    "shutdown",
+    "reboot",
+    "halt",
+    "poweroff",
+    ":(){",
+    "fork bomb",
+    ".env",
+    ".ssh/",
+    ".git/",
 ]
 TERMINAL_DENY_RM_PATTERNS = ["rm -rf /", "rm -rf ~", "rm -rf .", "rm -rf *"]
 
@@ -253,8 +298,7 @@ LOOP_OBS_CHARS: int = 6000
 LOOP_HISTORY_KEEP: int = 30
 LOOP_MAX_STALLS: int = 2
 LOOP_FORMAT_RETRIES: int = 2
-LOOP_FOLLOWUP: tuple = ("Continue: make the next tool calls, or reply with the final "
-                        "answer (no tool block).",)
+LOOP_FOLLOWUP: tuple = ("Continue: make the next tool calls, or reply with the final answer (no tool block).",)
 
 # --- task store (single source; store adapters import these) --------------
 NDB_CORPUS_DEFAULT: str = "nak_tasks"
@@ -271,7 +315,12 @@ SEARCH_MAX_RESULTS_CAP: int = 500
 SEARCH_MAX_FILE_BYTES: int = 1_000_000
 SEARCH_MAX_LINE_CHARS: int = 400
 SEARCH_SKIP_DIRS = {
-    ".git", ".libs", ".uv-cache", ".venv", "node_modules", "__pycache__",
+    ".git",
+    ".libs",
+    ".uv-cache",
+    ".venv",
+    "node_modules",
+    "__pycache__",
     "secrets",
 }
 
@@ -309,6 +358,7 @@ DEFAULT_CRAFTS: str = "nak_host/manifests/crafts.json"
 DEFAULT_CRAFTS_PROMPT: str = "nak_host/harness/craft"
 DEFAULT_REGISTRY: str = "nak_host/manifests/tools.json"
 DEFAULT_PERMISSIONS: str = "nak_host/manifests/permissions.json"
+DEFAULT_PIPELINE_DIR: str = "pipeline/UI"
 DEFAULT_STORE_BACKEND: str = STORE_DEFAULT_BACKEND
 # --- nebulondb (task store) defaults --------------------------------------
 DEFAULT_NDB_BASE_URL: str = "http://localhost:6969/api/NebulonDB"
@@ -330,12 +380,8 @@ DEFAULT_POLICY_ENABLED: bool = DEFAULT_POLICY["enabled"]
 DEFAULT_POLICY_MIN_CONFIDENCE: float = DEFAULT_POLICY["min_confidence"]
 DEFAULT_POLICY_MAX_RISK: float = DEFAULT_POLICY["max_risk"]
 DEFAULT_POLICY_MAX_PRIORITY_AUTO: float = DEFAULT_POLICY["max_priority_auto"]
-DEFAULT_POLICY_CLARIFY_ON_NEEDS_CLARIFICATION: bool = DEFAULT_POLICY[
-    "clarify_on_needs_clarification"
-]
+DEFAULT_POLICY_CLARIFY_ON_NEEDS_CLARIFICATION: bool = DEFAULT_POLICY["clarify_on_needs_clarification"]
 DEFAULT_POLICY_ESCALATE_ON_HIGH_RISK: bool = DEFAULT_POLICY["escalate_on_high_risk"]
 # --- permission seed (single source; settings.default_permission_entry) ---
-RESOURCE_DENY_SEED = ["**/.env", "**/.git/**", "**/.ssh/**",
-                      "**/*password*", "**/*secret*", "**/*credential*"]
-DEFAULT_LIMITS_BLOCK = {"max_tool_calls": 30, "max_execution_time": 120,
-                        "max_file_size": 10485760}
+RESOURCE_DENY_SEED = ["**/.env", "**/.git/**", "**/.ssh/**", "**/*password*", "**/*secret*", "**/*credential*"]
+DEFAULT_LIMITS_BLOCK = {"max_tool_calls": 30, "max_execution_time": 120, "max_file_size": 10485760}

@@ -104,33 +104,27 @@ def decide_many(
             for key, index in unique:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
-                    results[key] = _error(items[index], index,
-                                          "decision batch timeout")
+                    results[key] = _error(items[index], index, "decision batch timeout")
                     continue
                 try:
-                    results[key] = pool.submit(
-                        _call, items[index], index).result(timeout=remaining)
+                    results[key] = pool.submit(_call, items[index], index).result(timeout=remaining)
                 except Exception as exc:
-                    results[key] = _error(items[index], index,
-                                          f"decision timeout/failure: {exc}")
+                    results[key] = _error(items[index], index, f"decision timeout/failure: {exc}")
         finally:
             pool.shutdown(wait=False, cancel_futures=True)
     else:
         pool = ThreadPoolExecutor(max_workers=min(cap, len(unique)))
-        futures = {key: pool.submit(_call, items[index], index)
-                   for key, index in unique}
+        futures = {key: pool.submit(_call, items[index], index) for key, index in unique}
         try:
             for key, index in unique:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
-                    results[key] = _error(items[index], index,
-                                          "decision batch timeout")
+                    results[key] = _error(items[index], index, "decision batch timeout")
                     continue
                 try:
                     results[key] = futures[key].result(timeout=remaining)
                 except Exception as exc:
-                    results[key] = _error(items[index], index,
-                                          f"decision timeout/failure: {exc}")
+                    results[key] = _error(items[index], index, f"decision timeout/failure: {exc}")
         finally:
             for fut in futures.values():
                 fut.cancel()

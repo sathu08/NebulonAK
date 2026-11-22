@@ -34,8 +34,7 @@ from nak_host.utils.constant import SEARCH_SKIP_DIRS as _SKIP_DIRS
 
 
 def _root(data: dict) -> str:
-    return (str(data.get("root", "")).strip()
-            or str(default_workspace()))
+    return str(data.get("root", "")).strip() or str(default_workspace())
 
 
 def _max_results(data: dict) -> int:
@@ -94,9 +93,17 @@ def _glob(data: dict) -> str:
         if len(matches) >= limit:
             truncated = True
             break
-    return json.dumps({"ok": True, "action": "glob", "pattern": pattern,
-                       "base": str(base), "matches": matches,
-                       "count": len(matches), "truncated": truncated})
+    return json.dumps(
+        {
+            "ok": True,
+            "action": "glob",
+            "pattern": pattern,
+            "base": str(base),
+            "matches": matches,
+            "count": len(matches),
+            "truncated": truncated,
+        }
+    )
 
 
 def _grep(data: dict) -> str:
@@ -118,8 +125,7 @@ def _grep(data: dict) -> str:
     limit = _max_results(data)
     matches: list[dict[str, Any]] = []
     truncated = False
-    files = [base] if base.is_file() else list(
-        _iter_files(base, include))
+    files = [base] if base.is_file() else list(_iter_files(base, include))
     for path in files:
         try:
             if path.stat().st_size > _MAX_FILE_BYTES:
@@ -131,16 +137,23 @@ def _grep(data: dict) -> str:
         for number, line in enumerate(text.splitlines(), 1):
             if not regex.search(line):
                 continue
-            matches.append({"path": rel, "line": number,
-                            "text": line.strip()[:_MAX_LINE_CHARS]})
+            matches.append({"path": rel, "line": number, "text": line.strip()[:_MAX_LINE_CHARS]})
             if len(matches) >= limit:
                 truncated = True
                 break
         if truncated:
             break
-    return json.dumps({"ok": True, "action": "grep", "pattern": pattern,
-                       "base": str(base), "matches": matches,
-                       "count": len(matches), "truncated": truncated})
+    return json.dumps(
+        {
+            "ok": True,
+            "action": "grep",
+            "pattern": pattern,
+            "base": str(base),
+            "matches": matches,
+            "count": len(matches),
+            "truncated": truncated,
+        }
+    )
 
 
 def search(args: dict) -> str:
@@ -151,5 +164,4 @@ def search(args: dict) -> str:
         return _glob(data)
     if action in ("grep", "search", "content"):
         return _grep(data)
-    return json.dumps({"ok": False,
-                       "error": f"bad action {action!r}: want glob|grep"})
+    return json.dumps({"ok": False, "error": f"bad action {action!r}: want glob|grep"})

@@ -18,7 +18,7 @@ Use:
     run_craft("ship login", harness=h, team="core")  # leader plans
     store = make_task_store("nebulondb")  # durable TaskStore (default: memory)
     run_craft("ship login", harness=h, team="core", store=store)
-    """
+"""
 
 from __future__ import annotations
 
@@ -42,16 +42,18 @@ def make_brain(**kwargs: Any) -> Any:
     return Brain(**kwargs)
 
 
-def make_harness(worker: Optional[str] = None,
-                 user: Any = None,
-                 workspace_root: Any = None,
-                 registry: Any = None,
-                 permissions: Any = None,
-                 approver: Any = None,
-                 workers_file: Any = None,
-                 extra_tools: Any = None,
-                 ml: Any = None,
-                 mcp: Any = None) -> Any:
+def make_harness(
+    worker: Optional[str] = None,
+    user: Any = None,
+    workspace_root: Any = None,
+    registry: Any = None,
+    permissions: Any = None,
+    approver: Any = None,
+    workers_file: Any = None,
+    extra_tools: Any = None,
+    ml: Any = None,
+    mcp: Any = None,
+) -> Any:
     """Create an ExecutionHarness bound to a worker (sandboxed tool runner).
 
     Thin factory for symmetry with make_brain(): session dir is created
@@ -64,10 +66,18 @@ def make_harness(worker: Optional[str] = None,
     """
     from nak_host.harness.engine import ExecutionHarness
 
-    return ExecutionHarness(registry=registry, workspace_root=workspace_root,
-                            user=user, permissions=permissions, worker=worker,
-                            approver=approver, workers_file=workers_file,
-                            extra_tools=extra_tools, ml=ml, mcp=mcp)
+    return ExecutionHarness(
+        registry=registry,
+        workspace_root=workspace_root,
+        user=user,
+        permissions=permissions,
+        worker=worker,
+        approver=approver,
+        workers_file=workers_file,
+        extra_tools=extra_tools,
+        ml=ml,
+        mcp=mcp,
+    )
 
 
 def new_session(user: Any = None, label: Any = None, when: Any = None) -> str:
@@ -85,14 +95,15 @@ def new_session(user: Any = None, label: Any = None, when: Any = None) -> str:
     return make_session_id(who, when=when)
 
 
-def make_registry(workers_file: Any = None, teams_file: Any = None,
-                  tools_file: Any = None,
-                  permissions_file: Any = None) -> Any:
+def make_registry(
+    workers_file: Any = None, teams_file: Any = None, tools_file: Any = None, permissions_file: Any = None
+) -> Any:
     """Create the JSON registry adapter (RegistryPort over manifests)."""
     from nak_host.adapters.registry_json import JsonRegistry
 
-    return JsonRegistry(workers_file=workers_file, teams_file=teams_file,
-                        tools_file=tools_file, permissions_file=permissions_file)
+    return JsonRegistry(
+        workers_file=workers_file, teams_file=teams_file, tools_file=tools_file, permissions_file=permissions_file
+    )
 
 
 def make_memory(brain: Any = None, user: Any = None) -> Any:
@@ -102,8 +113,7 @@ def make_memory(brain: Any = None, user: Any = None) -> Any:
     return NebulonMemory(brain=brain, user=user)
 
 
-def make_executor(harness: Any = None, worker: Any = None,
-                  **kwargs: Any) -> Any:
+def make_executor(harness: Any = None, worker: Any = None, **kwargs: Any) -> Any:
     """Create the harness executor (ToolExecutorPort over a harness).
 
     Pass a built harness, or a worker name (+ make_harness kwargs) to build
@@ -116,16 +126,26 @@ def make_executor(harness: Any = None, worker: Any = None,
     return HarnessExecutor(harness)
 
 
-def call_worker(name: str, goal: str, *, store: Any = None,
-                approver: Any = None, workspace: str = "",
-                max_steps: int = CALL_DEFAULT_MAX_STEPS,
-                timeout: int = CALL_DEFAULT_TIMEOUT,
-                allowed_tools: Any = None, registry: Any = None,
-                harness_kwargs: Any = None, on_event: Any = None,
-                max_calls_per_turn: Any = None, obs_chars: Any = None,
-                history_keep: Any = None, max_stalls: Any = None,
-                auto_steps: Any = None,
-                **kwargs: Any) -> Any:
+def call_worker(
+    name: str,
+    goal: str,
+    *,
+    store: Any = None,
+    approver: Any = None,
+    workspace: str = "",
+    max_steps: int = CALL_DEFAULT_MAX_STEPS,
+    timeout: int = CALL_DEFAULT_TIMEOUT,
+    allowed_tools: Any = None,
+    registry: Any = None,
+    harness_kwargs: Any = None,
+    on_event: Any = None,
+    max_calls_per_turn: Any = None,
+    obs_chars: Any = None,
+    history_keep: Any = None,
+    max_stalls: Any = None,
+    auto_steps: Any = None,
+    **kwargs: Any,
+) -> Any:
     """Call one named worker on one task (depth-1 delegation).
 
     Convenience over nak_host.application.call_worker with real factories: a fresh
@@ -138,19 +158,28 @@ def call_worker(name: str, goal: str, *, store: Any = None,
 
     _ = kwargs
     return _app_call(
-        name, goal, store=_default_store(store),
+        name,
+        goal,
+        store=_default_store(store),
         worker_factory=lambda n, b: make_worker(n, brain=b),
         brain_factory=make_brain,
         harness_factory=lambda **k: make_harness(**k),
         executor_factory=lambda h: make_executor(harness=h),
         memory_factory=lambda b: make_memory(brain=b),
         registry=registry or make_registry(),
-        approver=approver, workspace=workspace, max_steps=max_steps,
-        timeout=timeout, allowed_tools=frozenset(allowed_tools or ()),
-        harness_kwargs=harness_kwargs, on_event=on_event,
-        max_calls_per_turn=max_calls_per_turn, obs_chars=obs_chars,
-        history_keep=history_keep, max_stalls=max_stalls,
-        auto_steps=auto_steps)
+        approver=approver,
+        workspace=workspace,
+        max_steps=max_steps,
+        timeout=timeout,
+        allowed_tools=frozenset(allowed_tools or ()),
+        harness_kwargs=harness_kwargs,
+        on_event=on_event,
+        max_calls_per_turn=max_calls_per_turn,
+        obs_chars=obs_chars,
+        history_keep=history_keep,
+        max_stalls=max_stalls,
+        auto_steps=auto_steps,
+    )
 
 
 def _workers_loader(workers_file: Any = None) -> Callable[[], List[Dict[str, Any]]]:
@@ -174,9 +203,9 @@ def _tools_loader(engine: Any = None, registry: Any = None) -> Callable[[], List
         try:
             from nak_host.adapters.registry_json import JsonRegistry
 
-            names = [str(e.get("name", "")).strip()
-                     for e in JsonRegistry(tools_file=registry).tools()
-                     if isinstance(e, dict)]
+            names = [
+                str(e.get("name", "")).strip() for e in JsonRegistry(tools_file=registry).tools() if isinstance(e, dict)
+            ]
             names = [n for n in names if n]
             if names:
                 return names
@@ -215,9 +244,15 @@ def _mark_step(line: str, label: str) -> str:
     return f"{body} [{label}]" if label and label not in body else body
 
 
-def _apply_decisions(goal: str, answer: str, cfg: Dict[str, Any], worker: Any,
-                     candidates: List[str], session_id: Optional[str],
-                     force_parallel: Optional[bool] = None) -> tuple:
+def _apply_decisions(
+    goal: str,
+    answer: str,
+    cfg: Dict[str, Any],
+    worker: Any,
+    candidates: List[str],
+    session_id: Optional[str],
+    force_parallel: Optional[bool] = None,
+) -> tuple:
     """Route plan steps through worker.route() and rewrite [worker=] tags.
 
     tags_win: existing tags are untouched; decisions fill untagged steps.
@@ -232,11 +267,17 @@ def _apply_decisions(goal: str, answer: str, cfg: Dict[str, Any], worker: Any,
     from nak_host.decision import decide_many
 
     try:
-        if callable(getattr(worker, "decision_enabled", None)) \
-                and not worker.decision_enabled():
-            return answer, [], {"scope": cfg.get("scope"), "mode": cfg.get("mode"),
-                                "status": "disabled (worker decision off)",
-                                "items": []}
+        if callable(getattr(worker, "decision_enabled", None)) and not worker.decision_enabled():
+            return (
+                answer,
+                [],
+                {
+                    "scope": cfg.get("scope"),
+                    "mode": cfg.get("mode"),
+                    "status": "disabled (worker decision off)",
+                    "items": [],
+                },
+            )
     except Exception:
         pass
     lines = str(answer or "").splitlines()
@@ -247,18 +288,26 @@ def _apply_decisions(goal: str, answer: str, cfg: Dict[str, Any], worker: Any,
             continue
         body = m.group(2)
         tag = _ASSIGN_TAG.search(body)
-        rows.append({"line": idx, "num": m.group(1).strip().rstrip(".)"),
-                     "prefix": m.group(1), "body": body,
-                     "text": _ASSIGN_TAG.sub("", body).strip(),
-                     "tag": tag.group(1).strip() if tag else ""})
+        rows.append(
+            {
+                "line": idx,
+                "num": m.group(1).strip().rstrip(".)"),
+                "prefix": m.group(1),
+                "body": body,
+                "text": _ASSIGN_TAG.sub("", body).strip(),
+                "tag": tag.group(1).strip() if tag else "",
+            }
+        )
     if not rows:
-        return answer, [], {"scope": cfg.get("scope"), "mode": cfg.get("mode"),
-                            "status": "no numbered steps", "items": []}
+        return (
+            answer,
+            [],
+            {"scope": cfg.get("scope"), "mode": cfg.get("mode"), "status": "no numbered steps", "items": []},
+        )
 
     mode = str(cfg.get("mode", "auto")).lower()
     entry_dec = (getattr(worker, "entry", {}) or {}).get("decision")
-    endpoint = str((entry_dec or {}).get("endpoint", "") or "").strip() \
-        if isinstance(entry_dec, dict) else ""
+    endpoint = str((entry_dec or {}).get("endpoint", "") or "").strip() if isinstance(entry_dec, dict) else ""
     use_llm = mode == "llm" or (mode == "auto" and not endpoint)
     # Precedence: explicit call override > worker capability > craft policy.
     parallel = bool(cfg.get("parallel", True))
@@ -276,19 +325,30 @@ def _apply_decisions(goal: str, answer: str, cfg: Dict[str, Any], worker: Any,
     except (TypeError, ValueError):
         cap = 1
 
-    pending = [r for r in rows
-               if not (cfg.get("assignment") == "tags_win" and r["tag"])]
+    pending = [r for r in rows if not (cfg.get("assignment") == "tags_win" and r["tag"])]
     if not pending:
-        return answer, [], {"scope": cfg.get("scope"), "mode": mode,
-                            "status": "tags only (no decisions needed)", "items": []}
+        return (
+            answer,
+            [],
+            {"scope": cfg.get("scope"), "mode": mode, "status": "tags only (no decisions needed)", "items": []},
+        )
     if not candidates:
         for r in pending:
             lines[r["line"]] = _mark_step(lines[r["line"]], "decision-blocked")
-        items = [{"step": r["num"], "worker": "", "source": "decision",
-                  "reason": "no candidate workers"} for r in pending]
-        return "\n".join(lines), items, {
-            "scope": cfg.get("scope"), "mode": mode, "status": "blocked",
-            "items": items, "blocked": [r["num"] for r in pending]}
+        items = [
+            {"step": r["num"], "worker": "", "source": "decision", "reason": "no candidate workers"} for r in pending
+        ]
+        return (
+            "\n".join(lines),
+            items,
+            {
+                "scope": cfg.get("scope"),
+                "mode": mode,
+                "status": "blocked",
+                "items": items,
+                "blocked": [r["num"] for r in pending],
+            },
+        )
 
     context = None
     try:
@@ -299,17 +359,15 @@ def _apply_decisions(goal: str, answer: str, cfg: Dict[str, Any], worker: Any,
     if cfg.get("scope") == "once":
         requests = [{"id": "once", "key": "once", "goal": goal}]
     else:
-        requests = [{"id": f"step-{i}", "key": f"step:{r['text']}",
-                     "goal": f"{goal}\nStep: {r['text']}"}
-                    for i, r in enumerate(pending)]
+        requests = [
+            {"id": f"step-{i}", "key": f"step:{r['text']}", "goal": f"{goal}\nStep: {r['text']}"}
+            for i, r in enumerate(pending)
+        ]
 
     def _call(request: Dict[str, Any]) -> Dict[str, Any]:
-        return worker.route(request["goal"], workers=candidates,
-                            context=context, llm=use_llm,
-                            session_id=session_id)
+        return worker.route(request["goal"], workers=candidates, context=context, llm=use_llm, session_id=session_id)
 
-    results = decide_many(requests, _call, max_parallel=cap,
-                          timeout=cfg.get("timeout"))
+    results = decide_many(requests, _call, max_parallel=cap, timeout=cfg.get("timeout"))
     by_id = {str(r.get("id", "")): r for r in results}
     on_error = str(cfg.get("on_error", "block")).lower()
     label = "decision-needs-input" if on_error == "ask" else "decision-blocked"
@@ -333,16 +391,30 @@ def _apply_decisions(goal: str, answer: str, cfg: Dict[str, Any], worker: Any,
             blocked.append(row["num"])
             name, source = "", "decision"
             reason = reason or "decision failed (no worker chosen)"
-        items.append({"step": row["num"], "worker": name, "source": source,
-                      "reason": reason,
-                      "decision": (res or {}).get("decision")})
+        items.append(
+            {
+                "step": row["num"],
+                "worker": name,
+                "source": source,
+                "reason": reason,
+                "decision": (res or {}).get("decision"),
+            }
+        )
 
-    status = ("parallel" if parallel and len(requests) > 1 else "serial")
+    status = "parallel" if parallel and len(requests) > 1 else "serial"
     status += f", {len(requests)} call(s), {len(blocked)} blocked"
-    return "\n".join(lines), items, {
-        "scope": cfg.get("scope"), "mode": mode, "status": status,
-        "parallel": bool(parallel and len(requests) > 1 and cap > 1),
-        "items": items, "blocked": blocked}
+    return (
+        "\n".join(lines),
+        items,
+        {
+            "scope": cfg.get("scope"),
+            "mode": mode,
+            "status": status,
+            "parallel": bool(parallel and len(requests) > 1 and cap > 1),
+            "items": items,
+            "blocked": blocked,
+        },
+    )
 
 
 def decide(
@@ -558,10 +630,14 @@ def make_task_store(backend: str = STORE_DEFAULT_BACKEND, **kwargs: Any) -> Any:
         # Natural kwarg names (base_url/user/...) alias their ndb_* settings.
         eff = dict(kwargs)
         for natural, canonical in (
-                ("base_url", "ndb_base_url"), ("user", "ndb_user"),
-                ("password", "ndb_password"), ("corpus", "ndb_corpus"),
-                ("timeout", "ndb_timeout"), ("max_retries", "ndb_max_retries"),
-                ("retry_backoff", "ndb_retry_backoff")):
+            ("base_url", "ndb_base_url"),
+            ("user", "ndb_user"),
+            ("password", "ndb_password"),
+            ("corpus", "ndb_corpus"),
+            ("timeout", "ndb_timeout"),
+            ("max_retries", "ndb_max_retries"),
+            ("retry_backoff", "ndb_retry_backoff"),
+        ):
             if eff.get(natural) not in (None, "") and eff.get(canonical) in (None, ""):
                 eff[canonical] = eff[natural]
 
@@ -572,8 +648,7 @@ def make_task_store(backend: str = STORE_DEFAULT_BACKEND, **kwargs: Any) -> Any:
 
         resolve = kwargs.get("resolve_from_mind")
         if resolve is None:
-            resolve = getattr(settings, "resolve_from_mind", True) \
-                if settings is not None else True
+            resolve = getattr(settings, "resolve_from_mind", True) if settings is not None else True
         base_url = str(_pick("ndb_base_url", DEFAULT_NDB_BASE_URL) or "").strip()
         if base_url == DEFAULT_NDB_BASE_URL:
             base_url = ""  # default-valued means "not configured" -> resolve
@@ -583,36 +658,44 @@ def make_task_store(backend: str = STORE_DEFAULT_BACKEND, **kwargs: Any) -> Any:
         resolver = None
         if resolve:
             mind_base = kwargs.get("mind_base_url") or (
-                str(getattr(settings, "base_url", "") or "").rstrip("/")
-                if settings is not None else "")
+                str(getattr(settings, "base_url", "") or "").rstrip("/") if settings is not None else ""
+            )
             mind_token = kwargs.get("mind_auth_token") or (
-                str(getattr(settings, "auth_token", "") or "")
-                if settings is not None else "")
+                str(getattr(settings, "auth_token", "") or "") if settings is not None else ""
+            )
             mind_token = mind_token or _os.environ.get("NAK_AUTH_TOKEN", "")
             resolver = MindCredentialsResolver(
-                mind_base_url=mind_base, auth_token=mind_token,
-                timeout=_pick("ndb_timeout", 30.0))
+                mind_base_url=mind_base, auth_token=mind_token, timeout=_pick("ndb_timeout", 30.0)
+            )
         return NebulonDBTaskStore(
-            base_url=base_url, user=user, password=password,
+            base_url=base_url,
+            user=user,
+            password=password,
             corpus=_pick("ndb_corpus", "nak_tasks"),
             timeout=_pick("ndb_timeout", 30.0),
             max_retries=_pick("ndb_max_retries", 2),
             retry_backoff=_pick("ndb_retry_backoff", 1.0),
-            credentials_resolver=resolver)
+            credentials_resolver=resolver,
+        )
     raise ValueError(f"unknown task store backend {backend!r} (want memory|nebulondb)")
 
 
-def run_craft(goal: str, worker: Any = None, harness: Any = None,
-              approver: Any = None, brain_factory: Any = None,
-              factory: Any = None,
-              max_workers: Optional[int] = None,
-              team: Optional[str] = None,
-              parallel: Optional[bool] = None,
-              decision: Any = None,
-              decision_parallel: Optional[bool] = None,
-              craft: Optional[str] = None,
-              dispatch: bool = True,
-              store: Any = None) -> Dict[str, Any]:
+def run_craft(
+    goal: str,
+    worker: Any = None,
+    harness: Any = None,
+    approver: Any = None,
+    brain_factory: Any = None,
+    factory: Any = None,
+    max_workers: Optional[int] = None,
+    team: Optional[str] = None,
+    parallel: Optional[bool] = None,
+    decision: Any = None,
+    decision_parallel: Optional[bool] = None,
+    craft: Optional[str] = None,
+    dispatch: bool = True,
+    store: Any = None,
+) -> Dict[str, Any]:
     """Worker crafts a plan; approved assignments run as peer workers.
 
     Facade over nak_host.application use-cases (create_task -> plan_task ->
@@ -687,18 +770,17 @@ def run_craft(goal: str, worker: Any = None, harness: Any = None,
 
     # run_craft(goal, h, team="core"): a non-worker second positional that
     # carries the harness API is the harness, not the planner.
-    if harness is None and worker is not None and not isinstance(worker, _GW) \
-            and hasattr(worker, "start_plan"):
+    if harness is None and worker is not None and not isinstance(worker, _GW) and hasattr(worker, "start_plan"):
         worker, harness = None, worker
     if harness is None:
         raise ValueError("run_craft needs a harness")
     if worker is not None and not isinstance(worker, _GW):
         raise ValueError("worker must be a GenericWorker (build via make_worker())")
     sid = getattr(harness, "session_id", None)
-    workers_file = (getattr(worker, "_workers_file", None) if worker is not None
-                    else (getattr(harness, "workers_file", "") or None))
-    planner = (str((worker.entry or {}).get("name", "")).strip()
-               if worker is not None else "")
+    workers_file = (
+        getattr(worker, "_workers_file", None) if worker is not None else (getattr(harness, "workers_file", "") or None)
+    )
+    planner = str((worker.entry or {}).get("name", "")).strip() if worker is not None else ""
 
     def _build(name: str) -> Any:
         if callable(factory):
@@ -717,15 +799,25 @@ def run_craft(goal: str, worker: Any = None, harness: Any = None,
             worker = _build(planner)
         planner_outside = ensure_planner_allowed(team_spec, planner)
     except ValueError as exc:
-        return {"planned": False, "approved": False, "answer": "",
-                "reason": f"team error: {exc}", "session_id": sid,
-                "team": str(team or ""), "members": [], "planner": planner,
-                "planner_outside_team": False, "shared_memory": True,
-                "parallel": bool(parallel) if parallel is not None else True}
+        return {
+            "planned": False,
+            "approved": False,
+            "answer": "",
+            "reason": f"team error: {exc}",
+            "session_id": sid,
+            "team": str(team or ""),
+            "members": [],
+            "planner": planner,
+            "planner_outside_team": False,
+            "shared_memory": True,
+            "parallel": bool(parallel) if parallel is not None else True,
+        }
     share = True if team_spec is None else bool(team_spec.get("shared_memory", True))
-    run_parallel = (bool(parallel) if parallel is not None
-                    else (True if team_spec is None
-                          else bool(team_spec.get("parallel", True))))
+    run_parallel = (
+        bool(parallel)
+        if parallel is not None
+        else (True if team_spec is None else bool(team_spec.get("parallel", True)))
+    )
     meta = {
         "team": team_spec["name"] if team_spec else "",
         "members": list(team_spec["members"]) if team_spec else [],
@@ -736,8 +828,7 @@ def run_craft(goal: str, worker: Any = None, harness: Any = None,
     }
     g = str(goal or "").strip()
     if not g:
-        return {"planned": False, "approved": False, "answer": "",
-                "reason": "missing goal", "session_id": sid, **meta}
+        return {"planned": False, "approved": False, "answer": "", "reason": "missing goal", "session_id": sid, **meta}
     if store is None:
         store = _default_store(None)
     try:
@@ -746,51 +837,77 @@ def run_craft(goal: str, worker: Any = None, harness: Any = None,
         max_steps = 3
     try:
         task, run = _app_create(
-            g, store=store,
+            g,
+            store=store,
             inputs={"goal": g, "team": str(team or "")},
             workspace=getattr(harness, "session_dir", "") or sid or "default",
-            max_steps=max_steps, timeout=300)
+            max_steps=max_steps,
+            timeout=300,
+        )
     except Exception as exc:
-        return {"planned": False, "approved": False, "answer": "",
-                "reason": f"task store failed: {str(exc)[:150]}",
-                "session_id": sid, **meta}
+        return {
+            "planned": False,
+            "approved": False,
+            "answer": "",
+            "reason": f"task store failed: {str(exc)[:150]}",
+            "session_id": sid,
+            **meta,
+        }
     try:
-        known = [str(e.get("name", "")).strip()
-                 for e in _workers_loader(getattr(worker, "_workers_file", None))()]
+        known = [str(e.get("name", "")).strip() for e in _workers_loader(getattr(worker, "_workers_file", None))()]
     except Exception:
         known = []
-    candidates = (list(team_spec["members"]) if team_spec else list(known))
+    candidates = list(team_spec["members"]) if team_spec else list(known)
     candidates = [n for n in candidates if n and n != planner]
 
     def _route(answer_text: str, cands: list) -> tuple:
         cfg = _decision_config(worker, decision, craft)
         if not (cfg and cfg.get("enabled")):
             return answer_text, [], None
-        return _apply_decisions(g, answer_text, cfg, worker, cands, sid,
-                                force_parallel=decision_parallel)
+        return _apply_decisions(g, answer_text, cfg, worker, cands, sid, force_parallel=decision_parallel)
 
-    plan_out = _app_plan(task, run, store=store, planner=worker,
-                         harness=harness, approver=approver,
-                         team_spec=team_spec, candidates=candidates,
-                         known_workers=known, route_steps=_route)
+    plan_out = _app_plan(
+        task,
+        run,
+        store=store,
+        planner=worker,
+        harness=harness,
+        approver=approver,
+        team_spec=team_spec,
+        candidates=candidates,
+        known_workers=known,
+        route_steps=_route,
+    )
     run = plan_out.pop("run")
     if not plan_out.get("planned"):
         return {**plan_out, **meta}
-    assign_out = _app_assign(task, run, store=store, team_spec=team_spec,
-                             assigned=plan_out.get("assigned_workers"),
-                             planner_name=planner,
-                             splitter=split_assignments)
+    assign_out = _app_assign(
+        task,
+        run,
+        store=store,
+        team_spec=team_spec,
+        assigned=plan_out.get("assigned_workers"),
+        planner_name=planner,
+        splitter=split_assignments,
+    )
     run = assign_out.pop("run")
     out: dict[str, Any] = {
-        "planned": True, "path": plan_out.get("path"),
+        "planned": True,
+        "path": plan_out.get("path"),
         "steps": plan_out.get("steps"),
         "needs_approval": plan_out.get("needs_approval"),
         "approved": plan_out.get("approved"),
         "assigned_workers": assign_out.get("assigned_workers"),
-        "answer": plan_out.get("answer"), "triage": plan_out.get("triage"),
-        "session_id": sid, "workers": [], "runs": [], "skipped": [],
-        "blocked": assign_out.get("blocked", []), "dispatched": False,
-        "decision": plan_out.get("decision"), **meta,
+        "answer": plan_out.get("answer"),
+        "triage": plan_out.get("triage"),
+        "session_id": sid,
+        "workers": [],
+        "runs": [],
+        "skipped": [],
+        "blocked": assign_out.get("blocked", []),
+        "dispatched": False,
+        "decision": plan_out.get("decision"),
+        **meta,
     }
     # Team is part of craft: approved assignments run as peer workers.
     # No plan -> no dispatch. No "assign" craft -> _enforce_autonomy has
@@ -801,8 +918,7 @@ def run_craft(goal: str, worker: Any = None, harness: Any = None,
         return out
     answer = str(plan_out.get("answer", ""))
     try:
-        run = store.transition(task.id, run.version, TaskState.RUNNING,
-                               {"type": "task.running"})
+        run = store.transition(task.id, run.version, TaskState.RUNNING, {"type": "task.running"})
     except Exception as exc:
         out["reason"] = f"task store failed: {str(exc)[:150]}"
         return out
@@ -815,15 +931,21 @@ def run_craft(goal: str, worker: Any = None, harness: Any = None,
     # false keeps the planner's session but gives each peer its own transcript.
     dispatch_sid = sid if share else None
     try:
-        fan = run_workers(answer, allowed, goal=g, factory=_build,
-                          session_id=dispatch_sid, approver=approver,
-                          max_workers=cap, exclude=planner,
-                          parallel=run_parallel)
+        fan = run_workers(
+            answer,
+            allowed,
+            goal=g,
+            factory=_build,
+            session_id=dispatch_sid,
+            approver=approver,
+            max_workers=cap,
+            exclude=planner,
+            parallel=run_parallel,
+        )
     except Exception as exc:
         out["reason"] = f"worker dispatch failed: {str(exc)[:150]}"
         return out
-    out.update({"workers": fan["workers"], "runs": fan["runs"],
-                "skipped": fan["skipped"], "dispatched": True})
+    out.update({"workers": fan["workers"], "runs": fan["runs"], "skipped": fan["skipped"], "dispatched": True})
     # Leader/planner read access to what the team wrote (shared mode only).
     if share and sid:
         try:
@@ -837,16 +959,24 @@ def run_craft(goal: str, worker: Any = None, harness: Any = None,
         runs = list(fan["runs"])
         bad = [str(r.get("worker", "")) for r in runs if not r.get("ok")]
         status = _ResultStatus.OK if not bad else _ResultStatus.FAILED
-        store.save_result(task.id, _Result(
-            task_id=task.id, worker=planner, status=status,
-            summary=f"{len(runs)} worker(s) ran, {len(runs) - len(bad)} ok",
-            files_changed=(), commands_run=(),
-            evidence={"runs": [{"worker": str(r.get("worker", "")),
-                                "ok": bool(r.get("ok"))} for r in runs],
-                      "skipped": list(fan.get("skipped", []))},
-            blockers=tuple(bad), needs_approval=False))
-        store.append_event(task.id, {"type": "task.dispatched",
-                                     "workers": [str(r.get("worker", "")) for r in runs]})
+        store.save_result(
+            task.id,
+            _Result(
+                task_id=task.id,
+                worker=planner,
+                status=status,
+                summary=f"{len(runs)} worker(s) ran, {len(runs) - len(bad)} ok",
+                files_changed=(),
+                commands_run=(),
+                evidence={
+                    "runs": [{"worker": str(r.get("worker", "")), "ok": bool(r.get("ok"))} for r in runs],
+                    "skipped": list(fan.get("skipped", [])),
+                },
+                blockers=tuple(bad),
+                needs_approval=False,
+            ),
+        )
+        store.append_event(task.id, {"type": "task.dispatched", "workers": [str(r.get("worker", "")) for r in runs]})
     except Exception as exc:
         out["reason"] = f"task store failed: {str(exc)[:150]}"
     return out

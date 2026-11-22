@@ -1,0 +1,16 @@
+{
+  "teams": [
+    {
+      "name": "core",
+      "description": "default build crew",
+      "leader": "vizhi",
+      "created_by": "sathya",
+      "created_at": "2026-10-20T00:00:00Z",
+      "members": ["vizhi", "aayan", "arivu", "ezhilan", "thiran", "viyan"],
+      "shared_memory": true,
+      "parallel": true,
+      "max_workers": 6,
+      "planner_must_be_member": false
+    }
+  ]
+}

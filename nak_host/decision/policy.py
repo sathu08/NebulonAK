@@ -67,12 +67,14 @@ def evaluate(
     pol = normalize_policy(policy)
     reasons: List[str] = []
     if not pol.get("enabled", True):
-        return {"action": "chat", "allowed": True,
-                "reasons": ["policy disabled"], "policy": pol}
+        return {"action": "chat", "allowed": True, "reasons": ["policy disabled"], "policy": pol}
     if not isinstance(triage, dict) or not triage:
-        return {"action": "escalate", "allowed": False,
-                "reasons": ["empty triage (laya fallback) — human check"],
-                "policy": pol}
+        return {
+            "action": "escalate",
+            "allowed": False,
+            "reasons": ["empty triage (laya fallback) — human check"],
+            "policy": pol,
+        }
 
     # 1. explicit needs_clarification from laya.
     if pol.get("clarify_on_needs_clarification", True) and triage.get("needs_clarification") is True:

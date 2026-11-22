@@ -11,6 +11,7 @@ P2 — correctness/robustness:
   * shared doc bounded by WORKER_SESSION_DOC_MAX_TURNS
   * cross-process (flock) merge guard on top of the thread lock
 """
+
 import json
 import threading
 import time
@@ -53,15 +54,13 @@ class PersistentBrain:
         return {"chat": {"id": chat_id, "messages": list(self.docs[chat_id])}}
 
     def chat(self, prompt, messages=None, session_id=None):
-        self.chat_calls.append({"prompt": prompt, "messages": messages,
-                                "session_id": session_id})
+        self.chat_calls.append({"prompt": prompt, "messages": messages, "session_id": session_id})
         return {"answer": self.answer}
 
 
 class CountingBrain(PersistentBrain):
     def chat(self, prompt, messages=None, session_id=None):
-        self.chat_calls.append({"prompt": prompt, "messages": messages,
-                                "session_id": session_id})
+        self.chat_calls.append({"prompt": prompt, "messages": messages, "session_id": session_id})
         return {"answer": f"ans{len(self.chat_calls)}"}
 
 
@@ -77,6 +76,7 @@ def vizhi(brain):
 
 # ---------- P1: context budget ----------
 
+
 def test_context_budget_keeps_newest_drops_oldest(monkeypatch):
     monkeypatch.setattr(memory_mod, "WORKER_SESSION_CONTEXT_CHARS", 120)
     brain = PersistentBrain(answer="echo")
@@ -86,8 +86,8 @@ def test_context_budget_keeps_newest_drops_oldest(monkeypatch):
     rep = w.session_report("t")
     inj = rep["injected"]
     assert inj is not None
-    assert "msg-5" in inj          # newest survives
-    assert "msg-0" not in inj      # oldest dropped once budget spent
+    assert "msg-5" in inj  # newest survives
+    assert "msg-0" not in inj  # oldest dropped once budget spent
     assert rep["injected_chars"] <= 120 + 40  # header + one line slack
 
 
@@ -102,6 +102,7 @@ def test_context_budget_zero_keeps_turn_cap_only(monkeypatch):
 
 
 # ---------- P1: session_report visibility ----------
+
 
 def test_session_report_lists_turns_and_injection(vizhi, brain):
     brain.docs["team"] = [
@@ -145,6 +146,7 @@ def test_cli_session_report(monkeypatch, capsys):
 
 # ---------- P2: doc bound ----------
 
+
 def test_doc_is_trimmed_to_max_turns(monkeypatch):
     monkeypatch.setattr(memory_mod, "WORKER_SESSION_DOC_MAX_TURNS", 6)
     brain = CountingBrain()
@@ -152,12 +154,13 @@ def test_doc_is_trimmed_to_max_turns(monkeypatch):
     for i in range(5):
         w.chat(f"turn-{i}", session_id="t")
     doc = brain.docs["t"]
-    assert len(doc) == 6                       # bounded
-    assert doc[-1]["content"] == "ans5"        # newest kept
+    assert len(doc) == 6  # bounded
+    assert doc[-1]["content"] == "ans5"  # newest kept
     assert all("turn-0" != m["content"] for m in doc)  # oldest trimmed
 
 
 # ---------- P2: cross-process merge guard ----------
+
 
 def test_merge_guard_serializes_threads():
     state = {"inside": 0, "max": 0}
@@ -192,6 +195,7 @@ def test_file_lock_off_is_noop(monkeypatch):
 
 
 # ---------- P3: read-back verification ----------
+
 
 def test_merge_verifies_saved_turn(monkeypatch):
     monkeypatch.setattr(memory_mod, "WORKER_SESSION_SAVE_RETRIES", 2)
@@ -253,6 +257,7 @@ def test_merge_reports_unverified_when_readback_never_settles(monkeypatch):
 
 # ---------- P1 (opt-in): durable Mind session promotion ----------
 
+
 class SessionBrain(PersistentBrain):
     """PersistentBrain + Mind session APIs (create/list/get)."""
 
@@ -264,8 +269,7 @@ class SessionBrain(PersistentBrain):
     def create_session(self, metadata=None, user=None):
         self._n += 1
         mid = f"mind{self._n}"
-        self.mind_sessions[mid] = {"session_id": mid, "status": "active",
-                                   "metadata": dict(metadata or {})}
+        self.mind_sessions[mid] = {"session_id": mid, "status": "active", "metadata": dict(metadata or {})}
         return dict(self.mind_sessions[mid])
 
     def list_sessions(self, user=None):
@@ -283,7 +287,7 @@ def test_promotion_off_creates_nothing(monkeypatch):
     brain = SessionBrain()
     w = GenericWorker("vizhi", brain=brain)
     out = w.chat("hi", session_id="harness_key")
-    assert brain.mind_sessions == {}                      # nothing promoted
+    assert brain.mind_sessions == {}  # nothing promoted
     assert all(c["session_id"] is None for c in brain.chat_calls)  # client-owned
     assert out["memory"]["merged"] is True
 
@@ -297,9 +301,9 @@ def test_promotion_creates_and_forwards_mind_session(monkeypatch):
     (mid,) = brain.mind_sessions
     assert brain.mind_sessions[mid]["metadata"]["harness_session"] == "harness_key"
     assert [c["session_id"] for c in brain.chat_calls] == [mid]  # forwarded
-    assert out["memory"]["session_id"] == "harness_key"          # shared key stays
-    assert out["memory"]["merged"] is True                       # mirror maintained
-    assert brain.docs["harness_key"][0]["content"] == "hi"       # shared doc written
+    assert out["memory"]["session_id"] == "harness_key"  # shared key stays
+    assert out["memory"]["merged"] is True  # mirror maintained
+    assert brain.docs["harness_key"][0]["content"] == "hi"  # shared doc written
 
 
 def test_promotion_reuses_existing_mapping(monkeypatch):
@@ -325,10 +329,9 @@ def test_promotion_falls_back_without_session_apis(monkeypatch):
 
 def test_ensure_mind_session_accepts_live_harness_key(monkeypatch):
     brain = SessionBrain()
-    brain.mind_sessions["live"] = {"session_id": "live", "status": "active",
-                                   "metadata": {}}
+    brain.mind_sessions["live"] = {"session_id": "live", "status": "active", "metadata": {}}
     w = GenericWorker("vizhi", brain=brain)
-    assert w.ensure_mind_session("live") == "live"      # already a Mind session
+    assert w.ensure_mind_session("live") == "live"  # already a Mind session
     assert w.ensure_mind_session("") is None
     assert GenericWorker("vizhi").ensure_mind_session("x") is None  # no brain
 
@@ -338,6 +341,7 @@ def test_concurrent_processes_style_merge_loses_no_turns(tmp_path, monkeypatch):
 
     class Shared:
         """Simulates a slower-IPC store; guard must keep writes ordered."""
+
         def __init__(self):
             self.docs = {}
 
@@ -350,6 +354,7 @@ def test_concurrent_processes_style_merge_loses_no_turns(tmp_path, monkeypatch):
             self.docs[doc["id"]] = [dict(m) for m in doc["messages"]]
 
     shared = Shared()
+
     # Each thread carries its own read/modify/write through the guard.
     def run(tag):
         for i in range(8):
@@ -358,8 +363,7 @@ def test_concurrent_processes_style_merge_loses_no_turns(tmp_path, monkeypatch):
                     existing = shared.get_chat("race")["chat"]["messages"]
                 except ValueError:
                     existing = []
-                existing += [{"role": "user", "content": f"{tag}{i}"},
-                             {"role": "assistant", "content": "ok"}]
+                existing += [{"role": "user", "content": f"{tag}{i}"}, {"role": "assistant", "content": "ok"}]
                 shared.save_chat({"id": "race", "messages": existing})
 
     threads = [threading.Thread(target=run, args=(t,)) for t in ("a", "b")]
@@ -368,5 +372,4 @@ def test_concurrent_processes_style_merge_loses_no_turns(tmp_path, monkeypatch):
     for t in threads:
         t.join()
     users = [m["content"] for m in shared.docs["race"] if m["role"] == "user"]
-    assert sorted(users) == sorted([f"a{i}" for i in range(8)]
-                                   + [f"b{i}" for i in range(8)])
+    assert sorted(users) == sorted([f"a{i}" for i in range(8)] + [f"b{i}" for i in range(8)])

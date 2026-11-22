@@ -64,10 +64,16 @@ class NDBAuthError(NDBError):
 class _NDBClient:
     """Minimal NebulonDB HTTP client (Basic auth + retries, no other deps)."""
 
-    def __init__(self, base_url: str, user: str, password: str,
-                 timeout: float = 30.0, max_retries: int = 2,
-                 retry_backoff: float = 1.0,
-                 on_unauthorized: Any = None) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        user: str,
+        password: str,
+        timeout: float = 30.0,
+        max_retries: int = 2,
+        retry_backoff: float = 1.0,
+        on_unauthorized: Any = None,
+    ) -> None:
         self._base = str(base_url or "").rstrip("/")
         self._auth = HTTPBasicAuth(str(user or ""), str(password or ""))
         self._timeout = float(timeout) if float(timeout) > 0 else 30.0
@@ -96,8 +102,7 @@ class _NDBClient:
         reauthed = False
         for i in range(tries):
             try:
-                resp = requests.post(url, json=payload, auth=self._auth,
-                                     timeout=self._timeout)
+                resp = requests.post(url, json=payload, auth=self._auth, timeout=self._timeout)
             except (requests.Timeout, requests.ConnectionError) as exc:
                 last = exc
             else:
@@ -106,8 +111,7 @@ class _NDBClient:
                         reauthed = True
                         self._on_unauthorized()
                         continue
-                    raise NDBAuthError(
-                        "nebulondb authentication failed (check user/password)")
+                    raise NDBAuthError("nebulondb authentication failed (check user/password)")
                 if resp.status_code in _TRANSIENT_HTTP:
                     last = RuntimeError(f"HTTP {resp.status_code}")
                 elif resp.status_code >= 400:
@@ -117,10 +121,9 @@ class _NDBClient:
                         body = resp.json()
                     except ValueError as exc:
                         raise NDBError("nebulondb returned non-JSON") from exc
-                    return body if isinstance(body, dict) else {"success": False,
-                                                                "message": "bad envelope"}
+                    return body if isinstance(body, dict) else {"success": False, "message": "bad envelope"}
             if i + 1 < tries:
-                time.sleep(self._backoff * (2 ** i))
+                time.sleep(self._backoff * (2**i))
         raise NDBError(f"nebulondb request failed after {tries} tries: {last}")
 
 
@@ -160,9 +163,14 @@ def _load(raw: Any, fallback: Any) -> Any:
 def _block_to_json(block: BlockReason | None) -> str:
     if block is None:
         return ""
-    return _dump({"code": block.code, "detail": block.detail,
-                  "resumable": bool(block.resumable),
-                  "recovery": _jsonable(dict(block.recovery))})
+    return _dump(
+        {
+            "code": block.code,
+            "detail": block.detail,
+            "resumable": bool(block.resumable),
+            "recovery": _jsonable(dict(block.recovery)),
+        }
+    )
 
 
 def _block_from_json(raw: Any) -> BlockReason | None:
@@ -170,9 +178,12 @@ def _block_from_json(raw: Any) -> BlockReason | None:
     if not isinstance(data, dict):
         return None
     try:
-        return BlockReason(code=str(data.get("code", "")), detail=str(data.get("detail", "")),
-                           resumable=bool(data.get("resumable", False)),
-                           recovery=data.get("recovery") or {})
+        return BlockReason(
+            code=str(data.get("code", "")),
+            detail=str(data.get("detail", "")),
+            resumable=bool(data.get("resumable", False)),
+            recovery=data.get("recovery") or {},
+        )
     except Exception:
         return None
 
@@ -180,13 +191,18 @@ def _block_from_json(raw: Any) -> BlockReason | None:
 def _result_to_json(result: Result | None) -> str:
     if result is None:
         return ""
-    return _dump({"worker": result.worker, "status": result.status.value,
-                  "summary": result.summary,
-                  "files_changed": list(result.files_changed),
-                  "commands_run": list(result.commands_run),
-                  "evidence": _jsonable(dict(result.evidence)),
-                  "blockers": list(result.blockers),
-                  "needs_approval": bool(result.needs_approval)})
+    return _dump(
+        {
+            "worker": result.worker,
+            "status": result.status.value,
+            "summary": result.summary,
+            "files_changed": list(result.files_changed),
+            "commands_run": list(result.commands_run),
+            "evidence": _jsonable(dict(result.evidence)),
+            "blockers": list(result.blockers),
+            "needs_approval": bool(result.needs_approval),
+        }
+    )
 
 
 def _result_from_json(task_id: str, raw: Any) -> Result | None:
@@ -194,14 +210,17 @@ def _result_from_json(task_id: str, raw: Any) -> Result | None:
     if not isinstance(data, dict):
         return None
     try:
-        return Result(task_id=task_id, worker=str(data.get("worker", "")),
-                      status=ResultStatus(str(data.get("status", ""))),
-                      summary=str(data.get("summary", "")),
-                      files_changed=tuple(data.get("files_changed") or ()),
-                      commands_run=tuple(data.get("commands_run") or ()),
-                      evidence=data.get("evidence") or {},
-                      blockers=tuple(data.get("blockers") or ()),
-                      needs_approval=bool(data.get("needs_approval", False)))
+        return Result(
+            task_id=task_id,
+            worker=str(data.get("worker", "")),
+            status=ResultStatus(str(data.get("status", ""))),
+            summary=str(data.get("summary", "")),
+            files_changed=tuple(data.get("files_changed") or ()),
+            commands_run=tuple(data.get("commands_run") or ()),
+            evidence=data.get("evidence") or {},
+            blockers=tuple(data.get("blockers") or ()),
+            needs_approval=bool(data.get("needs_approval", False)),
+        )
     except Exception:
         return None
 
@@ -209,27 +228,43 @@ def _result_from_json(task_id: str, raw: Any) -> Result | None:
 class NebulonDBTaskStore:
     """Append-only TaskStorePort on NebulonDB (single writer per process)."""
 
-    def __init__(self, base_url: str = "http://localhost:6969/api/NebulonDB",
-                 user: str = "", password: str = "",
-                 corpus: str = CORPUS_DEFAULT, timeout: float = 30.0,
-                 max_retries: int = 2, retry_backoff: float = 1.0,
-                 client: Any = None, credentials_resolver: Any = None) -> None:
+    def __init__(
+        self,
+        base_url: str = "http://localhost:6969/api/NebulonDB",
+        user: str = "",
+        password: str = "",
+        corpus: str = CORPUS_DEFAULT,
+        timeout: float = 30.0,
+        max_retries: int = 2,
+        retry_backoff: float = 1.0,
+        client: Any = None,
+        credentials_resolver: Any = None,
+    ) -> None:
         # Explicit (non-empty) fields always win and are never overwritten by
         # the resolver — neither at fill time nor on 401-refresh.
-        self._explicit = {"base_url": bool(str(base_url or "").strip()),
-                          "user": bool(str(user or "").strip()),
-                          "password": bool(str(password or "").strip())}
-        self._auth_state = {"base_url": str(base_url or "").rstrip("/"),
-                            "user": str(user or ""),
-                            "password": str(password or "")}
+        self._explicit = {
+            "base_url": bool(str(base_url or "").strip()),
+            "user": bool(str(user or "").strip()),
+            "password": bool(str(password or "").strip()),
+        }
+        self._auth_state = {
+            "base_url": str(base_url or "").rstrip("/"),
+            "user": str(user or ""),
+            "password": str(password or ""),
+        }
         self._resolver = credentials_resolver
         if client is not None:
             self._client = client
         else:
             self._client = _NDBClient(
-                base_url, user, password, timeout=timeout,
-                max_retries=max_retries, retry_backoff=retry_backoff,
-                on_unauthorized=self._reauth if credentials_resolver is not None else None)
+                base_url,
+                user,
+                password,
+                timeout=timeout,
+                max_retries=max_retries,
+                retry_backoff=retry_backoff,
+                on_unauthorized=self._reauth if credentials_resolver is not None else None,
+            )
         self._corpus = str(corpus or "").strip() or CORPUS_DEFAULT
         self._lock = threading.Lock()
         self._ready = False
@@ -268,14 +303,12 @@ class NebulonDBTaskStore:
         already holds it) — only the resolver's own lock is used.
         """
         if self._resolver is None:
-            raise NDBAuthError(
-                "nebulondb authentication failed (no credentials resolver configured)")
+            raise NDBAuthError("nebulondb authentication failed (no credentials resolver configured)")
         self._apply_resolved(self._resolver.refresh())
 
     # -- transport ---------------------------------------------------- #
     def _seg_payload(self, segment: str, extra: dict[str, Any]) -> dict[str, Any]:
-        payload = {"corpus_name": self._corpus, "segment_name": segment,
-                   "ndb_type": "cosmos"}
+        payload = {"corpus_name": self._corpus, "segment_name": segment, "ndb_type": "cosmos"}
         payload.update(extra)
         return payload
 
@@ -283,21 +316,17 @@ class NebulonDBTaskStore:
         if self._ready:
             return
         self._fill_missing_locked()
-        body = self._client.post("/corpus/create_corpus",
-                                 {"corpus_name": self._corpus, "ndb_type": "cosmos"})
+        body = self._client.post("/corpus/create_corpus", {"corpus_name": self._corpus, "ndb_type": "cosmos"})
         if not body.get("success") and not body.get("exists"):
-            raise NDBError(f"cannot bootstrap corpus {self._corpus!r}: "
-                           f"{str(body.get('message', 'unknown'))[:200]}")
+            raise NDBError(f"cannot bootstrap corpus {self._corpus!r}: {str(body.get('message', 'unknown'))[:200]}")
         for seg in _SEGMENTS:
             self._cache[seg] = self._read_segment(seg)
         self._ready = True
 
     def _read_segment(self, segment: str) -> list[dict[str, Any]]:
-        body = self._client.post("/segment/get_data",
-                                 self._seg_payload(segment, {}))
+        body = self._client.post("/segment/get_data", self._seg_payload(segment, {}))
         if not body.get("success"):
-            raise NDBError(f"cannot read segment {segment!r}: "
-                           f"{str(body.get('message', 'unknown'))[:200]}")
+            raise NDBError(f"cannot read segment {segment!r}: {str(body.get('message', 'unknown'))[:200]}")
         data = body.get("data") or {}
         records = data.get("records") or []
         return [r for r in records if isinstance(r, dict)]
@@ -309,15 +338,13 @@ class NebulonDBTaskStore:
             for seg in _SEGMENTS:
                 self._cache[seg] = self._read_segment(seg)
 
-    def _insert_locked(self, segment: str, metadata: dict[str, Any],
-                       text: str) -> dict[str, Any]:
+    def _insert_locked(self, segment: str, metadata: dict[str, Any], text: str) -> dict[str, Any]:
         body = self._client.post(
             "/segment/add_records",
-            self._seg_payload(segment, {"records": [{"text": text,
-                                                     "metadata": dict(metadata)}]}))
+            self._seg_payload(segment, {"records": [{"text": text, "metadata": dict(metadata)}]}),
+        )
         if not body.get("success"):
-            raise NDBError(f"cannot insert into {segment!r}: "
-                           f"{str(body.get('message', 'unknown'))[:200]}")
+            raise NDBError(f"cannot insert into {segment!r}: {str(body.get('message', 'unknown'))[:200]}")
         data = body.get("data") or {}
         ids = data.get("record_ids") or []
         doc = dict(metadata)
@@ -338,8 +365,7 @@ class NebulonDBTaskStore:
             "max_steps": int(task.max_steps),
             "timeout": int(task.timeout),
             "allowed_tools_json": _dump(sorted(task.allowed_tools)),
-            "payload_json": _dump({"inputs": _jsonable(dict(task.inputs)),
-                                   "acceptance": list(task.acceptance)}),
+            "payload_json": _dump({"inputs": _jsonable(dict(task.inputs)), "acceptance": list(task.acceptance)}),
             "kind": "task",
         }
 
@@ -348,10 +374,15 @@ class NebulonDBTaskStore:
         return f"task {task.id}: {task.goal[:120]}"
 
     @staticmethod
-    def _run_fields(task_id: str, state: TaskState, version: int,
-                    attempt: int, assigned_worker: str | None,
-                    block: BlockReason | None,
-                    result: Result | None) -> dict[str, Any]:
+    def _run_fields(
+        task_id: str,
+        state: TaskState,
+        version: int,
+        attempt: int,
+        assigned_worker: str | None,
+        block: BlockReason | None,
+        result: Result | None,
+    ) -> dict[str, Any]:
         return {
             "task_id": task_id,
             "state": state.value,
@@ -388,8 +419,7 @@ class NebulonDBTaskStore:
             assigned_worker=assigned,
             attempt=int(doc.get("attempt", 1)),
             block_reason=_block_from_json(doc.get("block_json")),
-            result=_result_from_json(str(doc.get("task_id", "")),
-                                     doc.get("result_json")),
+            result=_result_from_json(str(doc.get("task_id", "")), doc.get("result_json")),
         )
 
     # -- cache queries (lock held) ------------------------------------ #
@@ -406,37 +436,37 @@ class NebulonDBTaskStore:
         return None
 
     def _runs_for(self, task_id: str) -> list[dict[str, Any]]:
-        docs = [d for d in self._cache[SEG_RUNS]
-                if str(d.get("task_id", "")) == task_id]
+        docs = [d for d in self._cache[SEG_RUNS] if str(d.get("task_id", "")) == task_id]
         docs.sort(key=lambda d: int(d.get("version", 0)))
         return docs
 
     def _events_for(self, task_id: str) -> list[dict[str, Any]]:
-        docs = [d for d in self._cache[SEG_EVENTS]
-                if str(d.get("task_id", "")) == task_id]
+        docs = [d for d in self._cache[SEG_EVENTS] if str(d.get("task_id", "")) == task_id]
         docs.sort(key=lambda d: int(d.get("seq", 0)))
         return docs
 
     def _results_for(self, task_id: str) -> list[dict[str, Any]]:
-        return [d for d in self._cache[SEG_RESULTS]
-                if str(d.get("task_id", "")) == task_id]
+        return [d for d in self._cache[SEG_RESULTS] if str(d.get("task_id", "")) == task_id]
 
     def _latest_result(self, task_id: str) -> Result | None:
         docs = self._results_for(task_id)
         if not docs:
             return None
-        best = max(docs, key=lambda d: (int(d.get("attempt", 1)),
-                                        int(d.get("_id", 0)) if isinstance(d.get("_id"), int) else 0))
+        best = max(
+            docs, key=lambda d: (int(d.get("attempt", 1)), int(d.get("_id", 0)) if isinstance(d.get("_id"), int) else 0)
+        )
         try:
             return Result(
-                task_id=task_id, worker=str(best.get("worker", "")),
+                task_id=task_id,
+                worker=str(best.get("worker", "")),
                 status=ResultStatus(str(best.get("status", ""))),
                 summary=str(best.get("summary", "")),
                 files_changed=tuple(_load(best.get("files_json"), []) or ()),
                 commands_run=tuple(_load(best.get("commands_json"), []) or ()),
                 evidence=_load(best.get("evidence_json"), {}) or {},
                 blockers=tuple(_load(best.get("blockers_json"), []) or ()),
-                needs_approval=bool(best.get("needs_approval", False)))
+                needs_approval=bool(best.get("needs_approval", False)),
+            )
         except Exception:
             return None
 
@@ -474,46 +504,59 @@ class NebulonDBTaskStore:
                 "result_json": str(run_state.get("result_json", "") or ""),
                 "kind": "run",
             }
-            self._insert_locked(SEG_RUNS, snapshot,
-                                f"run {task_id} v{version} (healed)")
+            self._insert_locked(SEG_RUNS, snapshot, f"run {task_id} v{version} (healed)")
             have.add(version)
 
     def _heal_create_locked(self, task_doc: dict[str, Any]) -> None:
         """Repair a partially written create (task doc without run/event)."""
         task_id = str(task_doc.get("task_id", ""))
         if not self._runs_for(task_id):
-            self._insert_locked(SEG_RUNS, self._run_fields(
-                task_id, TaskState.CREATED, 0, 1, None, None, None),
-                f"run {task_id} v0 created (healed)")
+            self._insert_locked(
+                SEG_RUNS,
+                self._run_fields(task_id, TaskState.CREATED, 0, 1, None, None, None),
+                f"run {task_id} v0 created (healed)",
+            )
         if not self._events_for(task_id):
-            self._insert_locked(SEG_EVENTS, {
-                "event_id": self._event_id(task_id, 1), "task_id": task_id,
-                "seq": 1, "event_type": "task.created",
-                "payload_json": _dump({"goal": str(task_doc.get("goal", ""))}),
-                "kind": "event",
-            }, f"task {task_id} created (healed)")
+            self._insert_locked(
+                SEG_EVENTS,
+                {
+                    "event_id": self._event_id(task_id, 1),
+                    "task_id": task_id,
+                    "seq": 1,
+                    "event_type": "task.created",
+                    "payload_json": _dump({"goal": str(task_doc.get("goal", ""))}),
+                    "kind": "event",
+                },
+                f"task {task_id} created (healed)",
+            )
 
     # -- TaskStorePort ------------------------------------------------ #
     def create_task(self, task: Task) -> TaskRun:
         with self._lock:
             self._ensure_locked()
             if self._find_task_doc_by_key(task.idempotency_key) is not None:
-                raise DuplicateTask(
-                    f"task with idempotency key {task.idempotency_key!r} already exists")
+                raise DuplicateTask(f"task with idempotency key {task.idempotency_key!r} already exists")
             if self._find_task_doc(task.id) is not None:
                 raise DuplicateTask(f"task {task.id!r} already exists")
-            self._insert_locked(SEG_TASKS, self._task_doc(task),
-                                self._task_text(task))
-            self._insert_locked(SEG_RUNS, self._run_fields(
-                task.id, TaskState.CREATED, 0, 1, None, None, None),
-                f"run {task.id} v0 created")
-            self._insert_locked(SEG_EVENTS, {
-                "event_id": self._event_id(task.id, 1), "task_id": task.id,
-                "seq": 1, "event_type": "task.created",
-                "payload_json": _dump({"goal": task.goal}), "kind": "event",
-            }, f"task {task.id} created")
-            return TaskRun(task_id=task.id, state=TaskState.CREATED,
-                           version=0, assigned_worker=None, attempt=1)
+            self._insert_locked(SEG_TASKS, self._task_doc(task), self._task_text(task))
+            self._insert_locked(
+                SEG_RUNS,
+                self._run_fields(task.id, TaskState.CREATED, 0, 1, None, None, None),
+                f"run {task.id} v0 created",
+            )
+            self._insert_locked(
+                SEG_EVENTS,
+                {
+                    "event_id": self._event_id(task.id, 1),
+                    "task_id": task.id,
+                    "seq": 1,
+                    "event_type": "task.created",
+                    "payload_json": _dump({"goal": task.goal}),
+                    "kind": "event",
+                },
+                f"task {task.id} created",
+            )
+            return TaskRun(task_id=task.id, state=TaskState.CREATED, version=0, assigned_worker=None, attempt=1)
 
     def get_task(self, task_id: str) -> tuple[Task, TaskRun] | None:
         with self._lock:
@@ -530,11 +573,15 @@ class NebulonDBTaskStore:
             if run.result is None:
                 latest = self._latest_result(task_id)
                 if latest is not None:
-                    run = TaskRun(task_id=run.task_id, state=run.state,
-                                  version=run.version,
-                                  assigned_worker=run.assigned_worker,
-                                  attempt=run.attempt,
-                                  block_reason=run.block_reason, result=latest)
+                    run = TaskRun(
+                        task_id=run.task_id,
+                        state=run.state,
+                        version=run.version,
+                        assigned_worker=run.assigned_worker,
+                        attempt=run.attempt,
+                        block_reason=run.block_reason,
+                        result=latest,
+                    )
             return self._task_from_doc(doc), run
 
     def get_task_by_idempotency(self, idempotency_key: str) -> tuple[Task, TaskRun] | None:
@@ -574,15 +621,22 @@ class NebulonDBTaskStore:
             seq = len(self._events_for(task_id)) + 1
             payload = dict(event)
             event_type = str(payload.pop("type", "task.event"))
-            self._insert_locked(SEG_EVENTS, {
-                "event_id": self._event_id(task_id, seq), "task_id": task_id,
-                "seq": seq, "event_type": event_type,
-                "payload_json": _dump(_jsonable(payload)), "kind": "event",
-            }, f"task {task_id} event {event_type}")
+            self._insert_locked(
+                SEG_EVENTS,
+                {
+                    "event_id": self._event_id(task_id, seq),
+                    "task_id": task_id,
+                    "seq": seq,
+                    "event_type": event_type,
+                    "payload_json": _dump(_jsonable(payload)),
+                    "kind": "event",
+                },
+                f"task {task_id} event {event_type}",
+            )
 
-    def transition(self, task_id: str, expected_version: int,
-                   to_state: TaskState, event: dict[str, Any],
-                   **fields: Any) -> TaskRun:
+    def transition(
+        self, task_id: str, expected_version: int, to_state: TaskState, event: dict[str, Any], **fields: Any
+    ) -> TaskRun:
         unknown = [k for k in fields if k not in _RUN_FIELDS]
         if unknown:
             raise ValueError(f"unknown run fields: {unknown}")
@@ -601,39 +655,54 @@ class NebulonDBTaskStore:
                 raise TaskNotFound(f"task {task_id!r} has no run snapshots")
             current = self._run_from_doc(snaps[-1])
             if current.version != int(expected_version):
-                raise ConcurrencyError(task_id, int(expected_version),
-                                       current.version)
+                raise ConcurrencyError(task_id, int(expected_version), current.version)
             ensure_transition(task_id, current.state, to_state)
             assigned = fields.get("assigned_worker", current.assigned_worker)
             attempt = int(fields.get("attempt", current.attempt))
             block = fields.get("block_reason", current.block_reason)
             result = fields.get("result", current.result)
             version = current.version + 1
-            payload = {"from_state": current.state.value,
-                       "to_state": to_state.value, "version": version,
-                       "attempt": attempt,
-                       "assigned_worker": assigned or "",
-                       "block_json": _block_to_json(block),
-                       "result_json": _result_to_json(result)}
+            payload = {
+                "from_state": current.state.value,
+                "to_state": to_state.value,
+                "version": version,
+                "attempt": attempt,
+                "assigned_worker": assigned or "",
+                "block_json": _block_to_json(block),
+                "result_json": _result_to_json(result),
+            }
             merged = dict(event)
             merged_type = str(merged.pop("type", "task.state_changed"))
             seq = len(self._events_for(task_id)) + 1
             event_id = self._event_id(task_id, seq)
-            if any(str(e.get("event_id", "")) == event_id
-                   for e in self._events_for(task_id)):
+            if any(str(e.get("event_id", "")) == event_id for e in self._events_for(task_id)):
                 return current  # idempotent replay: already applied
-            self._insert_locked(SEG_EVENTS, {
-                "event_id": event_id, "task_id": task_id, "seq": seq,
-                "event_type": merged_type,
-                "payload_json": _dump({**_jsonable(merged), "run": payload}),
-                "kind": "event",
-            }, f"task {task_id} {current.state.value}->{to_state.value}")
-            self._insert_locked(SEG_RUNS, self._run_fields(
-                task_id, to_state, version, attempt, assigned, block, result),
-                f"run {task_id} v{version} {to_state.value}")
-            return TaskRun(task_id=task_id, state=to_state, version=version,
-                           assigned_worker=assigned, attempt=attempt,
-                           block_reason=block, result=result)
+            self._insert_locked(
+                SEG_EVENTS,
+                {
+                    "event_id": event_id,
+                    "task_id": task_id,
+                    "seq": seq,
+                    "event_type": merged_type,
+                    "payload_json": _dump({**_jsonable(merged), "run": payload}),
+                    "kind": "event",
+                },
+                f"task {task_id} {current.state.value}->{to_state.value}",
+            )
+            self._insert_locked(
+                SEG_RUNS,
+                self._run_fields(task_id, to_state, version, attempt, assigned, block, result),
+                f"run {task_id} v{version} {to_state.value}",
+            )
+            return TaskRun(
+                task_id=task_id,
+                state=to_state,
+                version=version,
+                assigned_worker=assigned,
+                attempt=attempt,
+                block_reason=block,
+                result=result,
+            )
 
     def save_result(self, task_id: str, result: Result) -> None:
         with self._lock:
@@ -644,19 +713,24 @@ class NebulonDBTaskStore:
             attempt = max([int(d.get("attempt", 1)) for d in snaps] or [1])
             for doc in self._results_for(task_id):
                 if int(doc.get("attempt", 1)) == attempt:
-                    raise DuplicateTask(
-                        f"result for task {task_id!r} attempt {attempt} already saved")
-            self._insert_locked(SEG_RESULTS, {
-                "task_id": task_id, "attempt": attempt,
-                "worker": result.worker, "status": result.status.value,
-                "summary": result.summary,
-                "needs_approval": bool(result.needs_approval),
-                "files_json": _dump(list(result.files_changed)),
-                "commands_json": _dump(list(result.commands_run)),
-                "evidence_json": _dump(_jsonable(dict(result.evidence))),
-                "blockers_json": _dump(list(result.blockers)),
-                "kind": "result",
-            }, f"result {task_id} attempt {attempt} {result.status.value}")
+                    raise DuplicateTask(f"result for task {task_id!r} attempt {attempt} already saved")
+            self._insert_locked(
+                SEG_RESULTS,
+                {
+                    "task_id": task_id,
+                    "attempt": attempt,
+                    "worker": result.worker,
+                    "status": result.status.value,
+                    "summary": result.summary,
+                    "needs_approval": bool(result.needs_approval),
+                    "files_json": _dump(list(result.files_changed)),
+                    "commands_json": _dump(list(result.commands_run)),
+                    "evidence_json": _dump(_jsonable(dict(result.evidence))),
+                    "blockers_json": _dump(list(result.blockers)),
+                    "kind": "result",
+                },
+                f"result {task_id} attempt {attempt} {result.status.value}",
+            )
 
     def recover_incomplete(self) -> list[TaskRun]:
         with self._lock:
@@ -668,9 +742,7 @@ class NebulonDBTaskStore:
                 if str(doc.get("state", "")) != TaskState.RUNNING.value:
                     continue
                 task_id = str(doc.get("task_id", ""))
-                latest = max(
-                    (d for d in self._runs_for(task_id)),
-                    key=lambda d: int(d.get("version", 0)))
+                latest = max((d for d in self._runs_for(task_id)), key=lambda d: int(d.get("version", 0)))
                 if latest is doc:
                     stuck.append(task_id)
         recovered = []
@@ -682,15 +754,21 @@ class NebulonDBTaskStore:
             if run.state != TaskState.RUNNING:
                 continue
             reason = BlockReason(
-                code="interrupted", detail="recovered on startup",
+                code="interrupted",
+                detail="recovered on startup",
                 resumable=False,
-                recovery={"state": TaskState.RUNNING.value,
-                          "version": run.version,
-                          "worker": run.assigned_worker or ""})
+                recovery={
+                    "state": TaskState.RUNNING.value,
+                    "version": run.version,
+                    "worker": run.assigned_worker or "",
+                },
+            )
             try:
-                recovered.append(self.transition(
-                    task_id, run.version, TaskState.BLOCKED,
-                    {"type": "task.interrupted"}, block_reason=reason))
+                recovered.append(
+                    self.transition(
+                        task_id, run.version, TaskState.BLOCKED, {"type": "task.interrupted"}, block_reason=reason
+                    )
+                )
             except (ConcurrencyError, TaskNotFound):
                 continue
         return recovered

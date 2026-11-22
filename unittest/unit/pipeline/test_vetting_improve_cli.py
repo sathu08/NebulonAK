@@ -5,7 +5,8 @@ import pipeline.vetting.cli.improve as cli
 
 def test_improve_plan_prints_json(monkeypatch, capsys):
     monkeypatch.setattr(
-        cli, "plan_improvements",
+        cli,
+        "plan_improvements",
         lambda *args, **kwargs: {"run_dir": "run", "actions": []},
     )
     code = cli.main(["plan", "run"])
@@ -16,7 +17,8 @@ def test_improve_plan_prints_json(monkeypatch, capsys):
 
 def test_improve_apply_reports_status(monkeypatch, capsys):
     monkeypatch.setattr(
-        cli, "apply_improvements",
+        cli,
+        "apply_improvements",
         lambda *args, **kwargs: {
             "status": "staged",
             "candidate_root": "cand",

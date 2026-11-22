@@ -2,70 +2,73 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>NebulonAK — Pipeline</title>
+<title>NebulonAK — Pipelines</title>
 <link rel="stylesheet" href="/assets/style.css">
 </head>
 <body>
-<nav><a href="/">Status</a><a href="pipeline">Pipeline</a><a href="settings">Settings</a></nav>
-<h1>Pipeline</h1>
+<nav><a href="/api/NebulonAK/dashboard/">Status</a><a href="/api/NebulonAK/dashboard/pipeline">Pipeline</a><a href="/api/NebulonAK/dashboard/builder">Builder</a><a href="/api/NebulonAK/dashboard/settings">Settings</a></nav>
+<h1>Pipelines</h1>
 <div id="error"></div>
-<h2>Pending tasks</h2>
-<div id="backend" class="dim"></div>
-<table id="tasks"><tr><th>Task</th><th>State</th><th>Worker</th><th>Attempt</th></tr></table>
-<h2>Vetting runs</h2>
-<div id="runsdir" class="dim"></div>
-<table id="runs"><tr><th>Stamp</th><th>Summary</th><th>Path</th></tr></table>
-<h2>Sessions</h2>
-<div id="ws" class="dim"></div>
-<table id="sessions"><tr><th>Time</th><th>Worker</th><th>Session</th><th>Event</th></tr></table>
+<h2>Definitions</h2>
+<div id="location" class="dim"></div>
+<table id="defs"><tr><th>Name</th><th>Kind</th><th>Nodes</th><th>Description</th><th>Location</th></tr></table>
+<h2>Runs <span id="runsfor" class="dim"></span></h2>
+<table id="runs"><tr><th>Stamp</th><th>Status</th><th>Worker</th><th>Summary</th></tr></table>
 <script src="/assets/api.js"></script>
 <script>
 "use strict";
 async function load() {
   try {
     banner("");
-    const t = await nakApi.tasks(20);
-    document.getElementById("backend").textContent =
-      "backend: " + (t.backend || "?") + (t.notice ? " — " + t.notice : "");
-    const tt = document.getElementById("tasks");
-    tt.querySelectorAll("tr.data").forEach(r => r.remove());
-    (t.pending || []).forEach(p => {
+    const loc = await nakApi.pipelineLocation().catch(() => ({}));
+    document.getElementById("location").textContent = loc.directory ? "folder: " + loc.directory : "";
+    const defs = await nakApi.listPipelines();
+    const dt = document.getElementById("defs");
+    dt.querySelectorAll("tr.data").forEach(r => r.remove());
+    const rows = (defs.definitions || []);
+    let firstSlug = "";
+    rows.forEach(d => {
+      if (!firstSlug && !d.builtin) firstSlug = d.slug;
       const tr = document.createElement("tr");
       tr.className = "data";
-      tr.appendChild(el("td", "mono", p.task_id));
-      tr.appendChild(el("td", null, p.state));
-      tr.appendChild(el("td", null, p.worker || "-"));
-      tr.appendChild(el("td", "mono", String(p.attempt)));
-      tt.appendChild(tr);
+      tr.appendChild(el("td", "mono", d.name || d.slug));
+      const kind = d.builtin ? "Built-in (code)" : "Builder JSON";
+      tr.appendChild(el("td", null, kind));
+      tr.appendChild(el("td", "mono", String(d.nodes != null ? d.nodes : "-")));
+      tr.appendChild(el("td", null, (d.description || "").slice(0, 120)));
+      const locTd = document.createElement("td");
+      locTd.className = "mono dim";
+      if (d.builtin) {
+        locTd.textContent = "defined in code: nak_host/flow/store.py::builtin_vetting_template — open the code to change it";
+      } else {
+        const a = document.createElement("a");
+        a.href = "/api/NebulonAK/dashboard/builder";
+        a.textContent = "pipeline/" + d.slug + "/pipeline.json — open in Builder";
+        locTd.appendChild(a);
+      }
+      tr.appendChild(locTd);
+      dt.appendChild(tr);
     });
-    const v = await nakApi.vetting(10);
-    document.getElementById("runsdir").textContent = v.runs_dir || "";
+    const slug = firstSlug || (rows[0] && rows[0].slug) || "";
+    document.getElementById("runsfor").textContent = slug ? "— " + slug : "";
     const rt = document.getElementById("runs");
     rt.querySelectorAll("tr.data").forEach(r => r.remove());
-    (v.runs || []).forEach(r => {
-      const tr = document.createElement("tr");
-      tr.className = "data";
-      tr.appendChild(el("td", "mono", r.stamp));
-      const rep = r.report ? JSON.stringify(r.report).slice(0, 160) : "(no summary)";
-      tr.appendChild(el("td", "mono", rep));
-      tr.appendChild(el("td", "mono dim", r.path));
-      rt.appendChild(tr);
-    });
-    const s = await nakApi.sessions(20);
-    document.getElementById("ws").textContent = s.workspace || "";
-    const st = document.getElementById("sessions");
-    st.querySelectorAll("tr.data").forEach(r => r.remove());
-    (s.sessions || []).slice().reverse().forEach(e => {
-      const tr = document.createElement("tr");
-      tr.className = "data";
-      tr.appendChild(el("td", "mono", (e.time || "").slice(0, 19).replace("T", " ")));
-      tr.appendChild(el("td", null, e.worker || "-"));
-      tr.appendChild(el("td", "mono", (e.session_id || "").slice(0, 32)));
-      tr.appendChild(el("td", null, e.event || "-"));
-      st.appendChild(tr);
-    });
+    if (slug) {
+      const rr = await nakApi.pipelineRuns(slug).catch(() => ({runs: []}));
+      (rr.runs || []).forEach(r => {
+        const tr = document.createElement("tr");
+        tr.className = "data";
+        tr.appendChild(el("td", "mono", r.stamp));
+        const td = document.createElement("td");
+        td.appendChild(pill(r.ok));
+        tr.appendChild(td);
+        tr.appendChild(el("td", null, r.worker || "-"));
+        tr.appendChild(el("td", "mono", (r.summary || "").slice(0, 160)));
+        rt.appendChild(tr);
+      });
+    }
   } catch (e) {
-    banner("pipeline failed: " + e.message);
+    banner("pipelines failed: " + e.message);
   }
 }
 load();

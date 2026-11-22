@@ -1,4 +1,5 @@
 """Shared-session locks + transcript helpers."""
+
 from __future__ import annotations
 
 import os
@@ -101,7 +102,7 @@ def _strip_prompt_dump(text: str) -> str:
     idx = raw.rfind(marker)
     if idx < 0:
         return raw
-    return raw[idx + len(marker):].strip()
+    return raw[idx + len(marker) :].strip()
 
 
 def _session_turns(doc: Any) -> List[Dict[str, str]]:
@@ -121,5 +122,3 @@ def _session_turns(doc: Any) -> List[Dict[str, str]]:
         if text:
             out.append({"role": role, "content": text})
     return out
-
-

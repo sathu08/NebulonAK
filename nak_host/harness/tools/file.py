@@ -35,9 +35,7 @@ from nak_host.utils.constant import (
 
 
 def _root(data: dict) -> str:
-    return (str(data.get("root", "")).strip()
-            or os.environ.get("NAK_WORKSPACE", "").strip()
-            or str(default_workspace()))
+    return str(data.get("root", "")).strip() or os.environ.get("NAK_WORKSPACE", "").strip() or str(default_workspace())
 
 
 def read_file(args: dict) -> str:
@@ -88,8 +86,7 @@ def list_directory(args: dict) -> str:
         except OSError:
             kind, size = "unknown", 0
         entries.append({"name": child.name, "type": kind, "size": size})
-    return json.dumps({"ok": True, "path": str(p), "entries": entries,
-                       "truncated": len(items) > MAX_ENTRIES})
+    return json.dumps({"ok": True, "path": str(p), "entries": entries, "truncated": len(items) > MAX_ENTRIES})
 
 
 def write_file(args: dict) -> str:
@@ -129,8 +126,7 @@ def write_file(args: dict) -> str:
         written = len(content.encode("utf-8", "ignore"))
     except (OSError, UnicodeError) as exc:
         return json.dumps({"ok": False, "error": str(exc)[:300]})
-    return json.dumps({"ok": True, "path": str(p), "bytes": written,
-                       "created": not existed, "mode": mode})
+    return json.dumps({"ok": True, "path": str(p), "bytes": written, "created": not existed, "mode": mode})
 
 
 def edit_file(args: dict) -> str:
@@ -166,16 +162,16 @@ def edit_file(args: dict) -> str:
         return json.dumps({"ok": False, "error": "old_string not found in file"})
     replace_all = bool(data.get("replace_all", False))
     if count > 1 and not replace_all:
-        return json.dumps({"ok": False,
-                           "error": f"old_string occurs {count} times; pass replace_all=true or a unique string"})
+        return json.dumps(
+            {"ok": False, "error": f"old_string occurs {count} times; pass replace_all=true or a unique string"}
+        )
     updated = text.replace(old, new) if replace_all else text.replace(old, new, 1)
     try:
         p.write_text(updated, encoding="utf-8")
         written = len(updated.encode("utf-8", "ignore"))
     except (OSError, UnicodeError) as exc:
         return json.dumps({"ok": False, "error": str(exc)[:300]})
-    return json.dumps({"ok": True, "path": str(p), "bytes": written,
-                       "replacements": count if replace_all else 1})
+    return json.dumps({"ok": True, "path": str(p), "bytes": written, "replacements": count if replace_all else 1})
 
 
 def file(args: dict) -> str:
@@ -194,8 +190,9 @@ def file(args: dict) -> str:
         return edit_file(data)
     if action in ("delete", "remove", "rm", "del"):
         return delete_file(data)
-    return json.dumps({"ok": False,
-                       "error": f"bad action {str(data.get('action', ''))!r}: want read|list|write|edit|delete"})
+    return json.dumps(
+        {"ok": False, "error": f"bad action {str(data.get('action', ''))!r}: want read|list|write|edit|delete"}
+    )
 
 
 def delete_file(args: dict) -> str:
@@ -334,5 +331,6 @@ def directory(args: dict) -> str:
         return rename_path(data)
     if action in ("delete", "remove", "rm", "del", "rmdir"):
         return delete_dir(data)
-    return json.dumps({"ok": False,
-                       "error": f"bad action {str(data.get('action', ''))!r}: want create|list|rename|delete"})
+    return json.dumps(
+        {"ok": False, "error": f"bad action {str(data.get('action', ''))!r}: want create|list|rename|delete"}
+    )

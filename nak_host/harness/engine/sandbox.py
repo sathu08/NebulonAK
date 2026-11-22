@@ -64,7 +64,7 @@ def _denied_dirs() -> Optional[set]:
         box = spec.get("sandbox")
         if not isinstance(box, dict):
             continue
-        for d in (box.get("deny_dirs") or []):
+        for d in box.get("deny_dirs") or []:
             # normalize: "secrets/" and "secrets" enforce identically.
             # Nested paths (still containing "/") stay enforced via
             # check_resources globs instead — only simple names here.
@@ -140,6 +140,7 @@ def safe_join(root: str | Path, raw: str) -> Tuple[bool, str]:
 
 # --- Session (lives here by design: no separate session.py) ---
 
+
 def create_session_dir(workspace_root: str | Path, user: str) -> Tuple[str, str]:
     """New session dir <workspace>/<user>_<UTC timestamp>__. Returns (id, dir)."""
     who = sanitize_user(user)
@@ -212,10 +213,8 @@ def prune_sessions(workspace_root: str | Path, keep: int = 20) -> Dict[str, Any]
         root = Path(workspace_root).expanduser()
         if not root.is_dir():
             return {"pruned": [], "kept": 0}
-        dirs = sorted((d for d in root.iterdir()
-                       if d.is_dir() and d.name.endswith("__")),
-                      key=lambda d: d.name)
-        doomed = dirs[:max(0, len(dirs) - keep_n)]
+        dirs = sorted((d for d in root.iterdir() if d.is_dir() and d.name.endswith("__")), key=lambda d: d.name)
+        doomed = dirs[: max(0, len(dirs) - keep_n)]
         pruned: List[str] = []
         for d in doomed:
             try:
@@ -229,11 +228,13 @@ def prune_sessions(workspace_root: str | Path, keep: int = 20) -> Dict[str, Any]
                 raw = json.loads(path.read_text(encoding="utf-8"))
                 if isinstance(raw, list):
                     gone = set(pruned)
-                    kept = [r for r in raw
-                            if str((r or {}).get("session_id", "") or "") not in gone
-                            and str((r or {}).get("session", "") or "") not in gone]
-                    path.write_text(json.dumps(kept, indent=2, ensure_ascii=False),
-                                    encoding="utf-8")
+                    kept = [
+                        r
+                        for r in raw
+                        if str((r or {}).get("session_id", "") or "") not in gone
+                        and str((r or {}).get("session", "") or "") not in gone
+                    ]
+                    path.write_text(json.dumps(kept, indent=2, ensure_ascii=False), encoding="utf-8")
             except (OSError, ValueError):
                 pass
         return {"pruned": pruned, "kept": len(dirs) - len(pruned)}
@@ -241,12 +242,12 @@ def prune_sessions(workspace_root: str | Path, keep: int = 20) -> Dict[str, Any]
         return {"pruned": [], "kept": 0}
 
 
-def resource_bases(session_dir: str | Path, workspace_root: str | Path,
-                   engine_file: str | Path = __file__) -> List[Path]:
+def resource_bases(
+    session_dir: str | Path, workspace_root: str | Path, engine_file: str | Path = __file__
+) -> List[Path]:
     """Bases a resolved path is tested against (session + workspace + project root)."""
     bases = []
-    for b in (session_dir, workspace_root,
-              Path(engine_file).resolve().parents[3]):  # nak_host/harness/engine -> root
+    for b in (session_dir, workspace_root, Path(engine_file).resolve().parents[3]):  # nak_host/harness/engine -> root
         try:
             if str(b or "").strip():
                 bases.append(Path(b).expanduser().resolve())
@@ -257,10 +258,12 @@ def resource_bases(session_dir: str | Path, workspace_root: str | Path,
 
 # --- Resource globs (deny wins; empty grant denies) ---
 
+
 def glob_hit(pattern: str, form: str) -> bool:
     """Glob match where ** crosses separators (PurePath.match can't
     handle trailing /**). Also covers top-level names for **/x forms."""
     from fnmatch import fnmatchcase
+
     pat = pattern.replace("**", "*")
     pats = [pat]
     if pat.startswith("*/"):
@@ -270,9 +273,7 @@ def glob_hit(pattern: str, form: str) -> bool:
     return any(fnmatchcase(form, p) for p in pats)
 
 
-def check_resources(resolved: str, op: str,
-                    entry: Dict[str, Any],
-                    bases: List[Path]) -> Optional[str]:
+def check_resources(resolved: str, op: str, entry: Dict[str, Any], bases: List[Path]) -> Optional[str]:
     """File globs for a resolved path. deny wins; empty grant = deny."""
     files = ((entry.get("resources") or {}).get("files")) or {}
     try:
@@ -285,7 +286,7 @@ def check_resources(resolved: str, op: str,
             forms.append(target.relative_to(base).as_posix())
         except ValueError:
             pass
-    for pat in (files.get("deny") or []):
+    for pat in files.get("deny") or []:
         if any(glob_hit(pat, f) for f in forms):
             return f"resource denied: {resolved}"
     # Session dir is always granted (deny already won above): any base dir

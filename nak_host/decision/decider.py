@@ -79,6 +79,7 @@ def _http() -> Any:
         return _rq
     return sess
 
+
 # --- Triage result cache (per-goal; never raises) ---------------------- #
 # Repeat decisions (retries, multi-step plans re-asking the same goal)
 # skip inference entirely. Key includes goal + observation + workers +
@@ -88,30 +89,42 @@ _TRIAGE_CACHE: Dict[str, tuple] = {}
 _TRIAGE_LOCK = threading.Lock()
 
 
-def _triage_key(goal: str, observation: Any,
-                workers: List[str], tools: List[str],
-                llm: bool, endpoint: Any,
-                decision_cfg: Any = None) -> str:
+def _triage_key(
+    goal: str,
+    observation: Any,
+    workers: List[str],
+    tools: List[str],
+    llm: bool,
+    endpoint: Any,
+    decision_cfg: Any = None,
+) -> str:
     import hashlib
 
     try:
-        obs = observation if isinstance(observation, str) else json.dumps(
-            observation, sort_keys=True, default=str)
+        obs = observation if isinstance(observation, str) else json.dumps(observation, sort_keys=True, default=str)
     except Exception:
         obs = str(observation)
     cfg = decision_cfg if isinstance(decision_cfg, dict) else {}
     try:
         cfg_key = json.dumps(
-            {"model": cfg.get("model"), "endpoint": cfg.get("endpoint"),
-             "questions": cfg.get("questions")},
-            sort_keys=True, default=str)
+            {"model": cfg.get("model"), "endpoint": cfg.get("endpoint"), "questions": cfg.get("questions")},
+            sort_keys=True,
+            default=str,
+        )
     except Exception:
         cfg_key = str(cfg)[:1000]
-    raw = json.dumps({"g": str(goal or ""), "o": str(obs)[:2000],
-                      "w": list(workers or []), "t": list(tools or []),
-                      "l": bool(llm), "e": str(endpoint or ""),
-                      "d": cfg_key},
-                     sort_keys=True)
+    raw = json.dumps(
+        {
+            "g": str(goal or ""),
+            "o": str(obs)[:2000],
+            "w": list(workers or []),
+            "t": list(tools or []),
+            "l": bool(llm),
+            "e": str(endpoint or ""),
+            "d": cfg_key,
+        },
+        sort_keys=True,
+    )
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
@@ -152,8 +165,7 @@ def _triage_store(key: str, result: Dict[str, Any]) -> None:
 _ENDPOINT_LIVE_CACHE: Dict[str, tuple] = {}
 
 
-def endpoint_live(url: Any, timeout: float = _ENDPOINT_PROBE_TIMEOUT,
-                  ttl: float = _ENDPOINT_LIVE_TTL) -> bool:
+def endpoint_live(url: Any, timeout: float = _ENDPOINT_PROBE_TIMEOUT, ttl: float = _ENDPOINT_LIVE_TTL) -> bool:
     """True when the decision endpoint answers HTTP (any status — even 400).
 
     Probe is POST {} (rejected by validation before inference, so it costs
@@ -186,8 +198,7 @@ def endpoint_live(url: Any, timeout: float = _ENDPOINT_PROBE_TIMEOUT,
 
 def _down_notice(url: str) -> str:
     """User-facing line when decision.enabled but the URL is not active."""
-    return (f"decision endpoint {url} is not active — "
-            f"using LLM (Brain) to decide instead.")
+    return f"decision endpoint {url} is not active — using LLM (Brain) to decide instead."
 
 
 def _read_workers_json(workers_file: Any = None) -> List[Dict[str, Any]]:
@@ -260,9 +271,7 @@ def _all_tools(
 
 
 def _is_decision_input(obs: Any) -> bool:
-    return isinstance(obs, dict) and any(
-        k in obs for k in ("situation", "user_intent", "worker_role", "history")
-    )
+    return isinstance(obs, dict) and any(k in obs for k in ("situation", "user_intent", "worker_role", "history"))
 
 
 def _state_from_decision_input(d: Dict[str, Any], goal: str) -> str:
@@ -332,14 +341,16 @@ def _load_decision(
         dec = e.get("decision")
         if isinstance(dec, dict) and dec.get("enabled", True):
             return dec
-    return {"enabled": True, "model": "laya", "endpoint": "",
-            "timeout": _DECISION_TIMEOUT,
-            "questions": list(_DEFAULT_DECISION_QUESTIONS)}
+    return {
+        "enabled": True,
+        "model": "laya",
+        "endpoint": "",
+        "timeout": _DECISION_TIMEOUT,
+        "questions": list(_DEFAULT_DECISION_QUESTIONS),
+    }
 
 
-def _build_laya_questions(
-    workers: List[str], tools: List[str], decision: Dict[str, Any]
-) -> Dict[str, Any]:
+def _build_laya_questions(workers: List[str], tools: List[str], decision: Dict[str, Any]) -> Dict[str, Any]:
     """Worker/tool choice + your priority/risk/needs_clarification scores."""
     qs: Dict[str, Any] = {
         "worker": {
@@ -379,9 +390,7 @@ def _build_laya_questions(
             # laya calls yes/no "noul" — "boolean" in workers.json maps here.
             qs[name] = {
                 "type": "noul",
-                "instructions": str(
-                    q.get("instructions") or "Does this goal need clarification before acting?"
-                ),
+                "instructions": str(q.get("instructions") or "Does this goal need clarification before acting?"),
             }
     return qs
 
@@ -399,9 +408,15 @@ def _pick_file_arg(goal: str, observation: Any, tool: str) -> Dict[str, Any]:
     return {"action": "read", "path": (fname or "notes.txt").strip()}
 
 
-def _fallback_pick(ws: List[str], ts: List[str], goal: str,
-                   observation: Any, note: str,
-                   notice: str = "", endpoint_live_flag: Optional[bool] = None) -> Dict[str, Any]:
+def _fallback_pick(
+    ws: List[str],
+    ts: List[str],
+    goal: str,
+    observation: Any,
+    note: str,
+    notice: str = "",
+    endpoint_live_flag: Optional[bool] = None,
+) -> Dict[str, Any]:
     """Never-crash fallback when the decision endpoint is unreachable.
 
     Fail-closed: ok=False + fallback=True so callers never mistake the
@@ -411,12 +426,19 @@ def _fallback_pick(ws: List[str], ts: List[str], goal: str,
     """
     worker = ws[0] if ws else "vizhi"
     tool = ts[0] if ts else "file"
-    out: Dict[str, Any] = {"ok": False, "fallback": True,
-            "worker": worker, "tool": tool,
-            "arguments": _pick_file_arg(goal, observation, tool),
-            "reason": f"decision endpoint unavailable, fallback -> {worker}/{tool} ({note[:100]})",
-            "llm": False, "model": "endpoint", "endpoint_fallback": True,
-            "decision": {}, "goal": goal}
+    out: Dict[str, Any] = {
+        "ok": False,
+        "fallback": True,
+        "worker": worker,
+        "tool": tool,
+        "arguments": _pick_file_arg(goal, observation, tool),
+        "reason": f"decision endpoint unavailable, fallback -> {worker}/{tool} ({note[:100]})",
+        "llm": False,
+        "model": "endpoint",
+        "endpoint_fallback": True,
+        "decision": {},
+        "goal": goal,
+    }
     if notice:
         out["notice"] = notice[:300]
     if endpoint_live_flag is not None:
@@ -461,8 +483,7 @@ def local_rule(
     if not ws or not ts:
         return {"ok": False, "error": "no workers/tools", "llm": False}
 
-    cfg = (decision_cfg if isinstance(decision_cfg, dict)
-           else _load_decision(workers_file, workers_loader))
+    cfg = decision_cfg if isinstance(decision_cfg, dict) else _load_decision(workers_file, workers_loader)
     # decision_input (from GenericWorker) already carries situation/history/
     # intent/role — format it richly; plain observation stays Goal+Observation.
     if _is_decision_input(observation):
@@ -472,52 +493,53 @@ def local_rule(
     questions = _build_laya_questions(ws, ts, cfg)
 
     # URL from the calling worker's block (or explicit override) — nothing else.
-    endpoint_url = (str(endpoint or "").strip()
-                    or str(cfg.get("endpoint", "") or "").strip())
-    if not (endpoint_url.startswith("http://")
-            or endpoint_url.startswith("https://")):
-        return _fallback_pick(ws, ts, g, observation,
-                              f"missing/invalid decision.endpoint in workers.json: {endpoint_url!r}"[:150],
-                              notice="no decision endpoint configured — using deterministic fallback.",
-                              endpoint_live_flag=False)
+    endpoint_url = str(endpoint or "").strip() or str(cfg.get("endpoint", "") or "").strip()
+    if not (endpoint_url.startswith("http://") or endpoint_url.startswith("https://")):
+        return _fallback_pick(
+            ws,
+            ts,
+            g,
+            observation,
+            f"missing/invalid decision.endpoint in workers.json: {endpoint_url!r}"[:150],
+            notice="no decision endpoint configured — using deterministic fallback.",
+            endpoint_live_flag=False,
+        )
     try:
         to = float(timeout) if timeout is not None else float(cfg.get("timeout", _DECISION_TIMEOUT))
         to = max(_DECISION_TIMEOUT_FLOOR, to)
     except (TypeError, ValueError):
         to = _DECISION_TIMEOUT
-    token = (str(auth_token).strip() if auth_token is not None
-             else str(cfg.get("auth_token", "") or "").strip())
+    token = str(auth_token).strip() if auth_token is not None else str(cfg.get("auth_token", "") or "").strip()
 
     try:
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
         if token:
             headers["Authorization"] = f"Bearer {token}"
-        resp = _http().post(endpoint_url,
-                            json={"state": state, "questions": questions},
-                            headers=headers, timeout=to)
+        resp = _http().post(endpoint_url, json={"state": state, "questions": questions}, headers=headers, timeout=to)
         try:
             body = resp.json()
         except ValueError as exc:
             raise RuntimeError(f"endpoint non-JSON ({resp.status_code})") from exc
         if resp.status_code >= 400:
             msg = body.get("message") if isinstance(body, dict) else None
-            raise RuntimeError(
-                f"endpoint HTTP {resp.status_code}: {str(msg or resp.text)[:150]}"
-            )
+            raise RuntimeError(f"endpoint HTTP {resp.status_code}: {str(msg or resp.text)[:150]}")
         # Accept {"answers"}, {"data": {"answers"}}, or raw scorer dict.
         if isinstance(body, dict) and isinstance(body.get("answers"), dict):
             answers = body["answers"]
-        elif (isinstance(body, dict) and isinstance(body.get("data"), dict)
-                and isinstance(body["data"].get("answers"), dict)):
+        elif (
+            isinstance(body, dict)
+            and isinstance(body.get("data"), dict)
+            and isinstance(body["data"].get("answers"), dict)
+        ):
             answers = body["data"]["answers"]
         elif isinstance(body, dict):
             answers = body
         else:
             raise RuntimeError("endpoint returned non-object")
     except Exception as exc:  # HTTP failed -> fallback
-        return _fallback_pick(ws, ts, g, observation, str(exc),
-                              notice=_down_notice(endpoint_url),
-                              endpoint_live_flag=False)
+        return _fallback_pick(
+            ws, ts, g, observation, str(exc), notice=_down_notice(endpoint_url), endpoint_live_flag=False
+        )
 
     try:
         w_ans = answers.get("worker", {}) if isinstance(answers, dict) else {}
@@ -542,16 +564,24 @@ def local_rule(
                 triage[f"{key}_confidence"] = round(float(a["answer_confidence"]), 3)
 
         model = str(cfg.get("model", "endpoint") or "endpoint")[:50]
-        return {"ok": True, "worker": worker, "tool": tool,
-                "arguments": _pick_file_arg(g, observation, tool),
-                "reason": f"endpoint(http): {worker}/{tool} triage={triage}",
-                "llm": False, "model": model, "decision": triage,
-                "endpoint": endpoint_url, "endpoint_live": True,
-                "via": "http", "goal": g}
+        return {
+            "ok": True,
+            "worker": worker,
+            "tool": tool,
+            "arguments": _pick_file_arg(g, observation, tool),
+            "reason": f"endpoint(http): {worker}/{tool} triage={triage}",
+            "llm": False,
+            "model": model,
+            "decision": triage,
+            "endpoint": endpoint_url,
+            "endpoint_live": True,
+            "via": "http",
+            "goal": g,
+        }
     except Exception as exc:
-        return _fallback_pick(ws, ts, g, observation, str(exc),
-                              notice=_down_notice(endpoint_url),
-                              endpoint_live_flag=False)
+        return _fallback_pick(
+            ws, ts, g, observation, str(exc), notice=_down_notice(endpoint_url), endpoint_live_flag=False
+        )
 
 
 def _decide_prompt_dirs(workers_file: Any = None) -> List[Path]:
@@ -570,8 +600,7 @@ def _decide_prompt_dirs(workers_file: Any = None) -> List[Path]:
     return dirs
 
 
-def _render_decide_template(template: str, goal: str, observation: str,
-                            workers: List[str], tools: List[str]) -> str:
+def _render_decide_template(template: str, goal: str, observation: str, workers: List[str], tools: List[str]) -> str:
     """Fill {{goal}}/{{workers}}/{{tools}}/{{observation}}. No new deps."""
     out = str(template)
     out = out.replace("{{goal}}", str(goal or "").strip())
@@ -581,8 +610,7 @@ def _render_decide_template(template: str, goal: str, observation: str,
     return out.strip()
 
 
-def _llm_prompt(goal: str, observation: Any, workers: List[str], tools: List[str],
-               workers_file: Any = None) -> str:
+def _llm_prompt(goal: str, observation: Any, workers: List[str], tools: List[str], workers_file: Any = None) -> str:
     """Decision prompt for llm=True (shared by any LLM provider).
 
     Loads prompts/decide.md next to workers.json (same {{...}} convention
@@ -597,18 +625,17 @@ def _llm_prompt(goal: str, observation: Any, workers: List[str], tools: List[str
         except OSError:
             continue
         if text.strip():
-            return _render_decide_template(text, str(goal or ""), obs,
-                                           workers, tools)
+            return _render_decide_template(text, str(goal or ""), obs, workers, tools)
     return (
         f"Goal: {str(goal or '').strip()}\n"
         f"Workers: {', '.join(workers)}\n"
         f"Tools: {', '.join(tools)}\n"
         f"Observation: {obs[:1200]}\n\n"
-        "Reply JSON only: {\"worker\": \"<one of Workers>\", "
-        "\"tool\": \"<one of Tools>\", \"arguments\": {...}, "
-        "\"priority\": <0-3>, \"risk\": <0-3>, "
-        "\"needs_clarification\": <true|false>, \"confidence\": <0-1>, "
-        "\"reason\": \"<short>\"}"
+        'Reply JSON only: {"worker": "<one of Workers>", '
+        '"tool": "<one of Tools>", "arguments": {...}, '
+        '"priority": <0-3>, "risk": <0-3>, '
+        '"needs_clarification": <true|false>, "confidence": <0-1>, '
+        '"reason": "<short>"}'
     )
 
 
@@ -720,9 +747,20 @@ def decide_task(
         return hit
 
     if not llm:
-        res = local_rule(g, ws, ts, observation, engine, workers_file,
-                         workers_loader, tools_loader, endpoint, timeout,
-                         auth_token, decision_cfg=decision_cfg)
+        res = local_rule(
+            g,
+            ws,
+            ts,
+            observation,
+            engine,
+            workers_file,
+            workers_loader,
+            tools_loader,
+            endpoint,
+            timeout,
+            auth_token,
+            decision_cfg=decision_cfg,
+        )
         _triage_store(ckey, res)
         return res
 
@@ -731,16 +769,38 @@ def decide_task(
         try:
             brain = brain_factory()
         except Exception as exc:  # factory failed -> endpoint fallback, never crash
-            fb = local_rule(g, ws, ts, observation, engine, workers_file,
-                            workers_loader, tools_loader, endpoint, timeout,
-                            auth_token, decision_cfg=decision_cfg)
+            fb = local_rule(
+                g,
+                ws,
+                ts,
+                observation,
+                engine,
+                workers_file,
+                workers_loader,
+                tools_loader,
+                endpoint,
+                timeout,
+                auth_token,
+                decision_cfg=decision_cfg,
+            )
             fb["reason"] += f" (brain factory: {str(exc)[:100]})"
             fb["llm_fallback"] = True
             return fb
     if brain is None:  # no direct `from nak_host.brain import Brain` here by design
-        fb = local_rule(g, ws, ts, observation, engine, workers_file,
-                        workers_loader, tools_loader, endpoint, timeout,
-                        auth_token, decision_cfg=decision_cfg)
+        fb = local_rule(
+            g,
+            ws,
+            ts,
+            observation,
+            engine,
+            workers_file,
+            workers_loader,
+            tools_loader,
+            endpoint,
+            timeout,
+            auth_token,
+            decision_cfg=decision_cfg,
+        )
         fb["reason"] += " (no brain injected — wire via nak_host/wiring.py)"
         fb["llm_fallback"] = True
         return fb
@@ -752,27 +812,41 @@ def decide_task(
         res = brain.chat(_llm_prompt(g, observation, ws, ts, workers_file))
         parsed = _parse_llm_answer(str(res.get("answer", "")), ws, ts)
     except Exception as exc:  # Mind down / bad JSON -> endpoint fallback
-        fb = local_rule(g, ws, ts, observation, engine, workers_file,
-                        workers_loader, tools_loader, endpoint, timeout,
-                        auth_token, decision_cfg=decision_cfg)
+        fb = local_rule(
+            g,
+            ws,
+            ts,
+            observation,
+            engine,
+            workers_file,
+            workers_loader,
+            tools_loader,
+            endpoint,
+            timeout,
+            auth_token,
+            decision_cfg=decision_cfg,
+        )
         fb["reason"] += f" (llm fallback: {str(exc)[:100]})"
         fb["llm_fallback"] = True
         return fb
 
     worker = parsed.get("worker", ws[0] if ws else "vizhi")
     tool = parsed.get("tool", ts[0] if ts else "file")
-    out: Dict[str, Any] = {"ok": True, "worker": worker, "tool": tool,
-            "arguments": parsed.get("arguments", {} if tool != "file" else {"action": "read", "path": "notes.txt"}),
-            "decision": parsed,
-            "reason": parsed.get("reason", "llm decision"),
-            "llm": True, "goal": g}
+    out: Dict[str, Any] = {
+        "ok": True,
+        "worker": worker,
+        "tool": tool,
+        "arguments": parsed.get("arguments", {} if tool != "file" else {"action": "read", "path": "notes.txt"}),
+        "decision": parsed,
+        "reason": parsed.get("reason", "llm decision"),
+        "llm": True,
+        "goal": g,
+    }
     # decision.enabled=true guard: report whether the scoring URL is live.
     # Down -> user notice that the LLM (not the endpoint) decided this call.
     try:
-        cfg = (decision_cfg if isinstance(decision_cfg, dict)
-               else _load_decision(workers_file, workers_loader))
-        ep = (str(endpoint or "").strip()
-              or str(cfg.get("endpoint", "") or "").strip())
+        cfg = decision_cfg if isinstance(decision_cfg, dict) else _load_decision(workers_file, workers_loader)
+        ep = str(endpoint or "").strip() or str(cfg.get("endpoint", "") or "").strip()
         if ep.startswith("http://") or ep.startswith("https://"):
             live = endpoint_live(ep)
             out["endpoint"] = ep

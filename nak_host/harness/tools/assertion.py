@@ -37,9 +37,7 @@ _OPS = ("eq", "ne", "contains", "regex", "gte", "lte", "in")
 
 
 def _root(data: dict) -> str:
-    return (str(data.get("root", "")).strip()
-            or os.environ.get("NAK_WORKSPACE", "").strip()
-            or str(default_workspace()))
+    return str(data.get("root", "")).strip() or os.environ.get("NAK_WORKSPACE", "").strip() or str(default_workspace())
 
 
 def _value(value: Any) -> Any:
@@ -59,17 +57,14 @@ def _number(value: Any) -> bool:
 
 def _check_one(item: Any, index: int) -> Dict[str, Any]:
     if not isinstance(item, dict):
-        return {"id": f"check-{index}", "op": "", "passed": False,
-                "error": "check must be an object"}
+        return {"id": f"check-{index}", "op": "", "passed": False, "error": "check must be an object"}
     cid = str(item.get("id", "") or f"check-{index}")
     op = str(item.get("op", "")).strip().lower()
     has_expected = "expected" in item
     has_actual = "actual" in item
     expected = item.get("expected")
     actual = item.get("actual")
-    out: Dict[str, Any] = {"id": cid, "op": op,
-                           "expected": _value(expected),
-                           "actual": _value(actual)}
+    out: Dict[str, Any] = {"id": cid, "op": op, "expected": _value(expected), "actual": _value(actual)}
     if op not in _OPS:
         out.update(passed=False, error=f"bad op {op!r}: want {'|'.join(_OPS)}")
         return out
@@ -82,8 +77,7 @@ def _check_one(item: Any, index: int) -> Dict[str, Any]:
         elif op == "ne":
             passed = expected != actual
         elif op == "contains":
-            passed = (expected in actual if isinstance(actual, (list, tuple, dict))
-                      else str(expected) in str(actual))
+            passed = expected in actual if isinstance(actual, (list, tuple, dict)) else str(expected) in str(actual)
         elif op == "in":
             passed = actual in expected if isinstance(expected, (list, tuple, dict, str)) else False
         elif op == "regex":
@@ -116,8 +110,7 @@ def assertion(args: dict) -> str:
     data = args or {}
     action = str(data.get("action", "")).strip().lower() or "check"
     if action not in ("check", "run", "assert"):
-        return json.dumps({"ok": False,
-                           "error": f"bad action {action!r}: want check|run|assert"})
+        return json.dumps({"ok": False, "error": f"bad action {action!r}: want check|run|assert"})
     checks = data.get("checks")
     suite_path = str(data.get("suite_path", "")).strip()
     if checks is not None and suite_path:
@@ -132,10 +125,16 @@ def assertion(args: dict) -> str:
     if not isinstance(checks, list) or not checks:
         return json.dumps({"ok": False, "error": "checks must be a non-empty list"})
     if len(checks) > MAX_CHECKS:
-        return json.dumps({"ok": False,
-                           "error": f"too many checks: {len(checks)} > {MAX_CHECKS}"})
+        return json.dumps({"ok": False, "error": f"too many checks: {len(checks)} > {MAX_CHECKS}"})
     results = [_check_one(item, i) for i, item in enumerate(checks, 1)]
     passed = sum(1 for r in results if r.get("passed"))
-    return json.dumps({"ok": True, "all_passed": passed == len(results),
-                       "total": len(results), "passed": passed,
-                       "failed": len(results) - passed, "results": results})
+    return json.dumps(
+        {
+            "ok": True,
+            "all_passed": passed == len(results),
+            "total": len(results),
+            "passed": passed,
+            "failed": len(results) - passed,
+            "results": results,
+        }
+    )

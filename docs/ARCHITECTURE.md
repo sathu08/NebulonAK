@@ -275,8 +275,8 @@ and offline runs (`NAK_STORE=memory` selects it; anything else in prod code
 resolves the prod store and fails loud when Mind/DB are down — persistence
 loss is never silent). NAK configures only its Mind connection; the DB
 host/username/password resolve from Mind's gated
-`GET /api/NebulonMind/system/db_connection` endpoint (bearer-shared-secret
-only; refused when Mind auth is disabled), cached in memory with TTL and
+`GET /api/NebulonMind/system/db_connection` endpoint (requires a per-user
+Mind token with the `admin:db` scope), cached in memory with TTL and
 refreshed on NDB 401. Explicit per-field overrides (kwarg > env > cfg)
 always win; `resolve_from_mind=false` restores legacy direct configuration.
 One corpus, `cosmos` type (plain JSON, no vectors):
@@ -425,18 +425,20 @@ nak_host/
                  executor_harness.py
   harness/       engine/ (execution, sandbox, permission, approval,
                  capability, registry, limits) · tools/ · craft/ · ml/ · mcp/
-  worker/        engine/ (worker, identity, prompt, chat, session, team,
-                 dispatch, triage, autonomy, registry, memory)
-   decision/      decider + policy + batch
+   worker/        engine/ (worker, identity, prompt, chat, session, team,
+                  dispatch, triage, autonomy, registry, memory)
+    flow/          user pipelines: models + store; engine/ (chain validation,
+                  branch-walk runner, approvals)
+    decision/      decider + policy + batch
    brain/         HTTP client over NebulonMD (the only LLM path)
    api/           laya decision endpoint + console dashboard
-                  (routes/status|pipeline|settings_view|dashboard + web/ console)
+                  (routes/status|pipeline|settings|console + web/ console; URL prefix stays /api/NebulonAK/dashboard)
    cli/           server ops: start|stop|restart|status (no TUI)
    manifests/     workers.json teams.json crafts.json tools.json permissions.json
    utils/         settings.py (cfg + env) · constant.py (all fallback values)
    wiring.py      composition root only
-nebulonak.py     server entry point (mirrors nebulondb.py / nebulonmd.py)
-nebulonagentkit.py  foreground API runner (same app, no daemon)
+nebulonak.py     server entry point (mirrors nebulondb.py / nebulonmd.py);
+               `start --foreground` serves in the terminal (same app, no daemon)
 pipeline/
   vetting/       worker evaluation CLIs + runners (nak-vetting)
 unittest/        unit · integration · live · server

@@ -1,4 +1,5 @@
 """Section 4: team leader as default planner + parallel/shared team memory."""
+
 import json
 import shutil
 from pathlib import Path
@@ -42,23 +43,25 @@ class _Brain:
         return {"chat": {"id": chat_id, "messages": list(self.docs[chat_id])}}
 
     def chat(self, prompt, messages=None, session_id=None):
-        self.chat_calls.append({"prompt": prompt, "messages": messages,
-                                "session_id": session_id})
+        self.chat_calls.append({"prompt": prompt, "messages": messages, "session_id": session_id})
         return {"answer": self.answer}
 
 
 def _worker(name, team=None, crafts=("plan", "assign")):
-    e = {"name": name, "type": "coordinator",
-         "identity": {"role": "tester"},
-         "memory": {"enabled": True}, "crafts": list(crafts)}
+    e = {
+        "name": name,
+        "type": "coordinator",
+        "identity": {"role": "tester"},
+        "memory": {"enabled": True},
+        "crafts": list(crafts),
+    }
     if team is not None:
         e["team"] = team
     return e
 
 
 def _team(name, members, **extra):
-    t = {"name": name, "leader": members[0], "members": members,
-         "shared_memory": True}
+    t = {"name": name, "leader": members[0], "members": members, "shared_memory": True}
     t.update(extra)
     return t
 
@@ -67,24 +70,26 @@ def _write(tmp_path, workers, teams):
     shutil.copy(_REAL_CRAFTS, tmp_path / "crafts.json")
     wf = tmp_path / "workers.json"
     wf.write_text(json.dumps(workers), encoding="utf-8")
-    (tmp_path / "teams.json").write_text(
-        json.dumps({"teams": teams}), encoding="utf-8")
+    (tmp_path / "teams.json").write_text(json.dumps({"teams": teams}), encoding="utf-8")
     return str(wf)
 
 
 # ---------- section 4: leader becomes the planner ----------
 
+
 def test_harness_as_second_positional_uses_team_leader(tmp_path):
     wf = _write(
         tmp_path,
-        [_worker("vizhi", {"enabled": True, "name": "core"}),
-         _worker("aayan", {"enabled": True, "name": "core"})],
+        [_worker("vizhi", {"enabled": True, "name": "core"}), _worker("aayan", {"enabled": True, "name": "core"})],
         [_team("core", ["vizhi", "aayan"])],
     )
     brain = _Brain("Plan:\n1. do x [worker=aayan]")
     h = make_harness(worker="vizhi", workspace_root=tmp_path, workers_file=wf)
     res = run_craft(
-        "ship it", h, team="core", approver=lambda i: True,
+        "ship it",
+        h,
+        team="core",
+        approver=lambda i: True,
         factory=lambda n: GenericWorker(n, brain=brain, workers_file=wf),
     )
     assert res["planned"] is True
@@ -97,14 +102,16 @@ def test_harness_as_second_positional_uses_team_leader(tmp_path):
 def test_dispatch_false_plans_without_peer_runs(tmp_path):
     wf = _write(
         tmp_path,
-        [_worker("vizhi", {"enabled": True, "name": "core"}),
-         _worker("aayan", {"enabled": True, "name": "core"})],
+        [_worker("vizhi", {"enabled": True, "name": "core"}), _worker("aayan", {"enabled": True, "name": "core"})],
         [_team("core", ["vizhi", "aayan"])],
     )
     brain = _Brain("Plan:\n1. do x [worker=aayan]")
     h = make_harness(worker="vizhi", workspace_root=tmp_path, workers_file=wf)
     res = run_craft(
-        "ship it", h, team="core", approver=lambda i: True,
+        "ship it",
+        h,
+        team="core",
+        approver=lambda i: True,
         factory=lambda n: GenericWorker(n, brain=brain, workers_file=wf),
         dispatch=False,
     )
@@ -118,8 +125,7 @@ def test_dispatch_false_plans_without_peer_runs(tmp_path):
 def test_omitting_worker_and_team_raises(tmp_path):
     wf = _write(
         tmp_path,
-        [_worker("vizhi", {"enabled": True, "name": "core"}),
-         _worker("aayan", {"enabled": True, "name": "core"})],
+        [_worker("vizhi", {"enabled": True, "name": "core"}), _worker("aayan", {"enabled": True, "name": "core"})],
         [_team("core", ["vizhi", "aayan"])],
     )
     h = make_harness(worker="vizhi", workspace_root=tmp_path, workers_file=wf)
@@ -130,8 +136,7 @@ def test_omitting_worker_and_team_raises(tmp_path):
 def test_unknown_team_returns_error_not_raise(tmp_path):
     wf = _write(
         tmp_path,
-        [_worker("vizhi", {"enabled": True, "name": "core"}),
-         _worker("aayan", {"enabled": True, "name": "core"})],
+        [_worker("vizhi", {"enabled": True, "name": "core"}), _worker("aayan", {"enabled": True, "name": "core"})],
         [_team("core", ["vizhi", "aayan"])],
     )
     h = make_harness(worker="vizhi", workspace_root=tmp_path, workers_file=wf)
@@ -142,19 +147,26 @@ def test_unknown_team_returns_error_not_raise(tmp_path):
 
 # ---------- parallel ----------
 
+
 def test_run_craft_parallel_false_reports_and_runs_serially(tmp_path):
     wf = _write(
         tmp_path,
-        [_worker("vizhi", {"enabled": True, "name": "core"}),
-         _worker("aayan", {"enabled": True, "name": "core"}),
-         _worker("arivu", {"enabled": True, "name": "core"})],
+        [
+            _worker("vizhi", {"enabled": True, "name": "core"}),
+            _worker("aayan", {"enabled": True, "name": "core"}),
+            _worker("arivu", {"enabled": True, "name": "core"}),
+        ],
         [_team("core", ["vizhi", "aayan", "arivu"])],
     )
     brain = _Brain("Plan:\n1. a [worker=aayan]\n2. b [worker=arivu]")
     vizhi = GenericWorker("vizhi", brain=brain, workers_file=wf)
     h = make_harness(worker="vizhi", workspace_root=tmp_path, workers_file=wf)
     res = run_craft(
-        "ship it", vizhi, h, team="core", approver=lambda i: True,
+        "ship it",
+        vizhi,
+        h,
+        team="core",
+        approver=lambda i: True,
         parallel=False,
         factory=lambda n: GenericWorker(n, brain=brain, workers_file=wf),
     )
@@ -165,9 +177,11 @@ def test_run_craft_parallel_false_reports_and_runs_serially(tmp_path):
 def test_team_parallel_policy_is_used_unless_overridden(tmp_path):
     wf = _write(
         tmp_path,
-        [_worker("vizhi", {"enabled": True, "name": "core"}),
-         _worker("aayan", {"enabled": True, "name": "core"}),
-         _worker("arivu", {"enabled": True, "name": "core"})],
+        [
+            _worker("vizhi", {"enabled": True, "name": "core"}),
+            _worker("aayan", {"enabled": True, "name": "core"}),
+            _worker("arivu", {"enabled": True, "name": "core"}),
+        ],
         [_team("core", ["vizhi", "aayan", "arivu"], parallel=False)],
     )
     brain = _Brain("Plan:\n1. a [worker=aayan]\n2. b [worker=arivu]")
@@ -176,37 +190,50 @@ def test_team_parallel_policy_is_used_unless_overridden(tmp_path):
 
     def _run(**kw):
         return run_craft(
-            "ship it", vizhi, h, team="core", approver=lambda i: True,
+            "ship it",
+            vizhi,
+            h,
+            team="core",
+            approver=lambda i: True,
             factory=lambda n: GenericWorker(n, brain=brain, workers_file=wf),
             **kw,
         )
 
-    assert _run()["parallel"] is False          # team policy
+    assert _run()["parallel"] is False  # team policy
     assert _run(parallel=True)["parallel"] is True  # explicit wins
 
 
 def test_run_workers_parallel_flag_defaults_true(tmp_path):
     brain = _Brain()
     out = run_workers(
-        "Plan:\n1. a [worker=aayan]", ["aayan"], goal="g", session_id="s",
-        factory=lambda n: GenericWorker(n, brain=brain), parallel=False)
+        "Plan:\n1. a [worker=aayan]",
+        ["aayan"],
+        goal="g",
+        session_id="s",
+        factory=lambda n: GenericWorker(n, brain=brain),
+        parallel=False,
+    )
     assert out["parallel"] is False
 
 
 # ---------- shared team memory + leader access ----------
 
+
 def test_team_memory_is_readable_by_leader(tmp_path):
     wf = _write(
         tmp_path,
-        [_worker("vizhi", {"enabled": True, "name": "core"}),
-         _worker("aayan", {"enabled": True, "name": "core"})],
+        [_worker("vizhi", {"enabled": True, "name": "core"}), _worker("aayan", {"enabled": True, "name": "core"})],
         [_team("core", ["vizhi", "aayan"])],
     )
     brain = _Brain("Plan:\n1. dig into logs [worker=aayan]")
     vizhi = GenericWorker("vizhi", brain=brain, workers_file=wf)
     h = make_harness(worker="vizhi", workspace_root=tmp_path, workers_file=wf)
     res = run_craft(
-        "ship it", vizhi, h, team="core", approver=lambda i: True,
+        "ship it",
+        vizhi,
+        h,
+        team="core",
+        approver=lambda i: True,
         factory=lambda n: GenericWorker(n, brain=brain, workers_file=wf),
     )
     assert res["shared_memory"] is True
@@ -220,20 +247,22 @@ def test_team_memory_is_readable_by_leader(tmp_path):
 def test_shared_memory_false_keeps_peer_turns_out(tmp_path):
     wf = _write(
         tmp_path,
-        [_worker("vizhi", {"enabled": True, "name": "core"}),
-         _worker("aayan", {"enabled": True, "name": "core"})],
+        [_worker("vizhi", {"enabled": True, "name": "core"}), _worker("aayan", {"enabled": True, "name": "core"})],
         [_team("core", ["vizhi", "aayan"], shared_memory=False)],
     )
     brain = _Brain("Plan:\n1. dig into logs [worker=aayan]")
     vizhi = GenericWorker("vizhi", brain=brain, workers_file=wf)
     h = make_harness(worker="vizhi", workspace_root=tmp_path, workers_file=wf)
     res = run_craft(
-        "ship it", vizhi, h, team="core", approver=lambda i: True,
+        "ship it",
+        vizhi,
+        h,
+        team="core",
+        approver=lambda i: True,
         factory=lambda n: GenericWorker(n, brain=brain, workers_file=wf),
     )
     assert res["shared_memory"] is False
     assert "team_memory" not in res
     # peer did not append its directive to the planner's session doc
-    users = [m["content"] for m in brain.docs[h.session_id]
-             if m["role"] == "user"]
+    users = [m["content"] for m in brain.docs[h.session_id] if m["role"] == "user"]
     assert not any("dig into logs" in u for u in users)

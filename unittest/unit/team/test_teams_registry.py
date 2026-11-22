@@ -1,4 +1,5 @@
 """Team registry: teams.json is authoritative, worker.team must agree."""
+
 import json
 
 import pytest
@@ -38,8 +39,7 @@ def _write(tmp_path, workers, teams=None):
     workers_file = tmp_path / "workers.json"
     workers_file.write_text(json.dumps(workers), encoding="utf-8")
     if teams is not None:
-        (tmp_path / "teams.json").write_text(
-            json.dumps({"teams": teams}), encoding="utf-8")
+        (tmp_path / "teams.json").write_text(json.dumps({"teams": teams}), encoding="utf-8")
     return str(workers_file)
 
 
@@ -47,8 +47,7 @@ def test_default_team_registry_loads():
     teams = list_teams()
     core = next(t for t in teams if t["name"] == "core")
     assert core["leader"] == "vizhi"
-    assert core["members"] == [
-        "vizhi", "aayan", "arivu", "ezhilan", "thiran", "viyan"]
+    assert core["members"] == ["vizhi", "aayan", "arivu", "ezhilan", "thiran", "viyan"]
     assert core["shared_memory"] is True
     assert core["parallel"] is True
     assert core["max_workers"] == 6
@@ -78,8 +77,7 @@ def test_member_must_declare_a_team(tmp_path):
 def test_worker_declared_team_must_match_roster(tmp_path):
     wf = _write(
         tmp_path,
-        [_entry("vizhi", {"enabled": True, "name": "core"}),
-         _entry("aayan", {"enabled": True, "name": "research"})],
+        [_entry("vizhi", {"enabled": True, "name": "core"}), _entry("aayan", {"enabled": True, "name": "research"})],
         [_team(members=["vizhi", "aayan"])],
     )
     with pytest.raises(ValueError, match="declares teams .*research"):
@@ -89,8 +87,7 @@ def test_worker_declared_team_must_match_roster(tmp_path):
 def test_enabled_worker_must_be_listed_in_members(tmp_path):
     wf = _write(
         tmp_path,
-        [_entry("vizhi", {"enabled": True, "name": "core"}),
-         _entry("aayan", {"enabled": True, "name": "core"})],
+        [_entry("vizhi", {"enabled": True, "name": "core"}), _entry("aayan", {"enabled": True, "name": "core"})],
         [_team(members=["aayan"])],
     )
     with pytest.raises(ValueError, match="not in its members"):
@@ -199,8 +196,8 @@ def test_team_block_validated(tmp_path):
 
 def test_list_teams_accepts_bare_list(tmp_path):
     (tmp_path / "workers.json").write_text(
-        json.dumps([_entry("vizhi", {"enabled": True, "name": "core"})]),
-        encoding="utf-8")
+        json.dumps([_entry("vizhi", {"enabled": True, "name": "core"})]), encoding="utf-8"
+    )
     teams_file = tmp_path / "teams.json"
     teams_file.write_text(json.dumps([_team(members=["vizhi"])]), encoding="utf-8")
     teams = list_teams(str(teams_file), str(tmp_path / "workers.json"))
@@ -211,8 +208,7 @@ def test_multi_team_worker_supported(tmp_path):
     wf = _write(
         tmp_path,
         [_entry("vizhi", teams=["core", "research"])],
-        [_team(name="core", members=["vizhi"]),
-         _team(name="research", members=["vizhi"])],
+        [_team(name="core", members=["vizhi"]), _team(name="research", members=["vizhi"])],
     )
     workers = list_workers(wf)
     assert workers[0]["teams"] == ["core", "research"]
@@ -222,8 +218,7 @@ def test_multi_team_worker_supported(tmp_path):
 def test_team_and_teams_are_mutually_exclusive(tmp_path):
     wf = _write(
         tmp_path,
-        [_entry("vizhi", {"enabled": True, "name": "core"},
-                teams=["core"])],
+        [_entry("vizhi", {"enabled": True, "name": "core"}, teams=["core"])],
         [_team(members=["vizhi"])],
     )
     with pytest.raises(ValueError, match="use either 'team' or 'teams'"):
@@ -243,10 +238,8 @@ def test_duplicate_teams_rejected(tmp_path):
 def test_multi_team_worker_must_be_in_each_roster(tmp_path):
     wf = _write(
         tmp_path,
-        [_entry("vizhi", teams=["core", "research"]),
-         _entry("aayan", {"enabled": True, "name": "core"})],
-        [_team(name="core", members=["vizhi", "aayan"]),
-         _team(name="research", members=["aayan"])],
+        [_entry("vizhi", teams=["core", "research"]), _entry("aayan", {"enabled": True, "name": "core"})],
+        [_team(name="core", members=["vizhi", "aayan"]), _team(name="research", members=["aayan"])],
     )
     with pytest.raises(ValueError, match="listed in 'research'"):
         list_workers(wf)

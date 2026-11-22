@@ -40,9 +40,7 @@ from nak_host.utils.constant import OBSERVE_MAX_CHARS as MAX_CHARS
 
 
 def _root(data: dict) -> str:
-    return (str(data.get("root", "")).strip()
-            or os.environ.get("NAK_WORKSPACE", "").strip()
-            or str(default_workspace()))
+    return str(data.get("root", "")).strip() or os.environ.get("NAK_WORKSPACE", "").strip() or str(default_workspace())
 
 
 def _session(data: dict) -> str:
@@ -59,36 +57,54 @@ def capture_file(args: dict) -> str:
     data = args or {}
     raw = str(data.get("path", "")).strip()
     if not raw:
-        return json.dumps({"ok": False, "type": "file",
-                           "session": _session(data), "path": raw,
-                           "error": "missing path: worker must pass a file path"})
+        return json.dumps(
+            {
+                "ok": False,
+                "type": "file",
+                "session": _session(data),
+                "path": raw,
+                "error": "missing path: worker must pass a file path",
+            }
+        )
     ok, resolved = safe_join(_root(data), raw)
     if not ok:
-        return json.dumps({"ok": False, "type": "file",
-                           "session": _session(data), "path": raw,
-                           "error": resolved})
+        return json.dumps({"ok": False, "type": "file", "session": _session(data), "path": raw, "error": resolved})
     p = Path(resolved)
     if not p.exists():
-        return json.dumps({"ok": False, "type": "file",
-                           "session": _session(data), "path": raw,
-                           "error": f"not found: {p}"})
+        return json.dumps(
+            {"ok": False, "type": "file", "session": _session(data), "path": raw, "error": f"not found: {p}"}
+        )
     if not p.is_file():
-        return json.dumps({"ok": False, "type": "file",
-                           "session": _session(data), "path": raw,
-                           "error": f"not a file: {p} (observe is files-only)"})
+        return json.dumps(
+            {
+                "ok": False,
+                "type": "file",
+                "session": _session(data),
+                "path": raw,
+                "error": f"not a file: {p} (observe is files-only)",
+            }
+        )
     try:
         text = p.read_text(encoding="utf-8", errors="replace")
     except (OSError, UnicodeError) as exc:
-        return json.dumps({"ok": False, "type": "file",
-                           "session": _session(data), "path": raw,
-                           "error": str(exc)[:300]})
+        return json.dumps(
+            {"ok": False, "type": "file", "session": _session(data), "path": raw, "error": str(exc)[:300]}
+        )
     truncated = False
     if len(text) > MAX_CHARS:
         text, truncated = text[:MAX_CHARS] + "\n…(truncated)", True
-    return json.dumps({"ok": True, "type": "file",
-                       "session": _session(data), "path": raw,
-                       "resolved": str(p), "content": text,
-                       "content_chars": len(text), "truncated": truncated})
+    return json.dumps(
+        {
+            "ok": True,
+            "type": "file",
+            "session": _session(data),
+            "path": raw,
+            "resolved": str(p),
+            "content": text,
+            "content_chars": len(text),
+            "truncated": truncated,
+        }
+    )
 
 
 def observe(args: dict) -> str:
@@ -97,7 +113,12 @@ def observe(args: dict) -> str:
     action = str(data.get("action", "")).strip().lower() or "capture"
     if action in ("capture", "read", "cat", "get"):
         return capture_file(data)
-    return json.dumps({"ok": False, "type": "file",
-                       "session": _session(data),
-                       "path": str(data.get("path", "")),
-                       "error": f"bad action {str(data.get('action', ''))!r}: want capture|read"})
+    return json.dumps(
+        {
+            "ok": False,
+            "type": "file",
+            "session": _session(data),
+            "path": str(data.get("path", "")),
+            "error": f"bad action {str(data.get('action', ''))!r}: want capture|read",
+        }
+    )

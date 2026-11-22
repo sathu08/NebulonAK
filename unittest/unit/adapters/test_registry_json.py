@@ -54,12 +54,22 @@ def test_bad_worker_entry_is_fail_loud(tmp_path):
 
 
 def _minimal_entry(name):
-    return {"name": name, "type": "coder",
-            "identity": {"role": "developer", "personality": [],
-                         "tone": "x", "formality": "professional",
-                         "humor": "none", "gender": "unspecified",
-                         "values": [], "do_not": [], "language": "en"},
-            "memory": {"enabled": True}}
+    return {
+        "name": name,
+        "type": "coder",
+        "identity": {
+            "role": "developer",
+            "personality": [],
+            "tone": "x",
+            "formality": "professional",
+            "humor": "none",
+            "gender": "unspecified",
+            "values": [],
+            "do_not": [],
+            "language": "en",
+        },
+        "memory": {"enabled": True},
+    }
 
 
 def test_missing_file_keeps_loader_error(tmp_path):
@@ -88,5 +98,4 @@ def test_wiring_loaders_delegate():
     assert "vizhi" in names and "arivu" in names
     tools = _tools_loader()()
     assert "file" in tools
-    assert _tools_loader(None, "/no/such/tools.json")() == [
-        "file", "directory", "search", "terminal", "observe"]
+    assert _tools_loader(None, "/no/such/tools.json")() == ["file", "directory", "search", "terminal", "observe"]

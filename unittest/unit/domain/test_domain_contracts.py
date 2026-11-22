@@ -103,9 +103,7 @@ def test_task_run_resume_requires_resumable_block():
         version=0,
         assigned_worker="arivu",
         attempt=1,
-        block_reason=BlockReason(
-            code="permission_denied", detail="no", resumable=False
-        ),
+        block_reason=BlockReason(code="permission_denied", detail="no", resumable=False),
     )
     assert not denied.can_resume()
 

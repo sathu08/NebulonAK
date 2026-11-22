@@ -1,4 +1,5 @@
 """Team policy: planner roster rules and member-restricted dispatch."""
+
 import json
 import shutil
 from pathlib import Path
@@ -73,8 +74,7 @@ def _write(tmp_path, workers, teams=None):
     wf = tmp_path / "workers.json"
     wf.write_text(json.dumps(workers), encoding="utf-8")
     if teams is not None:
-        (tmp_path / "teams.json").write_text(
-            json.dumps({"teams": teams}), encoding="utf-8")
+        (tmp_path / "teams.json").write_text(json.dumps({"teams": teams}), encoding="utf-8")
     return str(wf)
 
 
@@ -84,7 +84,11 @@ def _run(tmp_path, workers, teams, answer, team=None):
     vizhi = GenericWorker("vizhi", brain=brain, workers_file=wf)
     h = make_harness(worker="vizhi", workspace_root=tmp_path, workers_file=wf)
     res = run_craft(
-        "ship it", vizhi, h, approver=lambda info: True, team=team,
+        "ship it",
+        vizhi,
+        h,
+        approver=lambda info: True,
+        team=team,
         factory=lambda n: GenericWorker(n, brain=brain, workers_file=wf),
     )
     return res
@@ -93,9 +97,11 @@ def _run(tmp_path, workers, teams, answer, team=None):
 def test_dispatch_is_restricted_to_team_members(tmp_path):
     res = _run(
         tmp_path,
-        [_worker("vizhi", {"enabled": True, "name": "core"}),
-         _worker("aayan", {"enabled": True, "name": "core"}),
-         _worker("arivu")],
+        [
+            _worker("vizhi", {"enabled": True, "name": "core"}),
+            _worker("aayan", {"enabled": True, "name": "core"}),
+            _worker("arivu"),
+        ],
         [_team("core", ["vizhi", "aayan"], max_workers=2)],
         "Plan:\n1. do x [worker=aayan]\n2. do y [worker=arivu]",
         team="core",
@@ -114,8 +120,7 @@ def test_dispatch_is_restricted_to_team_members(tmp_path):
 def test_planner_may_be_outside_team(tmp_path):
     res = _run(
         tmp_path,
-        [_worker("vizhi", {"enabled": True, "name": "core"}),
-         _worker("aayan", {"enabled": True, "name": "research"})],
+        [_worker("vizhi", {"enabled": True, "name": "core"}), _worker("aayan", {"enabled": True, "name": "research"})],
         [_team("core", ["vizhi"]), _team("research", ["aayan"])],
         "Plan:\n1. research x [worker=aayan]",
         team="research",
@@ -131,10 +136,8 @@ def test_strict_team_rejects_outside_planner(tmp_path):
     # vizhi's default team is core; planning for research is rejected.
     res = _run(
         tmp_path,
-        [_worker("vizhi", {"enabled": True, "name": "core"}),
-         _worker("aayan", {"enabled": True, "name": "research"})],
-        [_team("core", ["vizhi"]),
-         _team("research", ["aayan"], planner_must_be_member=True)],
+        [_worker("vizhi", {"enabled": True, "name": "core"}), _worker("aayan", {"enabled": True, "name": "research"})],
+        [_team("core", ["vizhi"]), _team("research", ["aayan"], planner_must_be_member=True)],
         "Plan:\n1. research x [worker=aayan]",
         team="research",
     )

@@ -1,4 +1,5 @@
 """Parallel decision batches: order, dedupe, isolation, bounds, timeout."""
+
 import time
 
 from nak_host.decision import decide_many
@@ -15,8 +16,7 @@ def test_order_and_per_request_ids_are_preserved():
         calls.append(request["goal"])
         return {"ok": True, "worker": request["goal"].upper()}
 
-    out = decide_many([{"id": "a", "goal": "x"}, {"id": "b", "goal": "y"}],
-                      fn, max_parallel=2)
+    out = decide_many([{"id": "a", "goal": "x"}, {"id": "b", "goal": "y"}], fn, max_parallel=2)
     assert [r["id"] for r in out] == ["a", "b"]
     assert [r["worker"] for r in out] == ["X", "Y"]
     assert sorted(calls) == ["x", "y"]
@@ -29,9 +29,9 @@ def test_duplicate_requests_run_once_but_return_one_per_input():
         calls.append(request)
         return {"ok": True, "worker": "vizhi"}
 
-    out = decide_many([{"id": "1", "key": "same", "goal": "x"},
-                       {"id": "2", "key": "same", "goal": "x"}], fn,
-                      max_parallel=2)
+    out = decide_many(
+        [{"id": "1", "key": "same", "goal": "x"}, {"id": "2", "key": "same", "goal": "x"}], fn, max_parallel=2
+    )
     assert len(calls) == 1
     assert len(out) == 2
     assert [r["id"] for r in out] == ["1", "2"]
@@ -44,8 +44,7 @@ def test_one_failure_does_not_cancel_siblings():
             raise RuntimeError("boom")
         return {"ok": True, "worker": "aayan"}
 
-    out = decide_many([{"id": "bad", "goal": "bad"},
-                       {"id": "good", "goal": "good"}], fn, max_parallel=2)
+    out = decide_many([{"id": "bad", "goal": "bad"}, {"id": "good", "goal": "good"}], fn, max_parallel=2)
     by_id = {r["id"]: r for r in out}
     assert by_id["bad"]["ok"] is False
     assert "boom" in by_id["bad"]["error"]

@@ -15,9 +15,7 @@ def test_crafts_read_from_harness_section(tmp_path, monkeypatch):
     monkeypatch.delenv("NAK_CRAFTS", raising=False)
     monkeypatch.delenv("NAK_CRAFTS_FILE", raising=False)
     monkeypatch.delenv("NAK_CRAFTS_PROMPT", raising=False)
-    cfg = _cfg(tmp_path, "[harness]\n"
-                         "crafts = custom/crafts.json\n"
-                         "crafts_prompt = custom/craft\n")
+    cfg = _cfg(tmp_path, "[harness]\ncrafts = custom/crafts.json\ncrafts_prompt = custom/craft\n")
     settings = load_settings(cfg)
     assert settings.crafts == "custom/crafts.json"
     assert settings.crafts_prompt == "custom/craft"

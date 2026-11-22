@@ -6,32 +6,205 @@
 <link rel="stylesheet" href="/assets/style.css">
 </head>
 <body>
-<nav><a href="/">Status</a><a href="pipeline">Pipeline</a><a href="settings">Settings</a></nav>
+<nav><a href="/api/NebulonAK/dashboard/">Status</a><a href="/api/NebulonAK/dashboard/pipeline">Pipeline</a><a href="/api/NebulonAK/dashboard/builder">Builder</a><a href="/api/NebulonAK/dashboard/settings">Settings</a></nav>
 <h1>Settings <span class="dim">(effective config — secrets redacted)</span></h1>
 <div id="error"></div>
-<h2>Sections</h2>
-<table id="cfg"><tr><th>Section</th><th>Key</th><th>Value</th></tr></table>
-<h2>Manifests</h2>
-<div id="manifests"></div>
-<h2>Craft gaps</h2>
-<div id="gaps" class="mono"></div>
+<div id="fileTabs" class="tabs"></div>
+<div id="systemView">
+  <div class="dim small" style="margin-bottom:12px">Note: after Save, restart the server (<span class="mono">python nebulonak.py restart</span>) for changes to take effect.</div>
+  <div id="cfgSections"></div>
+  <div id="sysStatus" class="mono dim" style="margin-bottom:12px"></div>
+  <h2>Manifests</h2>
+  <div id="manifests"></div>
+  <h2>Craft gaps</h2>
+  <div id="gaps" class="mono"></div>
+</div>
+<div id="fileView" style="display:none">
+  <div class="file-head">
+    <h2 id="fileTitle" style="margin:0">file</h2>
+  </div>
+  <div class="mono dim" id="fileMeta" style="margin:4px 0 12px 0"></div>
+  <div id="fileCards"></div>
+  <div id="fileStatus" class="mono dim"></div>
+</div>
 <script src="/assets/api.js"></script>
 <script>
 "use strict";
+const SECRET_KEYS = new Set(["auth_token", "password", "secret", "api_key", "bearer"]);
+const HIDE_KEYS = { paths: new Set(["web", "pid_file"]) };
+let CACHE = null;      // last /settings payload (system view source)
+let EDITING = null;    // system section in edit mode, or null
+let CUR_TAB = "system";
+let FILE_CACHE = null; // {id, kind, path, content}
+
+function isSecretKey(key) {
+  return SECRET_KEYS.has(String(key || "").toLowerCase());
+}
+
+function sectionValues(kv) {
+  if (kv !== null && typeof kv === "object") return kv;
+  return { value: kv };
+}
+
+/* ---------- tabs ---------- */
+const FILE_TABS = [
+  { id: "workers", label: "workers" },
+  { id: "teams", label: "teams" },
+  { id: "tools", label: "tools" },
+  { id: "permissions", label: "permissions" },
+  { id: "crafts", label: "crafts" },
+];
+
+function renderTabs() {
+  const bar = document.getElementById("fileTabs");
+  bar.innerHTML = "";
+  const mk = (id, label) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = label;
+    b.className = "tab" + (CUR_TAB === id ? " active" : "");
+    b.onclick = () => switchTab(id);
+    bar.appendChild(b);
+  };
+  mk("system", "System");
+  FILE_TABS.forEach(t => mk(t.id, t.label));
+}
+
+function switchTab(id) {
+  CUR_TAB = id;
+  EDITING = null;
+  renderTabs();
+  document.getElementById("systemView").style.display = id === "system" ? "" : "none";
+  document.getElementById("fileView").style.display = id === "system" ? "none" : "";
+  if (id !== "system") openFile(id);
+}
+
+/* ---------- system view (existing cards) ---------- */
+function render() {
+  const wrap = document.getElementById("cfgSections");
+  wrap.innerHTML = "";
+  const settings = (CACHE && CACHE.settings) || {};
+  Object.entries(settings).forEach(([section, kv]) => {
+    if (kv === null || kv === undefined) return;
+    const values = sectionValues(kv);
+    const hide = HIDE_KEYS[section] || new Set();
+    const keys = Object.keys(values).filter(k => !hide.has(k));
+    if (!keys.length) return;
+    const isEdit = (EDITING === section);
+    const readOnly = (section === "store_backend");
+
+    const sec = document.createElement("div");
+    sec.className = "settings-section" + (isEdit ? " editing" : "");
+    sec.dataset.section = section;
+
+    const head = document.createElement("div");
+    head.className = "section-head";
+    const title = document.createElement("div");
+    title.className = "section-label";
+    title.textContent = section;
+    head.appendChild(title);
+    if (isEdit) {
+      const tag = document.createElement("span");
+      tag.className = "editing-tag";
+      tag.textContent = "editing";
+      head.appendChild(tag);
+    } else if (readOnly) {
+      const tag = document.createElement("span");
+      tag.className = "dim small";
+      tag.textContent = "read-only";
+      head.appendChild(tag);
+    } else {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "icon-btn";
+      btn.title = "Edit " + section;
+      btn.textContent = "✎";
+      btn.onclick = () => { EDITING = section; render(); };
+      head.appendChild(btn);
+    }
+    sec.appendChild(head);
+
+    const grid = document.createElement("div");
+    grid.className = "section-grid";
+    keys.forEach((k) => {
+      const raw = values[k];
+      const f = document.createElement("div");
+      f.className = "field";
+      const lab = document.createElement("label");
+      lab.textContent = k;
+      f.appendChild(lab);
+      if (isEdit) {
+        const inp = document.createElement("input");
+        inp.dataset.key = k;
+        if (isSecretKey(k) || String(raw) === "***") {
+          inp.type = "password";
+          inp.placeholder = "(hidden — leave blank to keep)";
+          inp.value = "";
+        } else {
+          inp.type = "text";
+          inp.value = String(raw);
+        }
+        f.appendChild(inp);
+      } else {
+        const val = document.createElement("div");
+        val.className = "mono value";
+        val.textContent = String(raw);
+        f.appendChild(val);
+      }
+      grid.appendChild(f);
+    });
+    sec.appendChild(grid);
+
+    if (isEdit) {
+      const foot = document.createElement("div");
+      foot.className = "section-foot open";
+      const hint = document.createElement("span");
+      hint.className = "dim small hint";
+      hint.textContent = "writes nebulonak.cfg (backup .bak kept)";
+      foot.appendChild(hint);
+      const cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.textContent = "Cancel";
+      cancel.className = "ghost";
+      cancel.onclick = () => { EDITING = null; render(); };
+      const save = document.createElement("button");
+      save.type = "button";
+      save.textContent = "Save";
+      save.onclick = () => saveEdit(section);
+      foot.appendChild(cancel);
+      foot.appendChild(save);
+      sec.appendChild(foot);
+    }
+    wrap.appendChild(sec);
+  });
+}
+
+async function saveEdit(section) {
+  const sec = document.querySelector('.settings-section[data-section="' + section + '"]');
+  if (!sec) return;
+  const values = {};
+  sec.querySelectorAll("input[data-key]").forEach((inp) => {
+    const k = inp.dataset.key;
+    if (inp.value !== "") values[k] = inp.value;
+    else if (!isSecretKey(k)) values[k] = inp.value;
+  });
+  if (!Object.keys(values).length) { EDITING = null; render(); return; }
+  try {
+    banner("");
+    await nakApi.saveSection(section, values);
+    EDITING = null;
+    await load();
+    document.getElementById("sysStatus").textContent = "Saved " + section + " — restart the server (python nebulonak.py restart) for changes to take effect.";
+  } catch (e) { banner("save failed: " + e.message); }
+}
+
 async function load() {
   try {
     banner("");
     const s = await nakApi.settings();
-    const tbl = document.getElementById("cfg");
-    Object.entries(s.settings || {}).forEach(([section, kv]) => {
-      Object.entries(kv || {}).forEach(([k, v]) => {
-        const tr = document.createElement("tr");
-        tr.appendChild(el("td", "dim", section));
-        tr.appendChild(el("td", "mono", k));
-        tr.appendChild(el("td", "mono", String(v)));
-        tbl.appendChild(tr);
-      });
-    });
+    CACHE = s;
+    if (EDITING && !(CACHE.settings || {})[EDITING]) EDITING = null;
+    render();
     const m = await nakApi.manifests();
     const box = document.getElementById("manifests");
     box.innerHTML = "";
@@ -45,6 +218,343 @@ async function load() {
     banner("settings failed: " + e.message);
   }
 }
+
+/* ---------- file view: title + values cards ---------- */
+function flatText(v) {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "object") {
+    const s = JSON.stringify(v, null, 1);
+    return s.length > 600 ? s.slice(0, 600) + " …(truncated)" : s;
+  }
+  return String(v);
+}
+
+function kvCard(title, obj) {
+  const sec = document.createElement("div");
+  sec.className = "settings-section";
+  const head = document.createElement("div");
+  head.className = "section-head";
+  const t = document.createElement("div");
+  t.className = "section-label";
+  t.textContent = title;
+  head.appendChild(t);
+  sec.appendChild(head);
+  const grid = document.createElement("div");
+  grid.className = "section-grid";
+  Object.keys(obj || {}).forEach((k) => {
+    const f = document.createElement("div");
+    f.className = "field";
+    const lab = document.createElement("label");
+    lab.textContent = k;
+    f.appendChild(lab);
+    const val = document.createElement("div");
+    val.className = "mono value";
+    val.textContent = flatText(obj[k]);
+    f.appendChild(val);
+    grid.appendChild(f);
+  });
+  sec.appendChild(grid);
+  return sec;
+}
+
+function parseIni(text) {
+  const out = {};
+  let cur = null;
+  String(text || "").split(/\r?\n/).forEach((line) => {
+    const s = line.trim();
+    if (!s || s.startsWith("#") || s.startsWith(";")) return;
+    const m = s.match(/^\[(.+)\]$/);
+    if (m) { cur = m[1].trim(); out[cur] = out[cur] || {}; return; }
+    const eq = s.indexOf("=");
+    if (eq > 0 && cur) out[cur][s.slice(0, eq).trim()] = s.slice(eq + 1).trim();
+  });
+  return out;
+}
+
+let FILE_DOC = null;   // parsed JSON of open file (view + merge target)
+let EDIT_CARD = null;  // group index under edit, or null
+let EDIT_DRAFT = null; // clone of the card object being edited
+
+function mergeInto(target, src) {
+  if (Array.isArray(target) && Array.isArray(src)) { target.length = 0; src.forEach(x => target.push(x)); return; }
+  if (target && typeof target === "object" && src && typeof src === "object"
+      && !Array.isArray(target) && !Array.isArray(src)) {
+    Object.keys(target).forEach(k => { if (!(k in src)) delete target[k]; });
+    Object.assign(target, src);
+  }
+}
+
+function fileGroups(doc) {
+  // [{title, editable, get, set}] — get/set reach live refs inside doc
+  if (Array.isArray(doc)) {
+    return doc.map((e, i) => ({
+      title: String((e && e.name) || ("#" + (i + 1))),
+      editable: !!(e && typeof e === "object"),
+      get: ((dd, ii) => () => dd[ii])(doc, i),
+      set: ((dd, ii) => (d) => mergeInto(dd[ii], d))(doc, i),
+    }));
+  }
+  if (doc && typeof doc === "object") {
+    const ks = Object.keys(doc);
+    if (ks.length && ks.every(k => doc[k] && typeof doc[k] === "object" && !Array.isArray(doc[k]))) {
+      const groups = [];
+      ks.forEach(k => {
+        const v = doc[k];
+        const sks = Object.keys(v);
+        if (sks.length && sks.every(sk => v[sk] && typeof v[sk] === "object")) {
+          Object.keys(v).forEach(sk => groups.push({
+            title: k + " / " + (((v[sk] && v[sk].name)) || sk),
+            editable: true,
+            get: ((vv, ssk) => () => vv[ssk])(v, sk),
+            set: ((vv, ssk) => (d) => mergeInto(vv[ssk], d))(v, sk),
+          }));
+        } else groups.push({
+          title: (v && v.name) || k, editable: true,
+          get: ((dd, kk) => () => dd[kk])(doc, k),
+          set: ((dd, kk) => (d) => mergeInto(dd[kk], d))(doc, k),
+        });
+      });
+      return groups;
+    }
+    return [{ title: FILE_CACHE.id, editable: true,
+              get: () => FILE_DOC, set: (d) => { FILE_DOC = d; } }];
+  }
+  return [];
+}
+
+function renderFileCards() {
+  const box = document.getElementById("fileCards");
+  box.innerHTML = "";
+  EDIT_BAD.clear();
+  if (!FILE_CACHE) return;
+  const { id, kind, content } = FILE_CACHE;
+  try {
+    if (kind === "ini") {
+      const ini = parseIni(content);
+      Object.keys(ini).forEach(sec => box.appendChild(kvCard(sec, ini[sec])));
+      if (!Object.keys(ini).length) box.appendChild(el("div", "dim", "Empty file."));
+      return;
+    }
+    FILE_DOC = JSON.parse(content || "null");
+    const groups = fileGroups(FILE_DOC);
+    if (!groups.length) { box.appendChild(el("div", "dim", "Empty file.")); return; }
+    groups.forEach((g, idx) => {
+      const isEdit = (EDIT_CARD === idx);
+      const sec = document.createElement("div");
+      sec.className = "settings-section" + (isEdit ? " editing" : "");
+      const head = document.createElement("div");
+      head.className = "section-head";
+      const t = document.createElement("div");
+      t.className = "section-label";
+      t.textContent = g.title;
+      head.appendChild(t);
+      const acts = document.createElement("div");
+      acts.className = "head-actions";
+      if (isEdit) {
+        const tag = document.createElement("span");
+        tag.className = "editing-tag";
+        tag.textContent = "editing";
+        acts.appendChild(tag);
+        const cancel = document.createElement("button");
+        cancel.type = "button"; cancel.textContent = "Cancel"; cancel.className = "ghost";
+        cancel.onclick = () => {
+          EDIT_CARD = null; EDIT_DRAFT = null;
+          document.getElementById("fileStatus").textContent = "";
+          renderFileCards();
+        };
+        const save = document.createElement("button");
+        save.type = "button"; save.textContent = "Save";
+        save.onclick = () => saveFileCard(idx);
+        acts.appendChild(cancel);
+        acts.appendChild(save);
+      } else if (g.editable) {
+        const btn = document.createElement("button");
+        btn.type = "button"; btn.className = "icon-btn";
+        btn.title = "Edit " + g.title; btn.textContent = "✎";
+        btn.onclick = () => {
+          EDIT_CARD = idx;
+          EDIT_DRAFT = JSON.parse(JSON.stringify(g.get()));
+          EDIT_BAD.clear();
+          document.getElementById("fileStatus").textContent = "";
+          renderFileCards();
+        };
+        acts.appendChild(btn);
+      }
+      head.appendChild(acts);
+      sec.appendChild(head);
+      const grid = document.createElement("div");
+      grid.className = "section-grid";
+      const src = isEdit ? EDIT_DRAFT : g.get();
+      if (src && typeof src === "object" && !Array.isArray(src)) {
+        Object.keys(src).forEach(k => nodeInto(grid, k, src[k], isEdit ? ((o, kk) => (nv) => { o[kk] = nv; })(src, k) : null));
+      } else if (Array.isArray(src)) {
+        src.forEach((item, i) => nodeInto(grid, String(i), item, isEdit ? ((a, ii) => (nv) => { a[ii] = nv; })(src, i) : null));
+      } else if (isEdit) {
+        grid.appendChild(el("div", "dim", "Nothing editable here."));
+      } else {
+        grid.appendChild(el("div", "mono dim", flatText(src)));
+      }
+      sec.appendChild(grid);
+      box.appendChild(sec);
+    });
+  } catch (e) {
+    box.appendChild(el("div", "dim", "Cannot preview: " + e.message));
+  }
+}
+
+async function saveFileCard(idx) {
+  const groups = fileGroups(FILE_DOC);
+  const g = groups[idx];
+  if (!g) return;
+  if (EDIT_BAD.size) {
+    document.getElementById("fileStatus").textContent = "Fix highlighted fields first.";
+    return;
+  }
+  g.set(EDIT_DRAFT);
+  const text = JSON.stringify(FILE_DOC, null, 2);
+  try {
+    const r = await nakApi.saveConfigFile(FILE_CACHE.id, text);
+    FILE_CACHE.content = text;
+    EDIT_CARD = null;
+    EDIT_DRAFT = null;
+    document.getElementById("fileStatus").textContent = "saved " + g.title + " (" + r.path + ", backup .bak kept)";
+    renderFileCards();
+  } catch (e) { banner("save failed: " + e.message); }
+}
+
+async function openFile(id) {
+  document.getElementById("fileTitle").textContent = id;
+  document.getElementById("fileMeta").textContent = "loading…";
+  document.getElementById("fileCards").innerHTML = "";
+  document.getElementById("fileStatus").textContent = "";
+  EDIT_CARD = null;
+  EDIT_DRAFT = null;
+  FILE_DOC = null;
+  try {
+    banner("");
+    const r = await nakApi.getConfigFile(id);
+    FILE_CACHE = { id, kind: r.kind, path: r.path, content: r.content || "" };
+    document.getElementById("fileTitle").textContent = id;
+    document.getElementById("fileMeta").textContent = r.path || "";
+    renderFileCards();
+  } catch (e) { banner("load failed: " + e.message); }
+}
+
+/* ---------- shared field editors (inputs bound live to holder object) ---------- */
+const EDIT_BAD = new Set();
+
+function markBad(inp, bad) {
+  inp.classList.toggle("invalid", !!bad);
+  if (bad) EDIT_BAD.add(inp); else EDIT_BAD.delete(inp);
+}
+
+function nodeInto(container, labelText, value, set) {
+  // One renderer for both modes: set == null → view (text box), else edit (input bound to set).
+  // View and edit therefore build the exact same tree: same cards, sub-blocks, fields.
+  if (value !== null && typeof value === "object") {
+    if (Array.isArray(value)) {
+      if (!value.length || value.every(x => x === null || typeof x !== "object")) {
+        const joined = value.join(", ");
+        if (set) {
+          const sample = value.slice();
+          const f = document.createElement("div");
+          f.className = "field";
+          const lab = document.createElement("label");
+          lab.textContent = labelText;
+          f.appendChild(lab);
+          const inp = document.createElement("input");
+          inp.type = "text";
+          inp.value = joined;
+          inp.oninput = () => {
+            const parts = inp.value.split(",").map(s => s.trim()).filter(s => s !== "");
+            const nums = sample.length > 0 && sample.every(x => typeof x === "number");
+            if (nums && parts.some(p => Number.isNaN(Number(p)))) { markBad(inp, true); return; }
+            markBad(inp, false);
+            set(nums ? parts.map(Number) : parts);
+          };
+          f.appendChild(inp);
+          container.appendChild(f);
+        } else {
+          const f = document.createElement("div");
+          f.className = "field";
+          const lab = document.createElement("label");
+          lab.textContent = labelText;
+          f.appendChild(lab);
+          const val = document.createElement("div");
+          val.className = "mono value";
+          val.textContent = joined;
+          f.appendChild(val);
+          container.appendChild(f);
+        }
+      } else {
+        const box = document.createElement("div");
+        box.className = "sub-block";
+        const t = document.createElement("div");
+        t.className = "sub-title";
+        t.textContent = labelText + " [" + value.length + "]";
+        box.appendChild(t);
+        value.forEach((item, i) => {
+          const title = (item && typeof item === "object" && item.name) ? String(item.name) : "#" + (i + 1);
+          nodeInto(box, title, item, set ? ((arr, ii) => (nv) => { arr[ii] = nv; })(value, i) : null);
+        });
+        container.appendChild(box);
+      }
+    } else {
+      const box = document.createElement("div");
+      box.className = "sub-block";
+      const t = document.createElement("div");
+      t.className = "sub-title";
+      t.textContent = labelText;
+      box.appendChild(t);
+      Object.keys(value).forEach(k => nodeInto(box, k, value[k], set ? ((o, kk) => (nv) => { o[kk] = nv; })(value, k) : null));
+      container.appendChild(box);
+    }
+  } else if (set) {
+    const f = document.createElement("div");
+    f.className = "field";
+    const lab = document.createElement("label");
+    lab.textContent = labelText;
+    f.appendChild(lab);
+    if (typeof value === "boolean") {
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = !!value;
+      cb.style.width = "auto";
+      cb.onchange = () => set(cb.checked);
+      f.appendChild(cb);
+    } else if (typeof value === "number") {
+      const inp = document.createElement("input");
+      inp.type = "text";
+      inp.value = String(value);
+      inp.oninput = () => {
+        const n = Number(inp.value);
+        if (inp.value.trim() === "" || Number.isNaN(n)) markBad(inp, true);
+        else { markBad(inp, false); set(n); }
+      };
+      f.appendChild(inp);
+    } else {
+      const inp = document.createElement("input");
+      inp.type = "text";
+      inp.value = (value === null || value === undefined) ? "" : String(value);
+      inp.oninput = () => set(inp.value);
+      f.appendChild(inp);
+    }
+    container.appendChild(f);
+  } else {
+    const f = document.createElement("div");
+    f.className = "field";
+    const lab = document.createElement("label");
+    lab.textContent = labelText;
+    f.appendChild(lab);
+    const val = document.createElement("div");
+    val.className = "mono value";
+    val.textContent = (value === null || value === undefined) ? "" : String(value);
+    f.appendChild(val);
+    container.appendChild(f);
+  }
+}
+
+renderTabs();
 load();
 </script>
 </body>

@@ -42,12 +42,13 @@ def test_missing_probe_suggests_probe_not_tool_fix():
     from pipeline.vetting.utils.models import ProbeResult, WorkerResult
     from pipeline.vetting.utils.runner import _build_improvements
 
-    result = WorkerResult(name="arivu", tool_probes=[
-        ProbeResult("search", "tool", "fail",
-                    "no safe probe for tool 'search'"),
-        ProbeResult("file", "tool", "fail", "file read returned no content"),
-    ])
-    suggestions = {i.target: i.suggestion
-                   for i in _build_improvements(result, None)}
+    result = WorkerResult(
+        name="arivu",
+        tool_probes=[
+            ProbeResult("search", "tool", "fail", "no safe probe for tool 'search'"),
+            ProbeResult("file", "tool", "fail", "file read returned no content"),
+        ],
+    )
+    suggestions = {i.target: i.suggestion for i in _build_improvements(result, None)}
     assert "_probe_call" in suggestions["search"]
     assert "Fix tool file" in suggestions["file"]

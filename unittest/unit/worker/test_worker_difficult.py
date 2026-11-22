@@ -4,6 +4,7 @@ Evaluates how the worker behaves under bad manifests, edge crafts,
 memory on/off, FakeBrain failures, and strict module boundaries.
 crafts is the ONLY source of truth (no autonomy block).
 """
+
 import contextlib
 import json
 import shutil
@@ -21,6 +22,7 @@ from nak_host.worker.engine.prompt import _render_prompt_template
 
 # ---------- manifest validation (fail-loud) ----------
 
+
 def _write_workers(tmp_path, entries):
     p = tmp_path / "workers.json"
     p.write_text(json.dumps(entries), encoding="utf-8")
@@ -36,9 +38,14 @@ def _base_entry(name="t1"):
         "name": name,
         "type": "coordinator",
         "identity": {
-            "role": "tester", "personality": ["Calm"], "tone": "flat",
-            "formality": "professional", "humor": "none",
-            "values": ["Quality"], "do_not": [], "language": "en",
+            "role": "tester",
+            "personality": ["Calm"],
+            "tone": "flat",
+            "formality": "professional",
+            "humor": "none",
+            "values": ["Quality"],
+            "do_not": [],
+            "language": "en",
         },
         "memory": {"enabled": True},
         "crafts": ["plan"],
@@ -68,6 +75,7 @@ def test_missing_memory_rejected(tmp_path):
 def test_new_type_accepted_from_json_itself(tmp_path):
     # types live in workers.json itself: a brand-new type loads with no code change
     from nak_host.worker.engine.autonomy import _worker_types
+
     e = _base_entry("novel")
     e["type"] = "reviewer"
     entries = list_workers(_write_workers(tmp_path, [e]))
@@ -88,19 +96,36 @@ def test_blank_type_defaults_to_coordinator(tmp_path):
 def test_craft_modes_come_from_registry(tmp_path):
     import json as _json
     from nak_host.worker.engine.autonomy import _craft_modes
+
     modes = _craft_modes(None)
     assert "plan" in modes and "build" in modes
     # missing registry -> fallback list, never raises
     assert _craft_modes("/no/such/workers.json") == ["plan", "assign", "build"]
     # new pin needs no code change: tmp registry with extra mode
-    reg = {"crafts": [
-        {"mode": "plan", "version": "1.0.0", "description": "p",
-         "tools": ["file"], "max_steps": 3, "approval": "small",
-         "auto_steps": 2, "path": "plan"},
-        {"mode": "qux", "version": "1.0.0", "description": "q",
-         "tools": ["file"], "max_steps": 2, "approval": "all",
-         "auto_steps": 1, "path": "plan"},
-    ]}
+    reg = {
+        "crafts": [
+            {
+                "mode": "plan",
+                "version": "1.0.0",
+                "description": "p",
+                "tools": ["file"],
+                "max_steps": 3,
+                "approval": "small",
+                "auto_steps": 2,
+                "path": "plan",
+            },
+            {
+                "mode": "qux",
+                "version": "1.0.0",
+                "description": "q",
+                "tools": ["file"],
+                "max_steps": 2,
+                "approval": "all",
+                "auto_steps": 1,
+                "path": "plan",
+            },
+        ]
+    }
     wf = tmp_path / "workers.json"
     wf.write_text(_json.dumps([_base_entry("t1")]), encoding="utf-8")
     (tmp_path / "crafts.json").write_text(_json.dumps(reg), encoding="utf-8")
@@ -110,14 +135,28 @@ def test_craft_modes_come_from_registry(tmp_path):
 
 
 def test_step_limits_come_only_from_planning_crafts(tmp_path):
-    reg = {"crafts": [
-        {"mode": "plan", "version": "1.0.0", "description": "p",
-         "tools": ["file"], "max_steps": 3, "approval": "small",
-         "auto_steps": 2},
-        {"mode": "assign", "version": "1.0.0", "description": "a",
-         "tools": ["file"], "max_steps": 99, "approval": "all",
-         "auto_steps": 99},
-    ]}
+    reg = {
+        "crafts": [
+            {
+                "mode": "plan",
+                "version": "1.0.0",
+                "description": "p",
+                "tools": ["file"],
+                "max_steps": 3,
+                "approval": "small",
+                "auto_steps": 2,
+            },
+            {
+                "mode": "assign",
+                "version": "1.0.0",
+                "description": "a",
+                "tools": ["file"],
+                "max_steps": 99,
+                "approval": "all",
+                "auto_steps": 99,
+            },
+        ]
+    }
     wf = tmp_path / "workers.json"
     wf.write_text(json.dumps([_base_entry("t1")]), encoding="utf-8")
     (tmp_path / "crafts.json").write_text(json.dumps(reg), encoding="utf-8")
@@ -128,11 +167,19 @@ def test_step_limits_come_only_from_planning_crafts(tmp_path):
 
 
 def test_autonomy_honors_nak_crafts_env(tmp_path, monkeypatch):
-    reg = {"crafts": [
-        {"mode": "plan", "version": "1.0.0", "description": "p",
-         "tools": ["file"], "max_steps": 6, "approval": "small",
-         "auto_steps": 6},
-    ]}
+    reg = {
+        "crafts": [
+            {
+                "mode": "plan",
+                "version": "1.0.0",
+                "description": "p",
+                "tools": ["file"],
+                "max_steps": 6,
+                "approval": "small",
+                "auto_steps": 6,
+            },
+        ]
+    }
     reg_path = tmp_path / "custom-crafts.json"
     reg_path.write_text(json.dumps(reg), encoding="utf-8")
     wf = tmp_path / "workers.json"
@@ -145,6 +192,7 @@ def test_autonomy_honors_nak_crafts_env(tmp_path, monkeypatch):
 
 def test_worker_types_fallback_never_raises():
     from nak_host.worker.engine.autonomy import _worker_types
+
     assert _worker_types("/no/such/workers.json") == ["coordinator", "researcher", "coder"]
     assert isinstance(_worker_types(None), list) and _worker_types(None)
 
@@ -158,8 +206,7 @@ def test_bad_identity_field_rejected(tmp_path):
 
 def test_bad_decision_type_rejected(tmp_path):
     e = _base_entry("bad5")
-    e["decision"] = {"enabled": True, "model": "laya",
-                     "questions": [{"name": "q1", "type": "telepathy"}]}
+    e["decision"] = {"enabled": True, "model": "laya", "questions": [{"name": "q1", "type": "telepathy"}]}
     with pytest.raises(ValueError, match="bad decision type"):
         list_workers(_write_workers(tmp_path, [e]))
 
@@ -180,6 +227,7 @@ def test_empty_prompt_file_rejected(tmp_path):
 
 # ---------- crafts derivation (no autonomy block) ----------
 
+
 def test_autonomy_key_rejected(tmp_path):
     e = _base_entry("bad_auto")
     e["autonomy"] = {"modes": ["plan"]}
@@ -189,6 +237,7 @@ def test_autonomy_key_rejected(tmp_path):
 
 def test_crafts_derivation_defaults(tmp_path):
     from nak_host.utils.constant import DEFAULT_WORKERS_JSON as _DEFAULT_WORKERS
+
     a = _autonomy_from_crafts(None, str(_DEFAULT_WORKERS), "x")
     assert "plan" in a["modes"]
     assert a["approval"] in ("all", "small", "none")
@@ -244,6 +293,7 @@ def test_needs_plan_approval_all_small_none(tmp_path):
 
 # ---------- crafts enforcement on model output ----------
 
+
 def test_enforce_assist_strips_plan_header_and_worker_tags(tmp_path):
     e = _base_entry("assist_w")
     e["crafts"] = []
@@ -276,11 +326,19 @@ def test_enforce_assign_strips_tags_when_no_assign(tmp_path):
 
 # ---------- prompt template edge cases ----------
 
+
 def test_render_drops_empty_labels():
-    ident = {"role": "r", "personality": [], "tone": "", "formality": "",
-             "humor": "", "language": "", "values": [], "do_not": []}
-    out = _render_prompt_template("Personality: {{personality}}\nTone: {{tone}}\nHi {{role}}",
-                                  ident, "bob")
+    ident = {
+        "role": "r",
+        "personality": [],
+        "tone": "",
+        "formality": "",
+        "humor": "",
+        "language": "",
+        "values": [],
+        "do_not": [],
+    }
+    out = _render_prompt_template("Personality: {{personality}}\nTone: {{tone}}\nHi {{role}}", ident, "bob")
     assert "Personality:" not in out
     assert "Tone:" not in out
     assert "Hi r" in out
@@ -295,6 +353,7 @@ def test_autonomy_lines_assist_vs_plan():
 
 
 # ---------- chat / memory / triage ----------
+
 
 def test_chat_session_key_client_owned_merges_not_daily(worker_vizhi, fake_brain):
     # A harness session key is unknown to Mind (no get_session) -> AK owns the
@@ -321,8 +380,7 @@ def test_chat_mind_owned_session_forwards_and_defers(tmp_path):
     brain = OwnedBrain()
     e = _base_entry("owned")
     e["crafts"] = []
-    w = GenericWorker("owned", brain=brain,
-                      workers_file=_write_workers(tmp_path, [e]))
+    w = GenericWorker("owned", brain=brain, workers_file=_write_workers(tmp_path, [e]))
     out = w.chat("hello owned", session_id="mind_sess")
     assert [c["session_id"] for c in brain.chat_calls if c["session_id"]] == ["mind_sess"]
     assert out["memory"]["session_id"] == "mind_sess"
@@ -360,13 +418,13 @@ def test_chat_old_brain_without_session_id_still_works(tmp_path):
 
     e = _base_entry("oldsess")
     e["crafts"] = []
-    w = GenericWorker("oldsess", brain=OldBrain(),
-                      workers_file=_write_workers(tmp_path, [e]))
+    w = GenericWorker("oldsess", brain=OldBrain(), workers_file=_write_workers(tmp_path, [e]))
     out = w.chat("hi", session_id="sess_old")
     assert out["answer"] == "old ok"
 
 
 # ---------- session sharing (Part B read path) ----------
+
 
 def test_session_notes_merged_into_prompt(worker_vizhi, fake_brain):
     fake_brain.session_docs["sess_team"] = [
@@ -375,8 +433,7 @@ def test_session_notes_merged_into_prompt(worker_vizhi, fake_brain):
     ]
     out = worker_vizhi.chat("continue the work", session_id="sess_team")
     assert out["memory"]["shared"] is True
-    main_call = next(c for c in fake_brain.chat_calls
-                     if "session sess_team so far" in str(c["messages"]))
+    main_call = next(c for c in fake_brain.chat_calls if "session sess_team so far" in str(c["messages"]))
     blocks = [m.get("content", "") for m in (main_call["messages"] or [])]
     assert any("session sess_team so far" in b and "null check" in b for b in blocks)
 
@@ -389,13 +446,13 @@ def test_session_missing_or_broken_is_skipped(worker_vizhi, fake_brain):
 
 def test_session_skipped_when_stateless(tmp_path):
     from conftest import FakeBrain
+
     brain = FakeBrain(answer="hi")
     brain.session_docs["s1"] = [{"role": "user", "content": "x"}]
     e = _base_entry("quiet")
     e["memory"] = {"enabled": False}
     e["crafts"] = []
-    w = GenericWorker("quiet", brain=brain,
-                      workers_file=_write_workers(tmp_path, [e]))
+    w = GenericWorker("quiet", brain=brain, workers_file=_write_workers(tmp_path, [e]))
     out = w.chat("hi", session_id="s1")
     assert out["memory"]["shared"] is False
 
@@ -406,10 +463,8 @@ def test_session_turns_capped_and_filtered(worker_vizhi, fake_brain):
     fake_brain.session_docs["big"] = msgs
     out = worker_vizhi.chat("go", session_id="big")
     assert out["memory"]["shared"] is True
-    main_call = next(c for c in fake_brain.chat_calls
-                     if "session big so far" in str(c["messages"]))
-    block = next(m["content"] for m in (main_call["messages"] or [])
-                 if "session big so far" in m.get("content", ""))
+    main_call = next(c for c in fake_brain.chat_calls if "session big so far" in str(c["messages"]))
+    block = next(m["content"] for m in (main_call["messages"] or []) if "session big so far" in m.get("content", ""))
     assert "system" not in block and "should be dropped" not in block
     assert block.count("[user]") <= 10  # never more than the turn cap
     assert "note 14" in block  # newest turns survive the budget
@@ -442,14 +497,14 @@ def test_chat_no_brain_raises(bare_worker_vizhi):
 
 def test_chat_stateless_when_memory_disabled(tmp_path):
     from conftest import FakeBrain
+
     e = _base_entry("stateless")
     e["memory"] = {"enabled": False}
     e["crafts"] = []
     if "decision" in e:
         del e["decision"]
     brain = FakeBrain(answer="hi there")
-    w = GenericWorker("stateless", brain=brain,
-                      workers_file=_write_workers(tmp_path, [e]))
+    w = GenericWorker("stateless", brain=brain, workers_file=_write_workers(tmp_path, [e]))
     out = w.chat("hello")
     assert out["answer"] == "hi there"
     assert out["memory"]["enabled"] is False
@@ -459,8 +514,7 @@ def test_chat_stateless_when_memory_disabled(tmp_path):
 
 def test_chat_memory_recall_and_store(worker_vizhi, fake_brain):
     fake_brain.search_hits = [{"content": {"text": "user likes tea"}}]
-    fake_brain.decisions = [{"candidate": {"text": "likes tea", "importance": 1},
-                             "should_remember": True}]
+    fake_brain.decisions = [{"candidate": {"text": "likes tea", "importance": 1}, "should_remember": True}]
     out = worker_vizhi.chat("remember I like tea")
     assert out["memory"]["enabled"] is True
     assert out["memory"]["recalled"] is True
@@ -479,8 +533,7 @@ def test_chat_search_failure_never_breaks(tmp_path):
     e = _base_entry("resilient")
     e["crafts"] = []
     brain = BoomSearch(answer="ok answer")
-    w = GenericWorker("resilient", brain=brain,
-                      workers_file=_write_workers(tmp_path, [e]))
+    w = GenericWorker("resilient", brain=brain, workers_file=_write_workers(tmp_path, [e]))
     out = w.chat("hi")
     assert out["answer"] == "ok answer"
     assert out["memory"]["recalled"] is False
@@ -488,10 +541,10 @@ def test_chat_search_failure_never_breaks(tmp_path):
 
 def test_store_decisions_respects_approve_and_should_remember(tmp_path):
     from conftest import FakeBrain
+
     e = _base_entry("storer")
     brain = FakeBrain()
-    w = GenericWorker("storer", brain=brain,
-                      workers_file=_write_workers(tmp_path, [e]))
+    w = GenericWorker("storer", brain=brain, workers_file=_write_workers(tmp_path, [e]))
     decisions = [
         {"candidate": {"text": "keep me", "importance": 2}, "should_remember": True},
         {"candidate": {"text": "drop me"}, "should_remember": False},
@@ -505,31 +558,40 @@ def test_store_decisions_respects_approve_and_should_remember(tmp_path):
 
 def test_triage_disabled_when_no_decision(tmp_path):
     from conftest import FakeBrain
+
     e = _base_entry("nodec")
     e["crafts"] = []
-    w = GenericWorker("nodec", brain=FakeBrain(),
-                      workers_file=_write_workers(tmp_path, [e]))
+    w = GenericWorker("nodec", brain=FakeBrain(), workers_file=_write_workers(tmp_path, [e]))
     assert w.decision_enabled() is False
     assert w.triage("hi")["enabled"] is False
 
 
 def test_triage_clarify_and_escalate_paths(worker_vizhi):
     # force clarify via injected policy evaluator
-    worker_vizhi._policy_evaluator = lambda triage, pol: {"action": "clarify", "allowed": False,
-                                                          "reasons": ["needs more"], "policy": pol}
+    worker_vizhi._policy_evaluator = lambda triage, pol: {
+        "action": "clarify",
+        "allowed": False,
+        "reasons": ["needs more"],
+        "policy": pol,
+    }
     worker_vizhi._decider = lambda *a, **k: {"ok": True, "decision": {"needs_clarification": True}}
     out = worker_vizhi.chat("do thing")
     assert "need a bit more detail" in out["answer"]
     assert out["acted"] is False
     # force escalate
-    worker_vizhi._policy_evaluator = lambda triage, pol: {"action": "escalate", "allowed": False,
-                                                          "reasons": ["risk 3 >= 2"], "policy": pol}
+    worker_vizhi._policy_evaluator = lambda triage, pol: {
+        "action": "escalate",
+        "allowed": False,
+        "reasons": ["risk 3 >= 2"],
+        "policy": pol,
+    }
     out2 = worker_vizhi.chat("do risky thing")
     assert out2["needs_approve"] is True
 
 
 def test_boundary_no_runtime_brain_import():
     import nak_host.worker.engine.worker as mod
+
     lines = Path(mod.__file__).read_text(encoding="utf-8").splitlines()
     # runtime imports = top-level import/from NOT inside `if TYPE_CHECKING:` block
     runtime = []

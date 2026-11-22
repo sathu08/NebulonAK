@@ -40,9 +40,7 @@ _SLUG = re.compile(r"[^a-z0-9]+")
 
 
 def _root(data: dict) -> str:
-    return (str(data.get("root", "")).strip()
-            or os.environ.get("NAK_WORKSPACE", "").strip()
-            or str(default_workspace()))
+    return str(data.get("root", "")).strip() or os.environ.get("NAK_WORKSPACE", "").strip() or str(default_workspace())
 
 
 def _slug(title: str) -> str:
@@ -63,10 +61,9 @@ def _markdown(title: str, sections: Dict[str, Any]) -> str:
         if isinstance(value, (list, tuple)):
             lines.extend(f"- {_inline(item)}" for item in value)
         elif isinstance(value, dict):
-            lines.extend(["```json",
-                          json.dumps(value, indent=2, ensure_ascii=False,
-                                     sort_keys=True, default=str),
-                          "```"])
+            lines.extend(
+                ["```json", json.dumps(value, indent=2, ensure_ascii=False, sort_keys=True, default=str), "```"]
+            )
         else:
             lines.append(str(value))
         lines.append("")
@@ -78,8 +75,7 @@ def report(args: dict) -> str:
     data = args or {}
     action = str(data.get("action", "")).strip().lower() or "write"
     if action not in ("write", "generate", "save"):
-        return json.dumps({"ok": False,
-                           "error": f"bad action {action!r}: want write|generate|save"})
+        return json.dumps({"ok": False, "error": f"bad action {action!r}: want write|generate|save"})
     fmt = str(data.get("format", "md")).strip().lower() or "md"
     if fmt not in ("md", "json"):
         return json.dumps({"ok": False, "error": f"bad format {fmt!r}: want md|json"})
@@ -93,31 +89,32 @@ def report(args: dict) -> str:
     else:
         sections = data.get("sections")
         if not isinstance(sections, dict):
-            return json.dumps({"ok": False,
-                               "error": "sections must be an object (or pass content)"})
-        text = (_markdown(title, sections) if fmt == "md" else
-                json.dumps({"title": title, "sections": sections}, indent=2,
-                           ensure_ascii=False, sort_keys=True, default=str) + "\n")
+            return json.dumps({"ok": False, "error": "sections must be an object (or pass content)"})
+        text = (
+            _markdown(title, sections)
+            if fmt == "md"
+            else json.dumps(
+                {"title": title, "sections": sections}, indent=2, ensure_ascii=False, sort_keys=True, default=str
+            )
+            + "\n"
+        )
     raw_path = str(data.get("path", "")).strip()
     if not raw_path:
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         raw_path = f"{DEFAULT_DIR}/{_slug(title)}-{stamp}.{fmt}"
     if not raw_path.lower().endswith(f".{fmt}"):
-        return json.dumps({"ok": False,
-                           "error": f"path must end with .{fmt}: {raw_path}"})
+        return json.dumps({"ok": False, "error": f"path must end with .{fmt}: {raw_path}"})
     ok, resolved = safe_join(_root(data), raw_path)
     if not ok:
         return json.dumps({"ok": False, "path": raw_path, "error": resolved})
     payload = text.encode("utf-8", "ignore")
     if len(payload) > MAX_BYTES:
-        return json.dumps({"ok": False, "path": raw_path,
-                           "error": f"report too large: {len(payload)} > {MAX_BYTES}"})
+        return json.dumps({"ok": False, "path": raw_path, "error": f"report too large: {len(payload)} > {MAX_BYTES}"})
     p = Path(resolved)
     overwrite = data.get("overwrite") is True
     try:
         if p.exists() and not overwrite:
-            return json.dumps({"ok": False, "path": str(p),
-                               "error": f"already exists: {p} (pass overwrite: true)"})
+            return json.dumps({"ok": False, "path": str(p), "error": f"already exists: {p} (pass overwrite: true)"})
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(text, encoding="utf-8")
     except (OSError, UnicodeError) as exc:
@@ -126,5 +123,6 @@ def report(args: dict) -> str:
         relative = os.path.relpath(str(p), _root(data))
     except (OSError, ValueError):
         relative = str(p)
-    return json.dumps({"ok": True, "path": str(p), "relative": relative,
-                       "bytes": len(payload), "format": fmt, "title": title})
+    return json.dumps(
+        {"ok": True, "path": str(p), "relative": relative, "bytes": len(payload), "format": fmt, "title": title}
+    )

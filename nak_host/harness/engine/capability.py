@@ -17,7 +17,7 @@ def required_caps(spec: Dict[str, Any]) -> List[str]:
     if isinstance(declared, list) and declared:
         return [str(c).strip() for c in declared if str(c).strip()]
     out = []
-    for c in (spec.get("capabilities") or []):
+    for c in spec.get("capabilities") or []:
         c = str(c).strip()
         if c:
             out.append(CAP_MAP.get(c, f"cap.{c}"))

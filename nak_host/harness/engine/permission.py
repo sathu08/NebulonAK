@@ -45,6 +45,7 @@ def strip_dot(p: str) -> str:
 
 def norm_resources(value: Any) -> Dict[str, Any]:
     from typing import List
+
     files = value.get("files") if isinstance(value, dict) else None
     files = files if isinstance(files, dict) else {}
 
@@ -59,19 +60,24 @@ def norm_resources(value: Any) -> Dict[str, Any]:
 
 def norm_worker_entry(value: Any) -> Dict[str, Any]:
     from .limits import norm_limits
+
     e = value if isinstance(value, dict) else {}
-    return {"enabled": bool(e.get("enabled", True)),
-            "tools": norm_verdict_map(e.get("tools")),
-            "capabilities": norm_verdict_map(e.get("capabilities")),
-            "resources": norm_resources(e.get("resources")),
-            "limits": norm_limits(e.get("limits"))}
+    return {
+        "enabled": bool(e.get("enabled", True)),
+        "tools": norm_verdict_map(e.get("tools")),
+        "capabilities": norm_verdict_map(e.get("capabilities")),
+        "resources": norm_resources(e.get("resources")),
+        "limits": norm_limits(e.get("limits")),
+    }
 
 
 def deny_all_permissions() -> Dict[str, Any]:
     """Fail-closed builtin: no workers, no roles, every default denies."""
-    return {"defaults": {"unknown_worker": "deny", "unknown_tool": "deny",
-                         "missing_permission": "deny", "error": "deny"},
-            "workers": {}, "roles": {}}
+    return {
+        "defaults": {"unknown_worker": "deny", "unknown_tool": "deny", "missing_permission": "deny", "error": "deny"},
+        "workers": {},
+        "roles": {},
+    }
 
 
 def load_permissions(permissions: Any = None) -> Dict[str, Any]:
@@ -96,12 +102,11 @@ def load_permissions(permissions: Any = None) -> Dict[str, Any]:
         return deny_all_permissions()
     workers = raw.get("workers") if isinstance(raw.get("workers"), dict) else {}
     roles = raw.get("roles") if isinstance(raw.get("roles"), dict) else {}
-    return {"defaults": {"unknown_worker": "deny", "unknown_tool": "deny",
-                         "missing_permission": "deny", "error": "deny"},
-            "workers": {str(k).strip(): norm_worker_entry(v)
-                        for k, v in workers.items() if str(k).strip()},
-            "roles": {str(k).strip(): norm_worker_entry(v)
-                      for k, v in roles.items() if str(k).strip()}}
+    return {
+        "defaults": {"unknown_worker": "deny", "unknown_tool": "deny", "missing_permission": "deny", "error": "deny"},
+        "workers": {str(k).strip(): norm_worker_entry(v) for k, v in workers.items() if str(k).strip()},
+        "roles": {str(k).strip(): norm_worker_entry(v) for k, v in roles.items() if str(k).strip()},
+    }
 
 
 def resolve_workers_file(workers_file: Any = None) -> Path:
@@ -119,8 +124,9 @@ def load_worker_names(workers_file: Any = None) -> list:
         return []
     if not isinstance(raw, list):
         return []
-    return sorted({str(e.get("name", "")).strip() for e in raw
-                   if isinstance(e, dict) and str(e.get("name", "")).strip()})
+    return sorted(
+        {str(e.get("name", "")).strip() for e in raw if isinstance(e, dict) and str(e.get("name", "")).strip()}
+    )
 
 
 def assert_worker_known(workers_file: Any = None, worker_name: Optional[str] = None) -> str:
@@ -161,14 +167,13 @@ def load_worker_role(workers_file: Any = None, worker_name: Optional[str] = None
     for e in raw:
         if isinstance(e, dict) and str(e.get("name", "")).strip() == name:
             ident = e.get("identity")
-            role = (ident.get("role") if isinstance(ident, dict) else None)
+            role = ident.get("role") if isinstance(ident, dict) else None
             role = str(role or "").strip()
             return role or None
     return None
 
 
-def merge_entries(base: Optional[Dict[str, Any]],
-                  overlay: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+def merge_entries(base: Optional[Dict[str, Any]], overlay: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     """Merge a role base entry with a worker overlay entry (worker wins).
 
     * enabled: AND (either side disabled -> disabled).
@@ -191,7 +196,7 @@ def merge_entries(base: Optional[Dict[str, Any]],
     def _union(*lists: Any) -> list:
         out: list = []
         for lst in lists:
-            for x in (lst or []):
+            for x in lst or []:
                 if x not in out:
                     out.append(x)
         return sorted(out)
@@ -203,27 +208,27 @@ def merge_entries(base: Optional[Dict[str, Any]],
         "description": str(overlay.get("description") or base.get("description") or ""),
         "tools": tools,
         "capabilities": caps,
-        "resources": {"files": {
-            "read": _union(bres.get("read"), ores.get("read")),
-            "write": _union(bres.get("write"), ores.get("write")),
-            "deny": _union(bres.get("deny"), ores.get("deny")),
-        }},
+        "resources": {
+            "files": {
+                "read": _union(bres.get("read"), ores.get("read")),
+                "write": _union(bres.get("write"), ores.get("write")),
+                "deny": _union(bres.get("deny"), ores.get("deny")),
+            }
+        },
         "limits": lim,
     }
 
 
-def deny(tool: str, worker_label: str, reason: str,
-         need_approval: bool = False) -> Dict[str, Any]:
-    out: Dict[str, Any] = {"ok": False, "error": reason,
-                           "tool": tool, "worker": worker_label}
+def deny(tool: str, worker_label: str, reason: str, need_approval: bool = False) -> Dict[str, Any]:
+    out: Dict[str, Any] = {"ok": False, "error": reason, "tool": tool, "worker": worker_label}
     if need_approval:
         out["need_approval"] = True
     return out
 
 
-def rule_for(permissions: Dict[str, Any], worker: Optional[str],
-             bound_worker: Optional[str] = None,
-             role: Optional[str] = None) -> tuple:
+def rule_for(
+    permissions: Dict[str, Any], worker: Optional[str], bound_worker: Optional[str] = None, role: Optional[str] = None
+) -> tuple:
     """Effective permission entry for a worker -> (entry|None, label).
 
     Resolution: role base (permissions.roles[role]) merged with the
@@ -248,8 +253,7 @@ def rule_for(permissions: Dict[str, Any], worker: Optional[str],
     if base is None:
         entry = overlay if isinstance(overlay, dict) else None
         return (entry, name) if isinstance(entry, dict) else (None, name)
-    merged = merge_entries(base if isinstance(base, dict) else None,
-                           overlay if isinstance(overlay, dict) else None)
+    merged = merge_entries(base if isinstance(base, dict) else None, overlay if isinstance(overlay, dict) else None)
     return (merged, name) if isinstance(merged, dict) else (None, name)
 
 
@@ -261,9 +265,10 @@ def registry_coverage(specs: Any) -> tuple:
     back to its plain capabilities list when no map exists).
     """
     from .capability import CAP_MAP
+
     tools: set = set()
     caps: set = set()
-    for spec in (specs or []):
+    for spec in specs or []:
         if not isinstance(spec, dict):
             continue
         name = str(spec.get("name", "") or "").strip()
@@ -278,7 +283,7 @@ def registry_coverage(specs: Any) -> tuple:
                         if c:
                             caps.add(c)
         else:
-            for c in (spec.get("capabilities") or []):
+            for c in spec.get("capabilities") or []:
                 c = str(c or "").strip()
                 if c:
                     caps.add(CAP_MAP.get(c, c if "." in c else f"cap.{c}"))
@@ -314,11 +319,10 @@ def audit_tool_coverage(permissions: Any, specs: Any) -> Dict[str, Any]:
             extra_tools = sorted(t for t in have_tools if t not in known_tools)
             extra_caps = sorted(c for c in have_caps if c not in known_caps)
             if miss_tools or miss_caps or extra_tools or extra_caps:
-                gaps[f"{section}:{entry_name}"] = {"tools": miss_tools,
-                                                  "capabilities": miss_caps,
-                                                  "extra_tools": extra_tools,
-                                                  "extra_capabilities": extra_caps}
+                gaps[f"{section}:{entry_name}"] = {
+                    "tools": miss_tools,
+                    "capabilities": miss_caps,
+                    "extra_tools": extra_tools,
+                    "extra_capabilities": extra_caps,
+                }
     return gaps
-
-
-

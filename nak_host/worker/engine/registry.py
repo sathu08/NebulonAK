@@ -4,6 +4,7 @@ Membership authority: ``teams.json.members`` decides who can be dispatched.
 A worker's ``team`` block is its default affiliation and must agree with the
 team roster; mismatches fail loudly at load time.
 """
+
 from __future__ import annotations
 
 import json
@@ -102,11 +103,9 @@ def _read_workers(workers_file: str | Path) -> List[Dict[str, Any]]:
         # Legacy single-team view kept for older callers/tests.
         legacy = e.get("team") if isinstance(e.get("team"), dict) else {}
         legacy_name = str(legacy.get("name", "") or "").strip()
-        norm["team"] = {"enabled": bool(teams),
-                        "name": teams[0] if teams else legacy_name}
+        norm["team"] = {"enabled": bool(teams), "name": teams[0] if teams else legacy_name}
         if "autonomy" in e and e["autonomy"] is not None:
-            raise ValueError(f"entry {name!r}: 'autonomy' was removed — "
-                             f"use 'crafts' instead")
+            raise ValueError(f"entry {name!r}: 'autonomy' was removed — use 'crafts' instead")
         norm.setdefault("capabilities", ["identity"])
         if "prompt_file" in e and not str(e.get("prompt_file") or "").strip():
             raise ValueError(f"entry {name!r}: empty 'prompt_file'")
@@ -131,8 +130,7 @@ def _read_workers(workers_file: str | Path) -> List[Dict[str, Any]]:
                 qtype = str(q.get("type", "")).strip().lower()
                 if qtype not in _VALID_DECISION_TYPES:
                     raise ValueError(
-                        f"entry {name!r}: bad decision type {qtype!r} "
-                        f"(want one of {sorted(_VALID_DECISION_TYPES)})"
+                        f"entry {name!r}: bad decision type {qtype!r} (want one of {sorted(_VALID_DECISION_TYPES)})"
                     )
             pol = dec.get("policy")
             if pol is not None:
@@ -147,9 +145,13 @@ def _read_workers(workers_file: str | Path) -> List[Dict[str, Any]]:
             else:
                 pol = {}
             merged = {
-                "enabled": True, "min_confidence": 0.6, "max_risk": 2.0,
-                "max_priority_auto": 2.5, "clarify_on_needs_clarification": True,
-                "escalate_on_high_risk": True, **pol,
+                "enabled": True,
+                "min_confidence": 0.6,
+                "max_risk": 2.0,
+                "max_priority_auto": 2.5,
+                "clarify_on_needs_clarification": True,
+                "escalate_on_high_risk": True,
+                **pol,
             }
             norm["decision"] = {**dec, "policy": merged}
         # crafts allowlist: which crafts (plan/assign/...) this worker may use.
@@ -174,8 +176,8 @@ def _read_workers(workers_file: str | Path) -> List[Dict[str, Any]]:
         # see _autonomy_from_crafts. Stored as norm["autonomy"] for
         # enforcement/rendering compat (crafts remains the editable truth).
         norm["autonomy"] = _autonomy_from_crafts(
-            None if "crafts" not in e or e["crafts"] is None else norm["crafts"],
-            workers_file, name)
+            None if "crafts" not in e or e["crafts"] is None else norm["crafts"], workers_file, name
+        )
         out.append(norm)
     names = [e["name"] for e in out]
     if len(set(names)) != len(names):
@@ -238,16 +240,18 @@ def _read_teams(teams_file: str | Path) -> List[Dict[str, Any]]:
             if key in t and (not isinstance(t[key], str) or not t[key].strip()):
                 raise ValueError(f"team {name!r}: {key!r} must be a non-empty string")
         norm = dict(t)
-        norm.update({
-            "name": name,
-            "description": description.strip(),
-            "leader": leader,
-            "members": members,
-            "shared_memory": shared,
-            "parallel": parallel,
-            "max_workers": mw,
-            "planner_must_be_member": strict,
-        })
+        norm.update(
+            {
+                "name": name,
+                "description": description.strip(),
+                "leader": leader,
+                "members": members,
+                "shared_memory": shared,
+                "parallel": parallel,
+                "max_workers": mw,
+                "planner_must_be_member": strict,
+            }
+        )
         out.append(norm)
     names = [t["name"] for t in out]
     if len(set(names)) != len(names):
@@ -255,8 +259,7 @@ def _read_teams(teams_file: str | Path) -> List[Dict[str, Any]]:
     return out
 
 
-def _validate_membership(workers: List[Dict[str, Any]],
-                         teams: List[Dict[str, Any]]) -> None:
+def _validate_membership(workers: List[Dict[str, Any]], teams: List[Dict[str, Any]]) -> None:
     """Reject any worker/team roster disagreement."""
     by_worker = {w["name"]: w for w in workers}
     by_team = {t["name"]: t for t in teams}
@@ -272,36 +275,24 @@ def _validate_membership(workers: List[Dict[str, Any]],
                 legacy = by_worker[m].get("team") or {}
                 if legacy.get("name"):
                     raise ValueError(
-                        f"worker {m!r}: team {legacy['name']!r} is disabled "
-                        f"but the worker is listed in {tname!r}"
+                        f"worker {m!r}: team {legacy['name']!r} is disabled but the worker is listed in {tname!r}"
                     )
-                raise ValueError(
-                    f"worker {m!r}: no team declared "
-                    f"but is listed in {tname!r}"
-                )
+                raise ValueError(f"worker {m!r}: no team declared but is listed in {tname!r}")
             if tname not in declared:
-                raise ValueError(
-                    f"worker {m!r} declares teams {declared!r} "
-                    f"but is listed in {tname!r}"
-                )
+                raise ValueError(f"worker {m!r} declares teams {declared!r} but is listed in {tname!r}")
     for w in workers:
         for tname in w.get("teams") or []:
             if tname not in by_team:
                 raise ValueError(f"worker {w['name']!r}: unknown team {tname!r}")
             if w["name"] not in by_team[tname]["members"]:
-                raise ValueError(
-                    f"worker {w['name']!r}: declares team {tname!r} "
-                    f"but is not in its members"
-                )
+                raise ValueError(f"worker {w['name']!r}: declares team {tname!r} but is not in its members")
 
 
 def _reject_orphan_teams(workers: List[Dict[str, Any]], teams_file: Path) -> None:
     """A worker declaring a team needs teams.json next to workers.json."""
     orphaned = [w["name"] for w in workers if w.get("teams")]
     if orphaned:
-        raise ValueError(
-            f"worker(s) declare a team but {teams_file} is missing: {orphaned}"
-        )
+        raise ValueError(f"worker(s) declare a team but {teams_file} is missing: {orphaned}")
 
 
 def list_workers(workers_file: str | Path = _DEFAULT_WORKERS) -> List[Dict[str, Any]]:
@@ -315,16 +306,18 @@ def list_workers(workers_file: str | Path = _DEFAULT_WORKERS) -> List[Dict[str, 
     return workers
 
 
-def list_teams(teams_file: str | Path = _DEFAULT_TEAMS,
-               workers_file: str | Path = _DEFAULT_WORKERS) -> List[Dict[str, Any]]:
+def list_teams(
+    teams_file: str | Path = _DEFAULT_TEAMS, workers_file: str | Path = _DEFAULT_WORKERS
+) -> List[Dict[str, Any]]:
     """Load teams and validate their rosters against workers.json."""
     teams = _read_teams(teams_file)
     _validate_membership(_read_workers(workers_file), teams)
     return teams
 
 
-def get_team(name: str, teams_file: str | Path = _DEFAULT_TEAMS,
-             workers_file: str | Path = _DEFAULT_WORKERS) -> Dict[str, Any]:
+def get_team(
+    name: str, teams_file: str | Path = _DEFAULT_TEAMS, workers_file: str | Path = _DEFAULT_WORKERS
+) -> Dict[str, Any]:
     """Return one normalized team or raise ValueError when unknown."""
     wanted = str(name or "").strip()
     for team in list_teams(teams_file, workers_file):

@@ -16,9 +16,14 @@ from typing import Any, Callable, Dict, Optional
 from .permission import deny
 
 
-def ask(tool: str, given: Dict[str, Any], worker_label: str,
-        what: str, approver: Optional[Callable[..., bool]] = None,
-        fallback_approver: Optional[Callable[..., bool]] = None) -> Optional[Dict[str, Any]]:
+def ask(
+    tool: str,
+    given: Dict[str, Any],
+    worker_label: str,
+    what: str,
+    approver: Optional[Callable[..., bool]] = None,
+    fallback_approver: Optional[Callable[..., bool]] = None,
+) -> Optional[Dict[str, Any]]:
     """Resolve an 'ask' verdict. Approver True -> None (proceed).
 
     No approver (or decline) -> deny + need_approval flag for the
@@ -33,6 +38,4 @@ def ask(tool: str, given: Dict[str, Any], worker_label: str,
             approved = False
     if approved:
         return None
-    return deny(tool, worker_label,
-                f"{what} needs approval for worker {worker_label!r}",
-                need_approval=True)
+    return deny(tool, worker_label, f"{what} needs approval for worker {worker_label!r}", need_approval=True)

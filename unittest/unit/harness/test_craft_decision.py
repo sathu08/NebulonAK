@@ -1,4 +1,5 @@
 """Craft decision block: normalization, fail-loud validation, defaults."""
+
 import pytest
 
 from nak_host.harness.craft import craft as C
@@ -28,12 +29,19 @@ def test_assign_craft_ships_parallel_per_step_decision():
 
 
 def test_normalize_decision_accepts_full_block():
-    dec = C.normalize_decision({
-        "enabled": True, "scope": "once", "assignment": "decision_only",
-        "mode": "endpoint", "parallel": False, "max_parallel": 99,
-        "timeout": 2.5, "on_error": "ask",
-        "questions": [{"name": "risk", "type": "score"}],
-    })
+    dec = C.normalize_decision(
+        {
+            "enabled": True,
+            "scope": "once",
+            "assignment": "decision_only",
+            "mode": "endpoint",
+            "parallel": False,
+            "max_parallel": 99,
+            "timeout": 2.5,
+            "on_error": "ask",
+            "questions": [{"name": "risk", "type": "score"}],
+        }
+    )
     assert dec["enabled"] is True
     assert dec["scope"] == "once"
     assert dec["assignment"] == "decision_only"
@@ -45,15 +53,18 @@ def test_normalize_decision_accepts_full_block():
     assert dec["questions"] == [{"name": "risk", "type": "score"}]
 
 
-@pytest.mark.parametrize("key,value", [
-    ("scope", "every"),
-    ("assignment", "first"),
-    ("mode", "magic"),
-    ("on_error", "ignore"),
-    ("max_parallel", "many"),
-    ("timeout", "soon"),
-    ("timeout", 0),
-])
+@pytest.mark.parametrize(
+    "key,value",
+    [
+        ("scope", "every"),
+        ("assignment", "first"),
+        ("mode", "magic"),
+        ("on_error", "ignore"),
+        ("max_parallel", "many"),
+        ("timeout", "soon"),
+        ("timeout", 0),
+    ],
+)
 def test_bad_decision_values_fail_closed(key, value):
     with pytest.raises(ValueError, match=f"decision.{key}"):
         C.normalize_decision({key: value})

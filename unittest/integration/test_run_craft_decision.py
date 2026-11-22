@@ -1,8 +1,15 @@
 """run_craft decision stage — tags win, decisions fill missing, audit in plan."""
+
 from pathlib import Path
 
-DECISION = {"enabled": True, "scope": "per_step", "mode": "endpoint",
-            "assignment": "tags_win", "parallel": True, "timeout": 5.0}
+DECISION = {
+    "enabled": True,
+    "scope": "per_step",
+    "mode": "endpoint",
+    "assignment": "tags_win",
+    "parallel": True,
+    "timeout": 5.0,
+}
 
 
 def _worker(answer, name="vizhi"):
@@ -25,8 +32,7 @@ def _must_not_route(*_args, **_kwargs):
 def _harness(name, tmp_workspace, approver=None):
     from nak_host.wiring import make_harness
 
-    return make_harness(worker=name, workspace_root=tmp_workspace,
-                        approver=approver)
+    return make_harness(worker=name, workspace_root=tmp_workspace, approver=approver)
 
 
 def test_decision_fills_missing_and_keeps_tags(tmp_workspace):
@@ -41,8 +47,9 @@ def test_decision_fills_missing_and_keeps_tags(tmp_workspace):
 
     w.route = route
     h = _harness("vizhi", tmp_workspace, approver=lambda i: True)
-    res = run_craft("summarize notes", w, h, approver=lambda i: True,
-                    decision=DECISION, team=None, brain_factory=_factory())
+    res = run_craft(
+        "summarize notes", w, h, approver=lambda i: True, decision=DECISION, team=None, brain_factory=_factory()
+    )
 
     assert res["planned"] is True
     assert len(calls) == 1 and "read notes" in calls[0]
@@ -68,8 +75,7 @@ def test_tags_win_needs_no_decisions_when_every_step_is_tagged(tmp_workspace):
 
     w.route = route
     h = _harness("vizhi", tmp_workspace, approver=lambda i: True)
-    res = run_craft("summarize notes", w, h, approver=lambda i: True,
-                    decision=DECISION, brain_factory=_factory())
+    res = run_craft("summarize notes", w, h, approver=lambda i: True, decision=DECISION, brain_factory=_factory())
 
     assert res["planned"] is True
     assert res["assigned_workers"] == ["aayan", "arivu"]
@@ -82,8 +88,7 @@ def test_failed_decision_blocks_step_and_forces_approval(tmp_workspace):
     w = _worker("1. read notes\n2. summarize", name="aayan")
     w.route = lambda *_a, **_k: {"ok": False, "error": "endpoint down"}
     h = _harness("aayan", tmp_workspace)
-    res = run_craft("summarize notes", w, h, approver=None,
-                    decision=DECISION, brain_factory=_factory())
+    res = run_craft("summarize notes", w, h, approver=None, decision=DECISION, brain_factory=_factory())
 
     assert res["planned"] is True
     assert res["needs_approval"] is True
@@ -101,9 +106,15 @@ def test_decision_parallel_false_is_visible_in_evidence(tmp_workspace):
     w = _worker("1. read notes\n2. summarize")
     w.route = lambda *_a, **_k: {"ok": True, "worker": "arivu"}
     h = _harness("vizhi", tmp_workspace, approver=lambda i: True)
-    res = run_craft("summarize notes", w, h, approver=lambda i: True,
-                    decision=DECISION, decision_parallel=False,
-                    brain_factory=_factory())
+    res = run_craft(
+        "summarize notes",
+        w,
+        h,
+        approver=lambda i: True,
+        decision=DECISION,
+        decision_parallel=False,
+        brain_factory=_factory(),
+    )
 
     assert res["decision"]["parallel"] is False
     assert "serial" in res["decision"]["status"]
@@ -115,8 +126,7 @@ def test_decision_off_leaves_untagged_steps_alone(tmp_workspace):
     w = _worker("1. read notes\n2. summarize")
     w.route = _must_not_route
     h = _harness("vizhi", tmp_workspace, approver=lambda i: True)
-    res = run_craft("summarize notes", w, h, approver=lambda i: True,
-                    decision=False, brain_factory=_factory())
+    res = run_craft("summarize notes", w, h, approver=lambda i: True, decision=False, brain_factory=_factory())
 
     assert res["planned"] is True
     assert res["decision"] is None
@@ -133,8 +143,7 @@ def test_worker_decision_disabled_skips_enabled_craft_block(tmp_workspace):
     w.entry["decision"] = dict(w.entry["decision"], enabled=False)
     w.route = _must_not_route
     h = _harness("vizhi", tmp_workspace, approver=lambda i: True)
-    res = run_craft("summarize notes", w, h, approver=lambda i: True,
-                    craft="assign", brain_factory=_factory())
+    res = run_craft("summarize notes", w, h, approver=lambda i: True, craft="assign", brain_factory=_factory())
 
     assert res["planned"] is True
     assert res["assigned_workers"] == []
@@ -152,8 +161,7 @@ def test_decision_off_still_dispatches_existing_tags(tmp_workspace):
     def factory(name):
         return make_worker(name, brain=FakeBrain(answer=f"{name} done"))
 
-    res = run_craft("ship login", w, h, approver=lambda i: True,
-                    team="core", decision=False, factory=factory)
+    res = run_craft("ship login", w, h, approver=lambda i: True, team="core", decision=False, factory=factory)
 
     assert res["decision"] is None
     assert res["assigned_workers"] == ["aayan", "arivu"]
@@ -180,8 +188,7 @@ def test_core_team_assign_craft_routes_multiple_workers_in_parallel(tmp_workspac
     def factory(name):
         return make_worker(name, brain=FakeBrain(answer=f"{name} done"))
 
-    res = run_craft("ship login", w, h, approver=lambda i: True,
-                    team="core", craft="assign", factory=factory)
+    res = run_craft("ship login", w, h, approver=lambda i: True, team="core", craft="assign", factory=factory)
 
     assert res["planned"] is True
     assert res["decision"]["parallel"] is True
@@ -201,8 +208,7 @@ def test_decision_only_overrides_existing_tag(tmp_workspace):
     w.route = lambda *_a, **_k: {"ok": True, "worker": "arivu"}
     h = _harness("vizhi", tmp_workspace, approver=lambda i: True)
     cfg = dict(DECISION, assignment="decision_only")
-    res = run_craft("summarize notes", w, h, approver=lambda i: True,
-                    decision=cfg, brain_factory=_factory())
+    res = run_craft("summarize notes", w, h, approver=lambda i: True, decision=cfg, brain_factory=_factory())
 
     assert res["assigned_workers"] == ["arivu"]
     assert "[worker=aayan]" not in res["steps"][0]

@@ -15,28 +15,30 @@ from pipeline.vetting.utils.runner import (
 
 def _plan_json():
     cases = []
-    for i, difficulty in enumerate(
-            ["easy", "easy", "mid", "mid", "hard", "hard"], 1):
-        cases.append({
-            "id": f"q{i}",
-            "difficulty": difficulty,
-            "question": f"Question {i}?",
-            "expected": f"Answer {i}",
-            "rubric": "Score 1.0 when the answer is present.",
-            "weight": 1,
-            "checks": [{"id": f"q{i}-check", "op": "contains",
-                        "expected": "answer"}],
-        })
+    for i, difficulty in enumerate(["easy", "easy", "mid", "mid", "hard", "hard"], 1):
+        cases.append(
+            {
+                "id": f"q{i}",
+                "difficulty": difficulty,
+                "question": f"Question {i}?",
+                "expected": f"Answer {i}",
+                "rubric": "Score 1.0 when the answer is present.",
+                "weight": 1,
+                "checks": [{"id": f"q{i}-check", "op": "contains", "expected": "answer"}],
+            }
+        )
     return json.dumps({"cases": cases})
 
 
 def _judge_json(case_id, score=1.0):
-    return json.dumps({
-        "case_id": case_id,
-        "score": score,
-        "rationale": "Matches the rubric.",
-        "evidence": "answer",
-    })
+    return json.dumps(
+        {
+            "case_id": case_id,
+            "score": score,
+            "rationale": "Matches the rubric.",
+            "evidence": "answer",
+        }
+    )
 
 
 class ScriptedBrain:
@@ -114,8 +116,7 @@ def test_planner_profile_drops_hidden_metadata():
     profile = build_profile("arivu")
     plan_profile = planner_profile(profile)
     assert plan_profile["worker_visible"] == profile["worker_visible"]
-    for hidden in ("tools", "tool_verdicts", "capabilities",
-                   "decision", "memory"):
+    for hidden in ("tools", "tool_verdicts", "capabilities", "decision", "memory"):
         assert hidden not in plan_profile
 
 
@@ -140,13 +141,14 @@ def test_plan_prompt_omits_assessor_only_tool_metadata(tmp_path, monkeypatch):
 
 def test_contains_checks_ignore_markdown_and_punctuation(tmp_path):
     case = Case(
-        id="q1", question="Name the crafts", expected="plan and build",
-        rubric="Both crafts must appear", difficulty="easy",
-        checks=[{"id": "c1", "op": "contains",
-                 "expected": "plan and build"}],
+        id="q1",
+        question="Name the crafts",
+        expected="plan and build",
+        rubric="Both crafts must appear",
+        difficulty="easy",
+        checks=[{"id": "c1", "op": "contains", "expected": "plan and build"}],
     )
-    answer = Answer(case_id="q1",
-                    text="The two crafts are `plan` and **build**.")
+    answer = Answer(case_id="q1", text="The two crafts are `plan` and **build**.")
     checks = _run_checks([case], [answer], tmp_path)
     assert checks[0]["passed"] is True
     assert _normalize_contains("`plan` and **build**") == "plan and build"
@@ -154,10 +156,8 @@ def test_contains_checks_ignore_markdown_and_punctuation(tmp_path):
 
 def test_case_score_excludes_judge_errors():
     cases = [
-        Case(id="q1", question="Q1", expected="E", rubric="R",
-             difficulty="easy"),
-        Case(id="q2", question="Q2", expected="E", rubric="R",
-             difficulty="mid"),
+        Case(id="q1", question="Q1", expected="E", rubric="R", difficulty="easy"),
+        Case(id="q2", question="Q2", expected="E", rubric="R", difficulty="mid"),
     ]
     answers = [Answer(case_id="q1", text="a"), Answer(case_id="q2", text="b")]
     judgements = [
@@ -169,11 +169,13 @@ def test_case_score_excludes_judge_errors():
 
 
 def test_empty_triage_makes_the_case_inconclusive(tmp_path):
-    responses = [{
-        "answer": "I've flagged this for review.",
-        "triage": {"ok": True, "decision": {},
-                   "policy": {"action": "escalate"}},
-    } for _ in range(6)]
+    responses = [
+        {
+            "answer": "I've flagged this for review.",
+            "triage": {"ok": True, "decision": {}, "policy": {"action": "escalate"}},
+        }
+        for _ in range(6)
+    ]
     brain = ScriptedBrain([_plan_json()])
     summary = run_vetting(
         ["vizhi"],
@@ -201,8 +203,7 @@ def test_target_decision_is_disabled_by_default(tmp_path):
     class EntryTarget(FakeTarget):
         def __init__(self, responses):
             super().__init__(responses)
-            self.entry = {"decision": {"enabled": True},
-                          "memory": {"enabled": True}}
+            self.entry = {"decision": {"enabled": True}, "memory": {"enabled": True}}
 
     def factory(name, brain):
         target = EntryTarget([{"answer": f"answer {i}"} for i in range(1, 7)])
@@ -213,8 +214,7 @@ def test_target_decision_is_disabled_by_default(tmp_path):
         ["vizhi"],
         run_dir=tmp_path / "run",
         brain=object(),
-        nunnan_brain=ScriptedBrain([_plan_json(), *[
-            _judge_json(f"q{i}") for i in range(1, 7)]]),
+        nunnan_brain=ScriptedBrain([_plan_json(), *[_judge_json(f"q{i}") for i in range(1, 7)]]),
         nunnan_factory=lambda b: FakeAssessor(b),
         worker_factory=factory,
         probe_crafts_enabled=False,
@@ -271,17 +271,14 @@ def test_invalid_plan_is_retried_with_the_validator_error(tmp_path):
         brain=object(),
         nunnan_brain=brain,
         nunnan_factory=lambda b: FakeAssessor(b),
-        worker_factory=lambda name, b: FakeTarget(
-            [{"answer": f"answer {i}"} for i in range(1, 7)]),
+        worker_factory=lambda name, b: FakeTarget([{"answer": f"answer {i}"} for i in range(1, 7)]),
         probe_crafts_enabled=False,
         probe_tools_enabled=False,
     )
     worker = summary.workers[0]
     assert worker.passed
     assert "exactly 6 cases" in brain.prompts[1]
-    history = json.loads(
-        (tmp_path / "run" / "vizhi" / "output" / "evidence"
-         / "nunnan_history.json").read_text())
+    history = json.loads((tmp_path / "run" / "vizhi" / "output" / "evidence" / "nunnan_history.json").read_text())
     assert [r["phase"] for r in history].count("plan") == 2
 
 
@@ -294,16 +291,13 @@ def test_transient_plan_error_is_retried(tmp_path):
         brain=object(),
         nunnan_brain=brain,
         nunnan_factory=lambda b: FakeAssessor(b),
-        worker_factory=lambda name, b: FakeTarget(
-            [{"answer": f"answer {i}"} for i in range(1, 7)]),
+        worker_factory=lambda name, b: FakeTarget([{"answer": f"answer {i}"} for i in range(1, 7)]),
         probe_crafts_enabled=False,
         probe_tools_enabled=False,
     )
     worker = summary.workers[0]
     assert worker.passed
-    history = json.loads(
-        (tmp_path / "run" / "vizhi" / "output" / "evidence"
-         / "nunnan_history.json").read_text())
+    history = json.loads((tmp_path / "run" / "vizhi" / "output" / "evidence" / "nunnan_history.json").read_text())
     plans = [r for r in history if r["phase"] == "plan"]
     assert len(plans) == 2
     assert "temporary timeout" in plans[0]["error"]
@@ -332,8 +326,7 @@ def test_plan_retry_gives_up_after_three_attempts(tmp_path):
     assert "plan failed" in worker.error
     assert "exactly 6 cases" in worker.error
     assert not brain.responses
-    report = (tmp_path / "run" / "vizhi" / "output" / "reports"
-              / "vizhi.md").read_text()
+    report = (tmp_path / "run" / "vizhi" / "output" / "reports" / "vizhi.md").read_text()
     assert "INCONCLUSIVE" in report
 
 
@@ -387,8 +380,7 @@ def test_default_run_isolates_brain_users_per_target(tmp_path, monkeypatch):
 
     class UserBrain(ScriptedBrain):
         def __init__(self, user=None):
-            super().__init__([_plan_json(), *[
-                _judge_json(f"q{i}") for i in range(1, 7)]])
+            super().__init__([_plan_json(), *[_judge_json(f"q{i}") for i in range(1, 7)]])
             self.user = user
             self.ensured = False
 
@@ -405,8 +397,7 @@ def test_default_run_isolates_brain_users_per_target(tmp_path, monkeypatch):
         ["vizhi", "aayan"],
         run_dir=tmp_path / "run",
         nunnan_factory=lambda b: FakeAssessor(b),
-        worker_factory=lambda name, b: FakeTarget(
-            [{"answer": f"answer {i}"} for i in range(1, 7)]),
+        worker_factory=lambda name, b: FakeTarget([{"answer": f"answer {i}"} for i in range(1, 7)]),
         probe_crafts_enabled=False,
         probe_tools_enabled=False,
     )
@@ -422,10 +413,13 @@ def test_default_run_isolates_brain_users_per_target(tmp_path, monkeypatch):
 
 
 def test_blocked_target_answer_is_recorded_not_fatal(tmp_path):
-    responses = [{
-        "answer": f"need more detail {i}",
-        "triage": {"policy": {"action": "clarify"}},
-    } for i in range(1, 7)]
+    responses = [
+        {
+            "answer": f"need more detail {i}",
+            "triage": {"policy": {"action": "clarify"}},
+        }
+        for i in range(1, 7)
+    ]
     summary = _run(tmp_path, responses, judge_score=0.0)
     worker = summary.workers[0]
     assert worker.score == 0.0
@@ -433,8 +427,7 @@ def test_blocked_target_answer_is_recorded_not_fatal(tmp_path):
     assert all(answer.blocked for answer in worker.answers)
     assert all(answer.blocked_by_policy for answer in worker.answers)
     assert all(answer.policy_action == "clarify" for answer in worker.answers)
-    transcript = (tmp_path / "run" / "vizhi" / "output" / "evidence"
-                  / "transcript.jsonl").read_text()
+    transcript = (tmp_path / "run" / "vizhi" / "output" / "evidence" / "transcript.jsonl").read_text()
     assert '"blocked": true' in transcript
 
 
@@ -445,6 +438,5 @@ def test_low_scores_become_improvement_suggestions(tmp_path):
     assert worker.improvements
     assert all(item.worker == "vizhi" for item in worker.improvements)
     assert any(item.source == "case" for item in worker.improvements)
-    md = (tmp_path / "run" / "vizhi" / "output" / "reports"
-          / "vizhi.md").read_text()
+    md = (tmp_path / "run" / "vizhi" / "output" / "reports" / "vizhi.md").read_text()
     assert "## Where to improve" in md

@@ -14,10 +14,16 @@ from nak_host.domain.state import TaskState
 from nak_host.domain.task import Task, TaskRun
 
 
-def verify_task(task: Task, run: TaskRun, *, store: Any,
-                tester: str = "ezhilan", kind: str = "test",
-                on_event: Any = None,
-                **chain_kwargs: Any) -> dict[str, Any]:
+def verify_task(
+    task: Task,
+    run: TaskRun,
+    *,
+    store: Any,
+    tester: str = "ezhilan",
+    kind: str = "test",
+    on_event: Any = None,
+    **chain_kwargs: Any,
+) -> dict[str, Any]:
     """Run one verification step. Returns {verified, result, run, chain}.
 
     ``on_event`` streams chain step events; forwarded to run_chain.
@@ -28,27 +34,33 @@ def verify_task(task: Task, run: TaskRun, *, store: Any,
     mode = str(kind or "test").strip().lower()
     criteria = "\n".join(f"- {a}" for a in (task.acceptance or ())) or "- (none stated)"
     if mode == "review":
-        goal = ("Review this work and report findings by severity with file "
-                "evidence. Do not modify anything.\n"
-                f"Goal: {task.goal}\nAcceptance:\n{criteria}")
+        goal = (
+            "Review this work and report findings by severity with file "
+            "evidence. Do not modify anything.\n"
+            f"Goal: {task.goal}\nAcceptance:\n{criteria}"
+        )
     elif mode == "test":
-        goal = ("Verify this work against the acceptance criteria. Run the "
-                "tests and report exact pass/fail evidence. Do not modify "
-                "anything except test scaffolding the task requires.\n"
-                f"Goal: {task.goal}\nAcceptance:\n{criteria}")
+        goal = (
+            "Verify this work against the acceptance criteria. Run the "
+            "tests and report exact pass/fail evidence. Do not modify "
+            "anything except test scaffolding the task requires.\n"
+            f"Goal: {task.goal}\nAcceptance:\n{criteria}"
+        )
     else:
         raise ValueError(f"unknown verify kind {kind!r} (want test|review)")
-    chain = run_chain(task, run, [{"worker": worker, "kind": mode,
-                                   "goal": goal}],
-                      store=store, on_event=on_event, **chain_kwargs)
+    chain = run_chain(
+        task, run, [{"worker": worker, "kind": mode, "goal": goal}], store=store, on_event=on_event, **chain_kwargs
+    )
     verified = bool(chain.get("ok")) and bool(chain.get("results"))
     if verified:
         fresh = chain["run"]
-        new_run = store.transition(task.id, fresh.version, TaskState.VERIFIED,
-                                   {"type": "task.verified", "by": worker,
-                                    "kind": mode})
-        return {"verified": True, "result": chain["results"][-1]["result"],
-                "run": new_run, "chain": chain}
-    return {"verified": False,
-            "result": chain["results"][-1]["result"] if chain.get("results") else None,
-            "run": chain["run"], "chain": chain}
+        new_run = store.transition(
+            task.id, fresh.version, TaskState.VERIFIED, {"type": "task.verified", "by": worker, "kind": mode}
+        )
+        return {"verified": True, "result": chain["results"][-1]["result"], "run": new_run, "chain": chain}
+    return {
+        "verified": False,
+        "result": chain["results"][-1]["result"] if chain.get("results") else None,
+        "run": chain["run"],
+        "chain": chain,
+    }

@@ -56,11 +56,17 @@ def _rule(spec: Any, index: int, inputs: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError(f"rule {rid}: metric {metric!r} must be numeric")
     ratio = max(0.0, min(1.0, (float(value) - float(low)) / (float(high) - float(low))))
     normalized = ratio if higher is not False else 1.0 - ratio
-    return {"id": rid, "metric": metric, "value": value,
-            "weight": float(weight), "min": low, "max": high,
-            "higher_is_better": higher is not False,
-            "normalized": round(normalized, 6),
-            "weighted": round(normalized * float(weight), 6)}
+    return {
+        "id": rid,
+        "metric": metric,
+        "value": value,
+        "weight": float(weight),
+        "min": low,
+        "max": high,
+        "higher_is_better": higher is not False,
+        "normalized": round(normalized, 6),
+        "weighted": round(normalized * float(weight), 6),
+    }
 
 
 def scorecard(args: dict) -> str:
@@ -68,25 +74,27 @@ def scorecard(args: dict) -> str:
     data = args or {}
     action = str(data.get("action", "")).strip().lower() or "score"
     if action not in ("score", "run", "calculate"):
-        return json.dumps({"ok": False,
-                           "error": f"bad action {action!r}: want score|run|calculate"})
+        return json.dumps({"ok": False, "error": f"bad action {action!r}: want score|run|calculate"})
     rules = data.get("rules")
     if not isinstance(rules, list) or not rules:
         return json.dumps({"ok": False, "error": "rules must be a non-empty list"})
     if len(rules) > MAX_RULES:
-        return json.dumps({"ok": False,
-                           "error": f"too many rules: {len(rules)} > {MAX_RULES}"})
+        return json.dumps({"ok": False, "error": f"too many rules: {len(rules)} > {MAX_RULES}"})
     inputs = data.get("inputs", data.get("metrics"))
     if not isinstance(inputs, dict):
         return json.dumps({"ok": False, "error": "inputs must be an object"})
     try:
-        breakdown: List[Dict[str, Any]] = [
-            _rule(spec, i, inputs) for i, spec in enumerate(rules, 1)
-        ]
+        breakdown: List[Dict[str, Any]] = [_rule(spec, i, inputs) for i, spec in enumerate(rules, 1)]
     except ValueError as exc:
         return json.dumps({"ok": False, "error": str(exc)[:300]})
     total = sum(r["weight"] for r in breakdown)
     score = sum(r["weighted"] for r in breakdown) / total
-    return json.dumps({"ok": True, "score": round(score, 6),
-                       "total_weight": round(total, 6),
-                       "rules": len(breakdown), "breakdown": breakdown})
+    return json.dumps(
+        {
+            "ok": True,
+            "score": round(score, 6),
+            "total_weight": round(total, 6),
+            "rules": len(breakdown),
+            "breakdown": breakdown,
+        }
+    )

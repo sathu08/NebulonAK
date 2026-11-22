@@ -39,9 +39,7 @@ class Task:
             max_steps = int(self.max_steps)
             timeout = int(self.timeout)
         except (TypeError, ValueError) as exc:
-            raise ValidationError(
-                "task.max_steps and task.timeout must be integers"
-            ) from exc
+            raise ValidationError("task.max_steps and task.timeout must be integers") from exc
         if max_steps < 1:
             raise ValidationError("task.max_steps must be >= 1")
         if timeout < 1:
@@ -72,9 +70,7 @@ class TaskRun:
             version = int(self.version)
             attempt = int(self.attempt)
         except (TypeError, ValueError) as exc:
-            raise ValidationError(
-                "task run version/attempt must be integers"
-            ) from exc
+            raise ValidationError("task run version/attempt must be integers") from exc
         if version < 0:
             raise ValidationError("task run version must be >= 0")
         if attempt < 1:
@@ -84,8 +80,4 @@ class TaskRun:
 
     def can_resume(self) -> bool:
         """True when a blocked run has a resumable reason."""
-        return (
-            is_resumable_state(self.state)
-            and self.block_reason is not None
-            and self.block_reason.resumable
-        )
+        return is_resumable_state(self.state) and self.block_reason is not None and self.block_reason.resumable

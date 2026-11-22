@@ -133,8 +133,7 @@ def test_list_pending_and_recovery():
     assert {r.task_id for r in store.list_pending()} == {"t1", "t2"}
     run = store.transition("t1", 0, TaskState.PLANNED, {})
     run = store.transition("t1", run.version, TaskState.APPROVED, {})
-    run = store.transition("t1", run.version, TaskState.ASSIGNED,
-                           {}, assigned_worker="arivu")
+    run = store.transition("t1", run.version, TaskState.ASSIGNED, {}, assigned_worker="arivu")
     assert run.assigned_worker == "arivu"
     run = store.transition("t1", run.version, TaskState.RUNNING, {})
     recovered = store.recover_incomplete()
@@ -154,10 +153,8 @@ def test_block_reason_roundtrip():
     run = store.transition("t1", run.version, TaskState.APPROVED, {})
     run = store.transition("t1", run.version, TaskState.ASSIGNED, {})
     run = store.transition("t1", run.version, TaskState.RUNNING, {})
-    reason = BlockReason(code="policy", detail="no", resumable=False,
-                         recovery={"step": 1})
-    run = store.transition("t1", run.version, TaskState.BLOCKED,
-                           {"type": "x"}, block_reason=reason)
+    reason = BlockReason(code="policy", detail="no", resumable=False, recovery={"step": 1})
+    run = store.transition("t1", run.version, TaskState.BLOCKED, {"type": "x"}, block_reason=reason)
     assert isinstance(run, TaskRun)
     assert run.block_reason.code == "policy"
     assert run.block_reason.recovery["step"] == 1

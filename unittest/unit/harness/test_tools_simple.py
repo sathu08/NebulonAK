@@ -1,4 +1,5 @@
 """SIMPLE tool tests — file / directory / observe happy paths (sandboxed)."""
+
 import json
 
 
@@ -38,6 +39,7 @@ def test_observe_capture(harness_vizhi_approved):
 
 def test_terminal_allowlisted_echo(harness_vizhi_approved):
     import json as j
+
     out = j.loads(harness_vizhi_approved.run("terminal", {"action": "exec", "command": "echo hello"}))
     # terminal may or may not be permitted by limits, but must return JSON with ok bool
     assert "ok" in out

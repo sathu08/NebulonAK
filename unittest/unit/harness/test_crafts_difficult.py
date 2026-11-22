@@ -1,4 +1,5 @@
 """DIFFICULT craft tests — fail-closed validation, flat-only, inputs, allowlists."""
+
 import pytest
 
 from nak_host.harness.craft import craft as C

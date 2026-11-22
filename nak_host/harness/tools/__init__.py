@@ -15,6 +15,19 @@ from .observe import capture_file, observe
 from .search import search
 from .terminal import run_terminal, terminal
 
-__all__ = ["file", "directory", "read_file", "list_directory", "write_file", "delete_file",
-           "create_dir", "rename_path", "delete_dir", "terminal", "run_terminal",
-           "observe", "capture_file", "search"]
+__all__ = [
+    "file",
+    "directory",
+    "read_file",
+    "list_directory",
+    "write_file",
+    "delete_file",
+    "create_dir",
+    "rename_path",
+    "delete_dir",
+    "terminal",
+    "run_terminal",
+    "observe",
+    "capture_file",
+    "search",
+]

@@ -23,8 +23,7 @@ class NebulonMemory:
             raise RuntimeError("no brain injected — pass brain=... explicitly")
         return self._brain
 
-    def recall(self, query: str, top_k: int = 5, user: str | None = None,
-               **kwargs: Any) -> dict[str, Any]:
+    def recall(self, query: str, top_k: int = 5, user: str | None = None, **kwargs: Any) -> dict[str, Any]:
         """Semantic recall: normalized ``{query, hits, count}``."""
         text = str(query or "").strip()
         if not text:
@@ -37,10 +36,14 @@ class NebulonMemory:
         hits = list(hits or []) if isinstance(hits, (list, tuple)) else [hits]
         return {"query": text, "hits": hits, "count": len(hits)}
 
-    def store(self, text: str | None = None, turn: dict[str, Any] | None = None,
-              facts: list[dict[str, Any]] | None = None,
-              user: str | None = None,
-              **kwargs: Any) -> dict[str, Any]:
+    def store(
+        self,
+        text: str | None = None,
+        turn: dict[str, Any] | None = None,
+        facts: list[dict[str, Any]] | None = None,
+        user: str | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
         """Persist a turn and/or facts. Returns what the backend reported.
 
         * ``turn``    -> ``brain.save_chat(turn, user=...)`` as given;

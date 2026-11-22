@@ -178,7 +178,7 @@
   "workers": {
     "default": {
       "enabled": true,
-      "description": "Unbound engines (no worker specified, e.g. harness-internal use): read-only file access. Named-but-unlisted workers are NOT this entry — they hit defaults.unknown_worker (deny).",
+      "description": "Unbound engines (no worker specified, e.g. harness-internal use): read-only file access. Named-but-unlisted workers are NOT this entry \u2014 they hit defaults.unknown_worker (deny).",
       "tools": {
         "file": "allow"
       },
@@ -188,7 +188,8 @@
       "resources": {
         "files": {
           "read": [
-            "workspace/**"
+            "workspace/**",
+            "/home/sathya/Codebase/**"
           ],
           "write": [],
           "deny": [
@@ -235,7 +236,8 @@
             "./workspace/**",
             "./project/**",
             "./docs/**",
-            "./test/**"
+            "./test/**",
+            "/home/sathya/Codebase/**"
           ],
           "write": [
             "./workspace/**",
@@ -260,7 +262,7 @@
     },
     "aayan": {
       "enabled": true,
-      "description": "Aayan (researcher role): plans only — reads and lists files to ground research plans. No writes, no terminal.",
+      "description": "Aayan (researcher role): plans only \u2014 reads and lists files to ground research plans. No writes, no terminal.",
       "tools": {
         "file": "allow",
         "directory": "allow",
@@ -284,7 +286,8 @@
             "./workspace/**",
             "./project/**",
             "./docs/**",
-            "./test/**"
+            "./test/**",
+            "/home/sathya/Codebase/**"
           ],
           "write": [],
           "deny": [
@@ -305,7 +308,7 @@
     },
     "arivu": {
       "enabled": true,
-      "description": "Arivu (developer role): builds and fixes code — reads, plans, implements via file writes and terminal checks with approval gates.",
+      "description": "Arivu (developer role): builds and fixes code \u2014 reads, plans, implements via file writes and terminal checks with approval gates.",
       "tools": {
         "file": "allow",
         "directory": "allow",
@@ -331,7 +334,8 @@
             "./workspace/**",
             "./project/**",
             "./docs/**",
-            "./test/**"
+            "./test/**",
+            "/home/sathya/Codebase/**"
           ],
           "write": [
             "./workspace/**",
@@ -365,7 +369,9 @@
       },
       "resources": {
         "files": {
-          "read": [],
+          "read": [
+            "/home/sathya/Codebase/**"
+          ],
           "write": [
             "./output/**"
           ],
@@ -413,7 +419,8 @@
             "./workspace/**",
             "./project/**",
             "./docs/**",
-            "./test/**"
+            "./test/**",
+            "/home/sathya/Codebase/**"
           ],
           "write": [
             "./workspace/**",
@@ -471,7 +478,8 @@
             "./workspace/**",
             "./project/**",
             "./docs/**",
-            "./test/**"
+            "./test/**",
+            "/home/sathya/Codebase/**"
           ],
           "write": [
             "./output/**"
@@ -494,7 +502,7 @@
     },
     "viyan": {
       "enabled": true,
-      "description": "Viyan (developer role): builds and fixes code — reads, plans, implements via file writes and terminal checks with approval gates.",
+      "description": "Viyan (developer role): builds and fixes code \u2014 reads, plans, implements via file writes and terminal checks with approval gates.",
       "tools": {
         "file": "allow",
         "directory": "allow",
@@ -520,7 +528,8 @@
             "./workspace/**",
             "./project/**",
             "./docs/**",
-            "./test/**"
+            "./test/**",
+            "/home/sathya/Codebase/**"
           ],
           "write": [
             "./workspace/**",

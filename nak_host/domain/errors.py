@@ -20,9 +20,7 @@ class IllegalTransition(DomainError):
         self.task_id = task_id
         self.from_state = from_state
         self.to_state = to_state
-        super().__init__(
-            f"task {task_id!r}: illegal transition {from_state!r} -> {to_state!r}"
-        )
+        super().__init__(f"task {task_id!r}: illegal transition {from_state!r} -> {to_state!r}")
 
 
 class ConcurrencyError(DomainError):
@@ -32,9 +30,7 @@ class ConcurrencyError(DomainError):
         self.task_id = task_id
         self.expected = expected
         self.actual = actual
-        super().__init__(
-            f"task {task_id!r}: version conflict (expected {expected}, actual {actual})"
-        )
+        super().__init__(f"task {task_id!r}: version conflict (expected {expected}, actual {actual})")
 
 
 class TaskNotFound(DomainError):

@@ -1,4 +1,5 @@
 """Worker identity + human-readable presentation."""
+
 from __future__ import annotations
 
 from typing import Any, Dict
@@ -28,7 +29,8 @@ def _default_identity() -> Dict[str, Any]:
 class IdentityMixin:
     def show(self) -> Dict[str, Any]:
         data: Dict[str, Any] = {
-            "name": self.entry["name"], "type": self.entry["type"],
+            "name": self.entry["name"],
+            "type": self.entry["type"],
             "description": self.entry.get("description", ""),
             "capabilities": self.entry.get("capabilities", []),
             "identity": {k: self.identity.get(k) for k in IDENTITY_FIELDS},
@@ -64,11 +66,9 @@ class IdentityMixin:
             from .team import resolve_team
 
             spec = resolve_team(self) or {}
-            members = [str(m).strip() for m in (spec.get("members") or [])
-                       if str(m).strip()]
+            members = [str(m).strip() for m in (spec.get("members") or []) if str(m).strip()]
             if members:
-                ctx = {"name": str(spec.get("name", "") or ""),
-                       "members": members}
+                ctx = {"name": str(spec.get("name", "") or ""), "members": members}
         except Exception:
             ctx = {}
         self._team_ctx = ctx
@@ -83,18 +83,21 @@ class IdentityMixin:
         """
         if self._prompt_template:
             rendered = _render_prompt_template(
-                self._prompt_template, self.identity, self.entry["name"],
-                self.autonomy, self.crafts, team=self._team_context())
+                self._prompt_template,
+                self.identity,
+                self.entry["name"],
+                self.autonomy,
+                self.crafts,
+                team=self._team_context(),
+            )
             if "{{autonomy}}" in self._prompt_template:
                 base = rendered
             else:
                 lines = _autonomy_lines(self.autonomy)
-                base = (f"{rendered}\n\n## Autonomy\n" + "\n".join(lines)
-                        if lines else rendered)
+                base = f"{rendered}\n\n## Autonomy\n" + "\n".join(lines) if lines else rendered
         else:
             p = self.identity
-            lines = [f"You are {self.entry['name']}, {p.get('role')}.".strip(),
-                     f"Tone: {p.get('tone')}"]
+            lines = [f"You are {self.entry['name']}, {p.get('role')}.".strip(), f"Tone: {p.get('tone')}"]
             if p.get("personality"):
                 lines.append("Personality: " + ", ".join(map(str, p["personality"])))
             if p.get("formality"):

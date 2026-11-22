@@ -1,4 +1,5 @@
 """Memory + shared-session persistence mixin."""
+
 from __future__ import annotations
 
 import time
@@ -55,8 +56,7 @@ class MemoryMixin:
                 bits.append(str(t)[:WORKER_MEMORY_SNIPPET_CHARS])
         if not bits:
             return None
-        return {"role": "tool",
-                "content": "things you remember about the user:\n- " + "\n- ".join(bits)}
+        return {"role": "tool", "content": "things you remember about the user:\n- " + "\n- ".join(bits)}
 
     def _recall_session(self, session_id: Optional[str]) -> Optional[Dict[str, str]]:
         """Session transcript turns for continuity (best-effort, never fatal).
@@ -100,8 +100,7 @@ class MemoryMixin:
         if not kept:
             return None
         kept.reverse()
-        return {"role": "tool",
-                "content": f"session {sid} so far:\n" + "\n".join(kept)}
+        return {"role": "tool", "content": f"session {sid} so far:\n" + "\n".join(kept)}
 
     def team_memory(self, session_id: str) -> Dict[str, Any]:
         """Read the shared team memory for a session (leader-visible).
@@ -146,8 +145,11 @@ class MemoryMixin:
                 turns = _session_turns(fetch(sid))
                 report["message_count"] = len(turns)
                 report["turns"] = [
-                    {"role": m["role"], "chars": len(m["content"]),
-                     "preview": m["content"][:WORKER_SESSION_TITLE_CHARS]}
+                    {
+                        "role": m["role"],
+                        "chars": len(m["content"]),
+                        "preview": m["content"][:WORKER_SESSION_TITLE_CHARS],
+                    }
                     for m in turns
                 ]
             except Exception as exc:  # missing doc is normal, not fatal
@@ -200,8 +202,7 @@ class MemoryMixin:
         if not callable(create):
             return None
         try:
-            created = create(metadata={"harness_session": sid,
-                                       "source": "nebulonak"})
+            created = create(metadata={"harness_session": sid, "source": "nebulonak"})
         except Exception:
             return None
         mid = (created or {}).get("session_id") if isinstance(created, dict) else None
@@ -236,8 +237,7 @@ class MemoryMixin:
             return bool(body.get("session_id"))
         return bool(body)
 
-    def _merge_session_chat(self, session_id: str, user_text: str,
-                            answer: str) -> Dict[str, Any]:
+    def _merge_session_chat(self, session_id: str, user_text: str, answer: str) -> Dict[str, Any]:
         """Append this turn to the shared session doc (read-modify-write).
 
         Mind auto-saves API chats only for sessions it knows about; AK uses
@@ -282,17 +282,15 @@ class MemoryMixin:
                     existing = _session_turns(fetch(session_id))
                 except Exception:
                     existing = []  # no doc yet (or unreadable) -> start one
-                if fresh and existing[-len(fresh):] == fresh:
+                if fresh and existing[-len(fresh) :] == fresh:
                     merged_len = len(existing)
                     verified = True
                     break
                 merged = existing + fresh
-                if (WORKER_SESSION_DOC_MAX_TURNS > 0
-                        and len(merged) > WORKER_SESSION_DOC_MAX_TURNS):
+                if WORKER_SESSION_DOC_MAX_TURNS > 0 and len(merged) > WORKER_SESSION_DOC_MAX_TURNS:
                     merged = merged[-WORKER_SESSION_DOC_MAX_TURNS:]
-                first_user = next((m["content"] for m in merged
-                                   if m["role"] == "user"), "")
-                title = (first_user[:WORKER_SESSION_TITLE_CHARS] or "session")
+                first_user = next((m["content"] for m in merged if m["role"] == "user"), "")
+                title = first_user[:WORKER_SESSION_TITLE_CHARS] or "session"
                 try:
                     save({"id": session_id, "title": title, "messages": merged})
                 except Exception:
@@ -311,7 +309,7 @@ class MemoryMixin:
                     # retrying cannot tell stale from unreadable, so do not
                     # duplicate the write. Report unverified instead.
                     break
-                if check[-len(fresh):] == fresh:
+                if check[-len(fresh) :] == fresh:
                     merged_len = len(check)
                     verified = True
                     break
@@ -324,10 +322,14 @@ class MemoryMixin:
         info["session_turns"] = merged_len
         return info
 
-    def _store_memory(self, user_text: str, answer: str,
-                        approve: Optional[Any] = None,
-                        session_id: Optional[str] = None,
-                        mind_owned: bool = False) -> Dict[str, Any]:
+    def _store_memory(
+        self,
+        user_text: str,
+        answer: str,
+        approve: Optional[Any] = None,
+        session_id: Optional[str] = None,
+        mind_owned: bool = False,
+    ) -> Dict[str, Any]:
         """Persist the turn (best-effort, never breaks the answer).
 
         * Session turns (session_id set) are MERGED into the shared doc
@@ -340,12 +342,13 @@ class MemoryMixin:
           pipeline below: decide (no storage) -> keep should_remember ->
           approve hook -> remember each (server gate still dedupes).
         """
-        info: Dict[str, Any] = {"chat_id": None, "decisions": 0,
-                                "stored": 0, "skipped": 0}
+        info: Dict[str, Any] = {"chat_id": None, "decisions": 0, "stored": 0, "skipped": 0}
         sid = str(session_id or "").strip() or None
-        transcript = ([{"role": m["role"], "content": m["content"]}
-                       for m in self.history
-                       if m.get("role") in ("user", "assistant") and str(m.get("content", "")).strip()])
+        transcript = [
+            {"role": m["role"], "content": m["content"]}
+            for m in self.history
+            if m.get("role") in ("user", "assistant") and str(m.get("content", "")).strip()
+        ]
         if sid and mind_owned:
             info["session_id"] = sid
             info["merged"] = False
@@ -355,16 +358,19 @@ class MemoryMixin:
         elif transcript:
             chat_id = self._transcript_id(self.entry["name"])
             try:
-                self.brain.save_chat({
-                    "id": chat_id,
-                    "title": f"{self.entry['name']} — {chat_id}",
-                    "messages": transcript,
-                })
+                self.brain.save_chat(
+                    {
+                        "id": chat_id,
+                        "title": f"{self.entry['name']} — {chat_id}",
+                        "messages": transcript,
+                    }
+                )
                 info["chat_id"] = chat_id  # mind_chats
             except Exception:
                 pass
-        turns = ([{"role": "user", "content": user_text}]
-                 + ([{"role": "assistant", "content": answer}] if answer.strip() else []))
+        turns = [{"role": "user", "content": user_text}] + (
+            [{"role": "assistant", "content": answer}] if answer.strip() else []
+        )
         try:
             result = self.process_turns(turns, approve=approve)
             info.update({k: result[k] for k in ("decisions", "stored", "skipped") if k in result})
@@ -389,8 +395,7 @@ class MemoryMixin:
             return decisions if isinstance(decisions, list) else []
         return data if isinstance(data, list) else []
 
-    def store_decisions(self, decisions: List[Dict[str, Any]],
-                        approve: Optional[Any] = None) -> Dict[str, Any]:
+    def store_decisions(self, decisions: List[Dict[str, Any]], approve: Optional[Any] = None) -> Dict[str, Any]:
         """Store accepted decisions one by one (mind_truth + mind_semantic).
 
         Keeps should_remember=true (default true when absent), asks the
@@ -439,8 +444,7 @@ class MemoryMixin:
             result["errors"] = errors
         return result
 
-    def process_turns(self, turns: str | List[Dict[str, str]],
-                      approve: Optional[Any] = None) -> Dict[str, Any]:
+    def process_turns(self, turns: str | List[Dict[str, str]], approve: Optional[Any] = None) -> Dict[str, Any]:
         """Full idea in one call: decide (preview) -> store accepted.
 
         approve: optional fn(decision) -> bool (harness will pass policy here).

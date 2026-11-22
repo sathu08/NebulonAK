@@ -2,7 +2,7 @@
 
 NAK configures only its Mind connection; the DB host/username/password come
 from Mind's gated ``GET /api/NebulonMind/system/db_connection`` endpoint
-(bearer-shared-secret only; the endpoint refuses when Mind auth is disabled).
+(requires a per-user token with the ``admin:db`` scope).
 
 Security posture (see docs/ARCHITECTURE.md §5):
 
@@ -39,10 +39,16 @@ class MindCredentialsResolver:
 
     PATH = "/system/db_connection"
 
-    def __init__(self, mind_base_url: str, auth_token: str,
-                 timeout: float = 30.0, max_retries: int = 2,
-                 retry_backoff: float = 1.0, ttl: float = 900.0,
-                 clock: Any = None) -> None:
+    def __init__(
+        self,
+        mind_base_url: str,
+        auth_token: str,
+        timeout: float = 30.0,
+        max_retries: int = 2,
+        retry_backoff: float = 1.0,
+        ttl: float = 900.0,
+        clock: Any = None,
+    ) -> None:
         self._base = str(mind_base_url or "").rstrip("/")
         self._token = str(auth_token or "")
         self._timeout = float(timeout) if float(timeout) > 0 else 30.0
@@ -81,28 +87,23 @@ class MindCredentialsResolver:
         last: Any = None
         for i in range(tries):
             try:
-                resp = requests.get(url, headers=self._headers(),
-                                    timeout=self._timeout)
+                resp = requests.get(url, headers=self._headers(), timeout=self._timeout)
             except (requests.Timeout, requests.ConnectionError) as exc:
                 last = exc
             else:
                 return self._interpret(resp.status_code, resp.text)
             if i + 1 < tries:
-                time.sleep(self._backoff * (2 ** i))
+                time.sleep(self._backoff * (2**i))
         raise CredentialsError(f"nebulonmind unreachable: {last}")
 
     @staticmethod
     def _interpret(status: int, text: str) -> NDBCredentials:
         if status == 401:
-            raise CredentialsError(
-                "nebulonmind rejected the credentials "
-                "(check NAK_USER / NAK_AUTH_TOKEN)")
+            raise CredentialsError("nebulonmind rejected the credentials (check NAK_USER / NAK_AUTH_TOKEN)")
         if status == 503:
-            raise CredentialsError(_server_message(text) or
-                                   "nebulonmind refused credential issuance")
+            raise CredentialsError(_server_message(text) or "nebulonmind refused credential issuance")
         if status >= 400:
-            raise CredentialsError(
-                f"nebulonmind HTTP {status}: {text[:200]}")
+            raise CredentialsError(f"nebulonmind HTTP {status}: {text[:200]}")
         try:
             import json as _json
 
@@ -110,16 +111,14 @@ class MindCredentialsResolver:
         except ValueError as exc:
             raise CredentialsError("nebulonmind returned non-JSON") from exc
         if not isinstance(body, dict) or not body.get("success"):
-            raise CredentialsError(_server_message(text) or
-                                   "nebulonmind refused credential issuance")
+            raise CredentialsError(_server_message(text) or "nebulonmind refused credential issuance")
         data = body.get("data") or {}
         base_url = str(data.get("base_url", "") or "").rstrip("/")
         username = str(data.get("username", "") or "")
         password = str(data.get("password", "") or "")
         if not base_url or not username or not password:
             raise CredentialsError("nebulonmind returned incomplete credentials")
-        return NDBCredentials(base_url=base_url, username=username,
-                              password=password)
+        return NDBCredentials(base_url=base_url, username=username, password=password)
 
 
 def _server_message(text: str) -> str:

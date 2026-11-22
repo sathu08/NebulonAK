@@ -18,13 +18,9 @@ test = [
 ]
 
 [project.scripts]
-nebulonagentkit = "nebulonagentkit:main"
 nak-brain = "nak_host.brain.__main__:main"
 nak-worker = "nak_host.worker.__main__:main"
 nak-vetting = "pipeline.vetting.cli:main"
-
-[tool.setuptools]
-py-modules = ["nebulonagentkit"]
 
 [tool.setuptools.packages.find]
 include = ["nak_host*", "pipeline*"]

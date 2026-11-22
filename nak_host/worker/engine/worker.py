@@ -17,6 +17,7 @@ Rules:
   * tools are PLACEHOLDERS: accepted via constructor or JSON passthrough and
     stored, never executed here. Harness objects never reach a worker.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -35,8 +36,7 @@ from .autonomy import _autonomy_from_crafts
 from .prompt import _crafts_from_entry, _load_prompt_template
 
 
-class GenericWorker(AutonomyMixin, TriageMixin, MemoryMixin, ChatMixin,
-                    IdentityMixin):
+class GenericWorker(AutonomyMixin, TriageMixin, MemoryMixin, ChatMixin, IdentityMixin):
     """One class that BECOMES any JSON entry. Standalone; tools are optional.
 
     Placeholders (never executed here, only stored/forwarded):
@@ -46,12 +46,16 @@ class GenericWorker(AutonomyMixin, TriageMixin, MemoryMixin, ChatMixin,
     object itself is never accepted or stored here; nak_host/wiring.py owns it.
     """
 
-    def __init__(self, name: str, brain: Optional[Any] = None,
-                 workers_file: str | Path | None = None,
-                 tools: Optional[Dict[str, Any]] = None,
-                 decider: Optional[Callable[..., Dict[str, Any]]] = None,
-                 policy_evaluator: Optional[Callable[..., Dict[str, Any]]] = None,
-                 crafts: Optional[List[Dict[str, str]]] = None) -> None:
+    def __init__(
+        self,
+        name: str,
+        brain: Optional[Any] = None,
+        workers_file: str | Path | None = None,
+        tools: Optional[Dict[str, Any]] = None,
+        decider: Optional[Callable[..., Dict[str, Any]]] = None,
+        policy_evaluator: Optional[Callable[..., Dict[str, Any]]] = None,
+        crafts: Optional[List[Dict[str, str]]] = None,
+    ) -> None:
         """BOUNDARY: brain/decider/evaluator are INJECTED (duck-typed).
 
         Use nak_host/wiring.py make_worker() to get a fully wired instance.
@@ -79,8 +83,8 @@ class GenericWorker(AutonomyMixin, TriageMixin, MemoryMixin, ChatMixin,
         # Behavior comes from crafts only (no autonomy block in JSON).
         # entry["autonomy"] is the derived dict stamped by list_workers.
         self.autonomy: Dict[str, Any] = dict(
-            self.entry.get("autonomy") or _autonomy_from_crafts(
-                self.entry.get("crafts"), resolved, name))
+            self.entry.get("autonomy") or _autonomy_from_crafts(self.entry.get("crafts"), resolved, name)
+        )
         self.brain = brain  # injected; NEVER `or Brain()` here (boundary rule)
         self._decider = decider
         self._policy_evaluator = policy_evaluator
@@ -90,10 +94,10 @@ class GenericWorker(AutonomyMixin, TriageMixin, MemoryMixin, ChatMixin,
         if crafts is None:
             crafts = _crafts_from_entry(self.entry, resolved)
         self.crafts: List[Dict[str, str]] = [
-            {"name": str(s.get("name", "")).strip(),
-             "description": str(s.get("description", "")).strip()}
-            for s in (crafts or []) if isinstance(s, dict)
-            and str(s.get("name", "")).strip()]
+            {"name": str(s.get("name", "")).strip(), "description": str(s.get("description", "")).strip()}
+            for s in (crafts or [])
+            if isinstance(s, dict) and str(s.get("name", "")).strip()
+        ]
         self.history: List[Dict[str, str]] = []
         # Markdown prompt view mapped from workers.json ("prompt_file").
         # Read once; missing/unreadable -> built-in builder in prompt().

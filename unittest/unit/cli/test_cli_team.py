@@ -3,6 +3,7 @@
 Drives nak_host.worker.__main__.main() end-to-end offline by patching the
 composition root's make_brain/make_worker/make_harness.
 """
+
 import json
 
 from nak_host.worker import __main__ as cli
@@ -38,8 +39,7 @@ class PersistentBrain:
         return {"chat": {"id": chat_id, "messages": list(self.docs[chat_id])}}
 
     def chat(self, prompt, messages=None, session_id=None):
-        self.chat_calls.append({"prompt": prompt, "messages": messages,
-                                "session_id": session_id})
+        self.chat_calls.append({"prompt": prompt, "messages": messages, "session_id": session_id})
         return {"answer": self.answer}
 
 
@@ -51,12 +51,8 @@ def _patch(monkeypatch, brain, workspace):
     real_make_harness = wiring.make_harness
 
     monkeypatch.setattr(wiring, "make_brain", lambda **k: brain)
-    monkeypatch.setattr(
-        wiring, "make_worker",
-        lambda name, brain=None, **kw: GenericWorker(name, brain=brain))
-    monkeypatch.setattr(
-        wiring, "make_harness",
-        lambda **kw: real_make_harness(workspace_root=workspace, **kw))
+    monkeypatch.setattr(wiring, "make_worker", lambda name, brain=None, **kw: GenericWorker(name, brain=brain))
+    monkeypatch.setattr(wiring, "make_harness", lambda **kw: real_make_harness(workspace_root=workspace, **kw))
 
 
 def _run(capsys, argv):
@@ -68,8 +64,7 @@ def _run(capsys, argv):
 def test_cli_team_alias_dispatches_as_craft(monkeypatch, capsys, tmp_workspace):
     brain = PersistentBrain(answer="Plan:\n1. dig into logs [worker=aayan]")
     _patch(monkeypatch, brain, tmp_workspace)
-    rc, out = _run(capsys, ["--worker", "vizhi", "--team", "investigate outage",
-                            "--approve", "--json"])
+    rc, out = _run(capsys, ["--worker", "vizhi", "--team", "investigate outage", "--approve", "--json"])
     assert rc == 0
     assert out["planned"] is True
     assert out["dispatched"] is True
@@ -80,8 +75,7 @@ def test_cli_team_alias_dispatches_as_craft(monkeypatch, capsys, tmp_workspace):
 def test_cli_team_mints_a_session(monkeypatch, capsys, tmp_workspace):
     brain = PersistentBrain(answer="Plan:\n1. plan [worker=aayan]")
     _patch(monkeypatch, brain, tmp_workspace)
-    rc, out = _run(capsys, ["--worker", "vizhi", "--team", "investigate",
-                            "--approve", "--json"])
+    rc, out = _run(capsys, ["--worker", "vizhi", "--team", "investigate", "--approve", "--json"])
     assert rc == 0
     assert out["session_id"].startswith("user_")
     assert out["session_id"] in brain.docs
@@ -90,8 +84,7 @@ def test_cli_team_mints_a_session(monkeypatch, capsys, tmp_workspace):
 def test_cli_team_skips_unknown_worker(monkeypatch, capsys, tmp_workspace):
     brain = PersistentBrain(answer="Plan:\n1. x [worker=ghost]")
     _patch(monkeypatch, brain, tmp_workspace)
-    rc, out = _run(capsys, ["--worker", "vizhi", "--team", "go",
-                            "--approve", "--json"])
+    rc, out = _run(capsys, ["--worker", "vizhi", "--team", "go", "--approve", "--json"])
     assert rc == 0
     assert out["assigned_workers"] == []
     assert out["runs"] == []
@@ -99,21 +92,17 @@ def test_cli_team_skips_unknown_worker(monkeypatch, capsys, tmp_workspace):
 
 
 def test_cli_team_max_workers_keeps_all(monkeypatch, capsys, tmp_workspace):
-    brain = PersistentBrain(
-        answer="Plan:\n1. a [worker=aayan]\n2. b [worker=arivu]")
+    brain = PersistentBrain(answer="Plan:\n1. a [worker=aayan]\n2. b [worker=arivu]")
     _patch(monkeypatch, brain, tmp_workspace)
-    rc, out = _run(capsys, ["--worker", "vizhi", "--team", "go",
-                            "--approve", "--max-workers", "1", "--json"])
+    rc, out = _run(capsys, ["--worker", "vizhi", "--team", "go", "--approve", "--max-workers", "1", "--json"])
     assert rc == 0
     assert sorted(r["worker"] for r in out["runs"]) == ["aayan", "arivu"]
 
 
-def test_cli_team_name_uses_leader_and_no_parallel(monkeypatch, capsys,
-                                                   tmp_workspace):
+def test_cli_team_name_uses_leader_and_no_parallel(monkeypatch, capsys, tmp_workspace):
     brain = PersistentBrain(answer="Plan:\n1. dig into logs [worker=aayan]")
     _patch(monkeypatch, brain, tmp_workspace)
-    rc, out = _run(capsys, ["--team-name", "core", "--craft", "investigate",
-                            "--approve", "--no-parallel", "--json"])
+    rc, out = _run(capsys, ["--team-name", "core", "--craft", "investigate", "--approve", "--no-parallel", "--json"])
     assert rc == 0
     assert out["planner"] == "vizhi"  # core.leader, --worker omitted
     assert out["team"] == "core"

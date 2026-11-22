@@ -29,8 +29,8 @@ nak_host/
   manifests/     workers.json · teams.json · crafts.json · tools.json · permissions.json
   utils/         settings (nebulonak.cfg + env) · constant.py (single source)
   wiring.py      composition root — the only place that wires everything
-nebulonak.py     server entry point (mirrors nebulondb.py / nebulonmd.py)
-nebulonagentkit.py  foreground API runner (same app, no daemon)
+nebulonak.py     server entry point (mirrors nebulondb.py / nebulonmd.py);
+               `start --foreground` serves in the terminal (same app, no daemon)
 pipeline/
   vetting/       worker evaluation with nunan as assessor (`nak-vetting`)
 docs/
@@ -72,7 +72,7 @@ EOF
 
 # 5. Vet workers (foreground API run without the daemon)
 .venv/bin/nak-vetting run --workers arivu,ezhilan
-.venv/bin/python nebulonagentkit.py
+.venv/bin/python nebulonak.py start --foreground
 ```
 
 ## Configuration

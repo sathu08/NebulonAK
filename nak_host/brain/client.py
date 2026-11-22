@@ -27,6 +27,7 @@ Usage:
 from __future__ import annotations
 
 import logging
+import threading
 import time
 
 from pathlib import Path
@@ -44,6 +45,27 @@ from nak_host.utils.constant import (
 from .config import NAKConfig, load_config
 
 logger = logging.getLogger("nak_host.brain")
+
+#: Process-wide per-username token cache (shared by all ``Brain``
+#: instances, incl. fresh ``Brain(user=...)`` per worker and parallel
+#: threads). Filled from entry tokens returned by
+#: ``create_user``/``ensure_user``; the configured ``auth_token`` stays the
+#: fallback for the default user. Deliberately in-memory only: tokens for
+#: extra users live for the process lifetime; after a restart, re-registering
+#: (or the server-side ``nebulonmind token`` rescue) mints fresh ones.
+_TOKEN_CACHE: Dict[str, str] = {}
+_TOKEN_LOCK = threading.Lock()
+
+
+def _cache_token(username: str, token: str) -> None:
+    if username and token:
+        with _TOKEN_LOCK:
+            _TOKEN_CACHE[str(username)] = str(token)
+
+
+def _cached_token(username: str) -> Optional[str]:
+    with _TOKEN_LOCK:
+        return _TOKEN_CACHE.get(str(username or ""))
 
 
 class BrainError(RuntimeError):
@@ -88,9 +110,7 @@ class Brain:
         self.retry_backoff = float(retry_backoff) if retry_backoff is not None else self._config.retry_backoff
 
         self._session = requests.Session()
-        self._session.headers.update(
-            {"Content-Type": "application/json", "Accept": "application/json"}
-        )
+        self._session.headers.update({"Content-Type": "application/json", "Accept": "application/json"})
         if self.auth_token:
             self._session.headers["Authorization"] = f"Bearer {self.auth_token}"
 
@@ -126,10 +146,17 @@ class Brain:
         t = timeout if timeout is not None else self.timeout
         budget = self.max_retries if retries is None else retries
         attempts = max(0, budget) + 1
+        # Per-user auth: the callee's username (from params, else the
+        # payload's user_id for body-routed calls like /chats, else this
+        # client's default) picks its cached entry token; the configured
+        # auth_token is the fallback. Owner mismatch (403) fails fast.
+        target_user = str((params or {}).get("user_id") or (payload or {}).get("user_id") or self.user or "").strip()
+        token = _cached_token(target_user) or self.auth_token
+        headers = {"Authorization": f"Bearer {token}"} if token else None
         last_error: Optional[BrainError] = None
         for attempt in range(1, attempts + 1):
             try:
-                resp = self._session.request(method, url, params=params, json=payload, timeout=t)
+                resp = self._session.request(method, url, params=params, json=payload, timeout=t, headers=headers)
             except requests.RequestException as exc:
                 last_error = BrainError(f"NebulonMD unreachable at {self.base_url}: {exc}")
             else:
@@ -152,8 +179,15 @@ class Brain:
                     return body
             if attempt < attempts:
                 wait = max(0.0, self.retry_backoff) * (2 ** (attempt - 1))
-                logger.warning("[brain] %s %s transient (%s); retry %d/%d in %.1fs",
-                               method, path, last_error, attempt, attempts - 1, wait)
+                logger.warning(
+                    "[brain] %s %s transient (%s); retry %d/%d in %.1fs",
+                    method,
+                    path,
+                    last_error,
+                    attempt,
+                    attempts - 1,
+                    wait,
+                )
                 if wait:
                     time.sleep(wait)
         assert last_error is not None
@@ -204,7 +238,10 @@ class Brain:
             raise BrainError(
                 f"NebulonMD is down at {self.base_url} — AgentKit will not work. "
                 "Start order: NebulonDB (:6969) first, then NebulonMD (:9696). "
-                f"({exc})", status=exc.status, body=exc.body) from exc
+                f"({exc})",
+                status=exc.status,
+                body=exc.body,
+            ) from exc
         try:
             body = self._request("GET", "/health/ready")
         except BrainError as exc:
@@ -212,10 +249,13 @@ class Brain:
                 raise BrainError(
                     "NebulonMD is not ready — NebulonDB is down or unreachable, "
                     "so AgentKit will not work. Start NebulonDB first, then "
-                    "restart NebulonMD.", status=503, body=exc.body) from exc
+                    "restart NebulonMD.",
+                    status=503,
+                    body=exc.body,
+                ) from exc
             raise BrainError(
-                f"NebulonMD readiness check failed at {self.base_url}: {exc}",
-                status=exc.status, body=exc.body) from exc
+                f"NebulonMD readiness check failed at {self.base_url}: {exc}", status=exc.status, body=exc.body
+            ) from exc
         return body.get("data", body)
 
     def llm_status(self) -> Dict[str, Any]:
@@ -246,12 +286,20 @@ class Brain:
     # ------------------------------------------------------------------ #
 
     def create_user(self, username: Optional[str] = None) -> Dict[str, Any]:
-        """POST /user/create_user — idempotent registration."""
+        """POST /user/create_user — idempotent registration.
+
+        A fresh registration returns the entry token ONCE; it is cached
+        process-wide so every later call for this username authenticates
+        as its owner (any ``Brain(user=...)`` instance, any thread).
+        """
         u = (username or self.user).strip()
         if not u or u.startswith("/"):
             raise ValueError(f"invalid username {u!r}")
         body = self._request("POST", "/user/create_user", payload={"username": u})
-        return body.get("data", body)
+        data = body.get("data", body)
+        if isinstance(data, dict):
+            _cache_token(u, str(data.get("token") or ""))
+        return data
 
     def resolve_user(self, username: Optional[str] = None) -> Dict[str, Any]:
         """GET /user/resolve?username= — lookup, never auto-registers."""
@@ -365,12 +413,8 @@ class Brain:
         body = self._request("GET", f"/memory/{memory_id}", params=self._user_params(user))
         return body.get("data", body)
 
-    def update_memory(
-        self, memory_id: str, fields: Dict[str, Any], user: Optional[str] = None
-    ) -> Dict[str, Any]:
-        body = self._request(
-            "PUT", f"/memory/{memory_id}", params=self._user_params(user), payload=fields
-        )
+    def update_memory(self, memory_id: str, fields: Dict[str, Any], user: Optional[str] = None) -> Dict[str, Any]:
+        body = self._request("PUT", f"/memory/{memory_id}", params=self._user_params(user), payload=fields)
         return body.get("data", body)
 
     def delete_memory(self, memory_id: str, user: Optional[str] = None) -> Dict[str, Any]:
@@ -497,14 +541,10 @@ class Brain:
         if raw:
             payload["raw"] = True
         timeout = max(self.timeout, BRAIN_CHAT_TIMEOUT_FLOOR)  # LLM turns take 15-45s+ under load
-        body = self._request(
-            "POST", "/agent/chat", params=self._user_params(user), payload=payload, timeout=timeout
-        )
+        body = self._request("POST", "/agent/chat", params=self._user_params(user), payload=payload, timeout=timeout)
         return body.get("data", body)
 
-    def create_session(
-        self, metadata: Optional[Dict[str, Any]] = None, user: Optional[str] = None
-    ) -> Dict[str, Any]:
+    def create_session(self, metadata: Optional[Dict[str, Any]] = None, user: Optional[str] = None) -> Dict[str, Any]:
         body = self._request(
             "POST", "/agent/session", params=self._user_params(user), payload={"metadata": metadata or {}}
         )
@@ -553,9 +593,7 @@ class Brain:
         body = self._request("GET", "/evaluation/dataset", params=self._user_params())
         return body.get("data", body)
 
-    def run_eval(
-        self, dataset: str = "memory_test_v1", seed: bool = True, max_items: int = 10
-    ) -> Dict[str, Any]:
+    def run_eval(self, dataset: str = "memory_test_v1", seed: bool = True, max_items: int = 10) -> Dict[str, Any]:
         body = self._request(
             "POST",
             "/evaluation/run",
@@ -566,15 +604,11 @@ class Brain:
         return body.get("data", body)
 
     def background_memory_run(self, mode: str = "consolidate", user: Optional[str] = None) -> Dict[str, Any]:
-        body = self._request(
-            "POST", "/background/memory/run", params=self._user_params(user), payload={"mode": mode}
-        )
+        body = self._request("POST", "/background/memory/run", params=self._user_params(user), payload={"mode": mode})
         return body.get("data", body)
 
     def background_task_run(self, days: int = 7, user: Optional[str] = None) -> Dict[str, Any]:
-        body = self._request(
-            "POST", "/background/task/run", params=self._user_params(user), payload={"days": days}
-        )
+        body = self._request("POST", "/background/task/run", params=self._user_params(user), payload={"days": days})
         return body.get("data", body)
 
     def background_status(self, user: Optional[str] = None) -> Dict[str, Any]:
@@ -608,8 +642,11 @@ class Brain:
             except BrainError as exc:
                 elapsed = round((time.time() - start) * 1000)
                 results["steps"][name] = {
-                    "ok": False, "elapsed_ms": elapsed, "error": str(exc),
-                    "status": exc.status, "body": exc.body,
+                    "ok": False,
+                    "elapsed_ms": elapsed,
+                    "error": str(exc),
+                    "status": exc.status,
+                    "body": exc.body,
                 }
                 ok = False
                 if verbose:

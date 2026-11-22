@@ -28,8 +28,7 @@ def _case(cid="q1", difficulty="easy"):
 
 
 def _plan():
-    return {"cases": [_case(f"q{i}", d) for i, d in enumerate(
-        ["easy", "easy", "mid", "mid", "hard", "hard"], 1)]}
+    return {"cases": [_case(f"q{i}", d) for i, d in enumerate(["easy", "easy", "mid", "mid", "hard", "hard"], 1)]}
 
 
 def test_validate_plan_accepts_balanced_six():
@@ -69,8 +68,7 @@ def test_validate_plan_grounding_is_opt_in():
 
 
 def _four_without_hard():
-    return {"cases": [_case("q1", "easy"), _case("q2", "easy"),
-                      _case("q3", "mid"), _case("q4", "mid")]}
+    return {"cases": [_case("q1", "easy"), _case("q2", "easy"), _case("q3", "mid"), _case("q4", "mid")]}
 
 
 def test_validate_plan_distribution_opt_out():
@@ -107,8 +105,7 @@ def test_validate_plan_ignores_rubric_tier_language():
     case = _case()
     case["question"] = "Explain the modes."
     case["expected"] = "Names the modes."
-    case["rubric"] = ("1.0 if both modes are named; "
-                      "0.5 if only one mode is named; 0.0 otherwise.")
+    case["rubric"] = "1.0 if both modes are named; 0.5 if only one mode is named; 0.0 otherwise."
     plan = {"cases": [case]}
     assert len(validate_plan(plan, 1, None, False, ["plan", "build"])) == 1
 
@@ -116,13 +113,10 @@ def test_validate_plan_ignores_rubric_tier_language():
 def test_build_judge_prompt_renders_facts():
     from pipeline.vetting.utils.models import Case as CaseModel
 
-    case = CaseModel(id="q1", question="Q?", expected="E.", rubric="R.",
-                     difficulty="easy")
+    case = CaseModel(id="q1", question="Q?", expected="E.", rubric="R.", difficulty="easy")
     plain = build_judge_prompt(case, "answer")
     assert "Worker facts" in plain
-    filled = build_judge_prompt(case, "answer",
-                                profile_facts={"worker": "w",
-                                               "crafts": ["plan"]})
+    filled = build_judge_prompt(case, "answer", profile_facts={"worker": "w", "crafts": ["plan"]})
     assert '"crafts"' in filled and '"plan"' in filled
 
 
@@ -170,11 +164,20 @@ def test_validate_plan_drops_brittle_check_phrases():
 
 
 def test_parse_json_object_preserves_braces_inside_strings():
-    raw = json.dumps({"cases": [{
-        "id": "q1", "difficulty": "easy",
-        "question": "What does {foo: bar} mean?",
-        "expected": "E", "rubric": "R", "weight": 1.0,
-    }]})
+    raw = json.dumps(
+        {
+            "cases": [
+                {
+                    "id": "q1",
+                    "difficulty": "easy",
+                    "question": "What does {foo: bar} mean?",
+                    "expected": "E",
+                    "rubric": "R",
+                    "weight": 1.0,
+                }
+            ]
+        }
+    )
     parsed = parse_json_object(raw)
     assert parsed["cases"][0]["question"] == "What does {foo: bar} mean?"
 
@@ -198,16 +201,11 @@ def test_parse_json_object_repairs_bare_check_value():
         '"expected":"E","rubric":"R","checks":[{"op":"contains","goal"}]}]}'
     )
     parsed = parse_json_object(raw)
-    assert parsed["cases"][0]["checks"] == [
-        {"op": "contains", "expected": "goal"}
-    ]
+    assert parsed["cases"][0]["checks"] == [{"op": "contains", "expected": "goal"}]
 
 
 def test_parse_json_object_repairs_missing_key_quotes():
-    raw = (
-        '{"cases":[{"id":"q1","difficulty":"easy","question":"Q?",'
-        'expected":"E",rubric:"R","weight":1.0}]}'
-    )
+    raw = '{"cases":[{"id":"q1","difficulty":"easy","question":"Q?",expected":"E",rubric:"R","weight":1.0}]}'
     parsed = parse_json_object(raw)
     assert parsed["cases"][0]["expected"] == "E"
     assert parsed["cases"][0]["rubric"] == "R"
@@ -230,16 +228,22 @@ def test_parse_json_object_recovers_top_level_case_fields():
 def test_parse_json_object_recovers_cases_after_early_array_close():
     cases = [_case(f"q{i}") for i in range(1, 5)]
     raw = (
-        '{"cases":[' + json.dumps(cases[0]) + "," + json.dumps(cases[1]) + "]},"
-        + json.dumps(cases[2]) + "," + json.dumps(cases[3]) + "}"
+        '{"cases":['
+        + json.dumps(cases[0])
+        + ","
+        + json.dumps(cases[1])
+        + "]},"
+        + json.dumps(cases[2])
+        + ","
+        + json.dumps(cases[3])
+        + "}"
     )
     parsed = parse_json_object(raw)
     assert [case["id"] for case in parsed["cases"]] == ["q1", "q2", "q3", "q4"]
 
 
 def test_parse_json_object_closes_truncated_object():
-    raw = ('{"case_id":"q1","score":1.0,"rationale":"ok",'
-           '"evidence":"quote"')
+    raw = '{"case_id":"q1","score":1.0,"rationale":"ok","evidence":"quote"'
     parsed = parse_json_object(raw)
     assert parsed["score"] == 1.0
     assert parsed["case_id"] == "q1"
@@ -251,13 +255,10 @@ def test_parse_json_object_rejects_empty():
 
 
 def test_validate_judgement_bounds_score():
-    case = Case(id="q1", question="Q", expected="E", rubric="R",
-                difficulty="easy")
+    case = Case(id="q1", question="Q", expected="E", rubric="R", difficulty="easy")
     with pytest.raises(PromptError, match="score must be a number"):
-        validate_judgement({"case_id": "q1", "score": 2,
-                            "rationale": "too high"}, case)
-    ok = validate_judgement({"case_id": "q1", "score": 0.5,
-                             "rationale": "half", "evidence": "quote"}, case)
+        validate_judgement({"case_id": "q1", "score": 2, "rationale": "too high"}, case)
+    ok = validate_judgement({"case_id": "q1", "score": 0.5, "rationale": "half", "evidence": "quote"}, case)
     assert ok.score == 0.5
 
 
@@ -268,19 +269,19 @@ def test_fence_grows_past_inner_backticks():
 
 
 def test_judge_prompt_uses_the_actual_case_id():
-    judge = build_judge_prompt(
-        Case(id="q2", question="Q?", expected="E", rubric="R",
-             difficulty="mid"), "answer", "")
+    judge = build_judge_prompt(Case(id="q2", question="Q?", expected="E", rubric="R", difficulty="mid"), "answer", "")
     assert '"case_id": "q2"' in judge
     assert '"case_id": "q1"' not in judge
 
 
 def test_judge_prompt_includes_policy_outcome_and_checks():
     judge = build_judge_prompt(
-        Case(id="q2", question="Q?", expected="E", rubric="R",
-             difficulty="mid"), "blocked", "",
+        Case(id="q2", question="Q?", expected="E", rubric="R", difficulty="mid"),
+        "blocked",
+        "",
         {"action": "escalate", "blocked": True},
-        [{"id": "c1", "op": "contains", "expected": "x", "passed": False}])
+        [{"id": "c1", "op": "contains", "expected": "x", "passed": False}],
+    )
     assert "Policy outcome" in judge
     assert "escalate" in judge
     assert "Deterministic checks" in judge
@@ -289,17 +290,24 @@ def test_judge_prompt_includes_policy_outcome_and_checks():
 
 def test_judge_prompt_omits_case_checks_by_default():
     judge = build_judge_prompt(
-        Case(id="q2", question="Q?", expected="E", rubric="R",
-             difficulty="mid",
-             checks=[{"id": "leaked-check", "op": "contains",
-                      "expected": "x"}]), "answer", "")
+        Case(
+            id="q2",
+            question="Q?",
+            expected="E",
+            rubric="R",
+            difficulty="mid",
+            checks=[{"id": "leaked-check", "op": "contains", "expected": "x"}],
+        ),
+        "answer",
+        "",
+    )
     assert "leaked-check" not in judge
 
 
 def test_plan_retry_prompt_includes_the_validator_error():
-    prompt = build_plan_retry_prompt({"role": "researcher"}, 6,
-                                     '{"cases": []}',
-                                     "plan must contain exactly 6 cases (got 0)")
+    prompt = build_plan_retry_prompt(
+        {"role": "researcher"}, 6, '{"cases": []}', "plan must contain exactly 6 cases (got 0)"
+    )
     assert "exactly 6 cases" in prompt
     assert "researcher" in prompt
     assert "2 easy, 2 mid, 2 hard" in prompt
@@ -312,8 +320,6 @@ def test_prompts_include_counts_and_profile():
     assert "q1" in prompt
     assert "Prefer `checks: []`" in prompt
     assert "Never test hidden or unstable metadata" in prompt
-    judge = build_judge_prompt(
-        Case(id="q1", question="Q?", expected="E", rubric="R",
-             difficulty="mid"), "answer", "")
+    judge = build_judge_prompt(Case(id="q1", question="Q?", expected="E", rubric="R", difficulty="mid"), "answer", "")
     assert '"case_id"' in judge
     assert "answer" in judge

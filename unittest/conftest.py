@@ -1,14 +1,13 @@
 """Shared fixtures for NebulonAK unittest suite (offline, no Mind/DB needed)."""
+
 import sys
-import json
-import tempfile
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
-
-import pytest
 
 
 class FakeBrain:
@@ -19,7 +18,10 @@ class FakeBrain:
     All other prompts get self.answer (plan/chat text).
     """
 
-    DECIDE_REPLY = '{"worker": "vizhi", "tool": "file", "arguments": {"action": "read", "path": "notes.txt"}, "reason": "fake decide"}'
+    DECIDE_REPLY = (
+        '{"worker": "vizhi", "tool": "file", '
+        '"arguments": {"action": "read", "path": "notes.txt"}, "reason": "fake decide"}'
+    )
 
     def __init__(self, answer="1. step one\n2. step two", search_hits=None, decisions=None):
         self.answer = answer
@@ -36,8 +38,7 @@ class FakeBrain:
             raise RuntimeError("Mind down (fake)")
 
     def chat(self, prompt, messages=None, session_id=None):
-        self.chat_calls.append({"prompt": prompt, "messages": messages,
-                                "session_id": session_id})
+        self.chat_calls.append({"prompt": prompt, "messages": messages, "session_id": session_id})
         p = str(prompt or "").lower()
         if "task router" in p or "reply format" in p or "reply with json" in p:
             return {"answer": self.DECIDE_REPLY, "raw": "fake-decide"}
@@ -73,11 +74,13 @@ def tmp_workspace(tmp_path):
     # Workspace MUST live under <repo>/workspace so default permissions
     # resources (workspace/**) grant session files. Unique per-test.
     import uuid
+
     ws = REPO_ROOT / "workspace" / f"unittest-{uuid.uuid4().hex[:8]}"
     ws.mkdir(parents=True, exist_ok=True)
     yield str(ws)
     # best-effort cleanup (sessions inside); never fail the test
     import shutil
+
     try:
         shutil.rmtree(str(ws), ignore_errors=True)
     except Exception:
@@ -87,6 +90,7 @@ def tmp_workspace(tmp_path):
 @pytest.fixture()
 def harness_vizhi(tmp_workspace):
     from nak_host.harness.engine import ExecutionHarness
+
     return ExecutionHarness(worker="vizhi", user="tester", workspace_root=tmp_workspace)
 
 
@@ -94,37 +98,42 @@ def harness_vizhi(tmp_workspace):
 def harness_vizhi_approved(tmp_workspace):
     """vizhi with approver=True: 'ask' verdicts pass so tool sandbox is tested."""
     from nak_host.harness.engine import ExecutionHarness
-    return ExecutionHarness(worker="vizhi", user="tester", workspace_root=tmp_workspace,
-                            approver=lambda *a, **k: True)
+
+    return ExecutionHarness(worker="vizhi", user="tester", workspace_root=tmp_workspace, approver=lambda *a, **k: True)
 
 
 @pytest.fixture()
 def harness_arivu(tmp_workspace):
     from nak_host.harness.engine import ExecutionHarness
+
     return ExecutionHarness(worker="arivu", user="tester", workspace_root=tmp_workspace)
 
 
 @pytest.fixture()
 def harness_aayan(tmp_workspace):
     from nak_host.harness.engine import ExecutionHarness
+
     return ExecutionHarness(worker="aayan", user="tester", workspace_root=tmp_workspace)
 
 
 @pytest.fixture()
 def worker_vizhi(fake_brain):
     from nak_host.wiring import make_worker
+
     return make_worker("vizhi", brain=fake_brain)
 
 
 @pytest.fixture()
 def worker_arivu(fake_brain):
     from nak_host.wiring import make_worker
+
     return make_worker("arivu", brain=fake_brain)
 
 
 @pytest.fixture()
 def worker_aayan(fake_brain):
     from nak_host.wiring import make_worker
+
     return make_worker("aayan", brain=fake_brain)
 
 
@@ -132,4 +141,5 @@ def worker_aayan(fake_brain):
 def bare_worker_vizhi():
     """No brain — for testing the no-brain error path."""
     from nak_host.worker import GenericWorker
+
     return GenericWorker("vizhi")

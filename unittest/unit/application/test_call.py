@@ -27,8 +27,7 @@ class _Harness:
         self.session_dir = "/tmp/ws"
 
 
-def _factories(brain, worker=None, harness=None, executor=None, memory=None,
-               registry=None):
+def _factories(brain, worker=None, harness=None, executor=None, memory=None, registry=None):
     made = {}
 
     def brain_factory():
@@ -51,19 +50,20 @@ def _factories(brain, worker=None, harness=None, executor=None, memory=None,
         made["memory"] = memory
         return memory
 
-    return made, {"worker_factory": worker_factory,
-                  "brain_factory": brain_factory,
-                  "harness_factory": harness_factory,
-                  "executor_factory": executor_factory,
-                  "memory_factory": memory_factory,
-                  "registry": registry}
+    return made, {
+        "worker_factory": worker_factory,
+        "brain_factory": brain_factory,
+        "harness_factory": harness_factory,
+        "executor_factory": executor_factory,
+        "memory_factory": memory_factory,
+        "registry": registry,
+    }
 
 
 def test_named_call_builds_and_runs():
     store = InMemoryTaskStore()
     made, factories = _factories(ScriptBrain(["done"]))
-    out = call_worker("arivu", "write it", store=store, workspace="/tmp/ws",
-                      **factories)
+    out = call_worker("arivu", "write it", store=store, workspace="/tmp/ws", **factories)
     assert out["result"].status == ResultStatus.OK
     assert out["result"].worker == "arivu"
     assert out["run"].state == TaskState.RUNNING
@@ -92,6 +92,5 @@ def test_tools_come_from_registry():
 
     store = InMemoryTaskStore()
     made, factories = _factories(ScriptBrain(["done"]), registry=Reg())
-    out = call_worker("arivu", "write it", store=store, workspace="/tmp/ws",
-                      **factories)
+    out = call_worker("arivu", "write it", store=store, workspace="/tmp/ws", **factories)
     assert out["result"].status == ResultStatus.OK

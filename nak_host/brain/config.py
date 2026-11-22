@@ -21,8 +21,16 @@ from ..utils.settings import (
     load_settings,
 )
 
-__all__ = ["NAKConfig", "load_config", "find_cfg", "load_settings",
-           "DEFAULT_BASE_URL", "DEFAULT_USER", "DEFAULT_TIMEOUT", "CFG_FILENAME"]
+__all__ = [
+    "NAKConfig",
+    "load_config",
+    "find_cfg",
+    "load_settings",
+    "DEFAULT_BASE_URL",
+    "DEFAULT_USER",
+    "DEFAULT_TIMEOUT",
+    "CFG_FILENAME",
+]
 
 
 @dataclass
@@ -37,19 +45,22 @@ class NAKConfig:
 
     @classmethod
     def from_settings(cls, s: Settings) -> "NAKConfig":
-        return cls(base_url=s.base_url.rstrip("/"), user=s.user,
-                   auth_token=s.auth_token, timeout=float(s.timeout),
-                   max_retries=int(s.max_retries), retry_backoff=float(s.retry_backoff),
-                   cfg_path=s.cfg_path)
+        return cls(
+            base_url=s.base_url.rstrip("/"),
+            user=s.user,
+            auth_token=s.auth_token,
+            timeout=float(s.timeout),
+            max_retries=int(s.max_retries),
+            retry_backoff=float(s.retry_backoff),
+            cfg_path=s.cfg_path,
+        )
 
     def validate(self) -> List[str]:
         problems: List[str] = []
         if not self.base_url.startswith(("http://", "https://")):
             problems.append(f"base_url must be http(s): {self.base_url!r}")
         if "/api/NebulonMind" not in self.base_url:
-            problems.append(
-                f"base_url must include /api/NebulonMind prefix: {self.base_url!r}"
-            )
+            problems.append(f"base_url must include /api/NebulonMind prefix: {self.base_url!r}")
         if not (self.user or "").strip() or (self.user or "").startswith("/"):
             problems.append(f"invalid user: {self.user!r}")
         if self.timeout <= 0:

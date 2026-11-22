@@ -11,7 +11,7 @@ import pytest
 from pipeline.vetting.utils.bank import list_banks, load_bank, resolve_bank
 from pipeline.vetting.utils.models import Case, RunSummary, WorkerResult
 from pipeline.vetting.utils.prompting import validate_plan
-from pipeline.vetting.utils.runner import _aggregate, _run_one, repeat_vetting
+from pipeline.vetting.utils.runner import _run_one, repeat_vetting
 
 MANIFESTS = Path(__file__).resolve().parents[3] / "nak_host" / "manifests"
 
@@ -36,8 +36,7 @@ class _FakeNunnan:
 
     def chat(self, prompt):
         self.chats.append(prompt)
-        return json.dumps({"case_id": self._case_id, "score": self._score,
-                           "rationale": "good"})
+        return json.dumps({"case_id": self._case_id, "score": self._score, "rationale": "good"})
 
 
 def test_shipped_banks_load_and_match_workers():
@@ -69,15 +68,13 @@ def test_banks_are_grounded_in_their_workers_crafts():
     for name in ("arivu", "ezhilan", "aayan"):
         allowed = [c["name"] for c in crafts_for_worker(name)]
         assert allowed, f"no crafts resolved for {name}"
-        profile = build_profile(name, MANIFESTS / "workers.json",
-                                MANIFESTS / "permissions.json")
+        profile = build_profile(name, MANIFESTS / "workers.json", MANIFESTS / "permissions.json")
         visible = profile.get("worker_visible") or {}
-        modes = ((visible.get("autonomy") or {}).get("modes") or [])
+        modes = (visible.get("autonomy") or {}).get("modes") or []
         assert modes, f"no modes resolved for {name}"
         bank = load_bank(name)
         payload = {"cases": [c.to_dict() for c in bank["cases"]]}
-        cases = validate_plan(payload, len(bank["cases"]), allowed, False,
-                              modes)
+        cases = validate_plan(payload, len(bank["cases"]), allowed, False, modes)
         assert len(cases) == len(bank["cases"])
 
 
@@ -88,11 +85,26 @@ def test_resolve_bank_match_and_mismatch(tmp_path):
     with pytest.raises(ValueError, match="not 'arivu'"):
         resolve_bank("ezhilan", "arivu")
     one = tmp_path / "solo.v3.json"
-    one.write_text(json.dumps({
-        "worker": "solo", "version": 3,
-        "cases": [{"id": "q1", "difficulty": "easy", "question": "Q?",
-                    "expected": "E.", "rubric": "1.0 when ok; 0.0 otherwise.",
-                    "weight": 1, "checks": []}]}), encoding="utf-8")
+    one.write_text(
+        json.dumps(
+            {
+                "worker": "solo",
+                "version": 3,
+                "cases": [
+                    {
+                        "id": "q1",
+                        "difficulty": "easy",
+                        "question": "Q?",
+                        "expected": "E.",
+                        "rubric": "1.0 when ok; 0.0 otherwise.",
+                        "weight": 1,
+                        "checks": [],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
     assert load_bank(one)["version"] == 3
     assert len(resolve_bank(one, "solo")) == 1
     with pytest.raises(ValueError, match="not 'other'"):
@@ -100,8 +112,9 @@ def test_resolve_bank_match_and_mismatch(tmp_path):
 
 
 def _summary(name, score, passed, run_dir="r"):
-    return RunSummary(run_dir=run_dir, started_at="", workers=[
-        WorkerResult(name=name, score=score, passed=passed, status="pass")])
+    return RunSummary(
+        run_dir=run_dir, started_at="", workers=[WorkerResult(name=name, score=score, passed=passed, status="pass")]
+    )
 
 
 def test_aggregate_median_and_majority(tmp_path):
@@ -129,9 +142,8 @@ def test_aggregate_minority_fails(tmp_path):
     import pipeline.vetting.utils.runner as runner_module
 
     out = runner_module._aggregate(
-        tmp_path / "agg",
-        [_summary("w", 0.4, False, "r1"), _summary("w", 0.9, True, "r2")],
-        "", 2, "t0")
+        tmp_path / "agg", [_summary("w", 0.4, False, "r1"), _summary("w", 0.9, True, "r2")], "", 2, "t0"
+    )
     assert out.workers[0].verdict == "FAIL"
     assert out.exit_code == 1
 
@@ -145,24 +157,38 @@ def test_repeat_vetting_rejects_bad_counts(tmp_path):
 
 def test_run_one_uses_bank_without_planning(tmp_path):
     nun = _FakeNunnan()
-    bank_cases = [Case(id="qb1", difficulty="easy", question="Q?",
-                       expected="E.",
-                       rubric="1.0 when ok; 0.0 otherwise.", weight=1.0,
-                       checks=[])]
+    bank_cases = [
+        Case(
+            id="qb1",
+            difficulty="easy",
+            question="Q?",
+            expected="E.",
+            rubric="1.0 when ok; 0.0 otherwise.",
+            weight=1.0,
+            checks=[],
+        )
+    ]
     result = _run_one(
-        "arivu", "run1", tmp_path, workers_file=MANIFESTS / "workers.json",
+        "arivu",
+        "run1",
+        tmp_path,
+        workers_file=MANIFESTS / "workers.json",
         permissions_file=MANIFESTS / "permissions.json",
-        assessor_brain=None, target_brain=None,
+        assessor_brain=None,
+        target_brain=None,
         nunnan_factory=lambda b: nun,
         worker_factory=lambda n, b: _FakeTarget(),
-        cases=1, threshold=0.6, answer_chars=8000,
-        probe_crafts_enabled=False, probe_tools_enabled=False,
-        bank_cases=bank_cases)
+        cases=1,
+        threshold=0.6,
+        answer_chars=8000,
+        probe_crafts_enabled=False,
+        probe_tools_enabled=False,
+        bank_cases=bank_cases,
+    )
     assert [c.id for c in result.cases] == ["qb1"]
     assert len(nun.chats) == 1  # judgement only; no plan generation
     assert result.passed is True and result.status == "pass"
-    transcript = (tmp_path / "arivu" / "output" / "evidence"
-                  / "transcript.jsonl").read_text(encoding="utf-8")
+    transcript = (tmp_path / "arivu" / "output" / "evidence" / "transcript.jsonl").read_text(encoding="utf-8")
     assert '"bank": true' in transcript
 
 
@@ -173,11 +199,9 @@ def test_case_invalid_routes_to_case_improvement():
 
     result = WorkerResult(
         name="w",
-        cases=[CaseModel(id="q1", difficulty="easy", question="Q?",
-                         expected="E.", rubric="R.")],
-        judgements=[JudgementModel(
-            case_id="q1", score=0.0,
-            rationale="CASE-INVALID: expected contradicts profile")])
+        cases=[CaseModel(id="q1", difficulty="easy", question="Q?", expected="E.", rubric="R.")],
+        judgements=[JudgementModel(case_id="q1", score=0.0, rationale="CASE-INVALID: expected contradicts profile")],
+    )
     improvements = _build_improvements(result, None)
     assert len(improvements) == 1
     assert improvements[0].source == "case"
@@ -192,8 +216,7 @@ def test_profile_facts_reads_both_profile_layouts():
         "values": ["top-level value"],
         "worker_visible": {
             "crafts": [{"name": "plan"}, {"name": "build"}],
-            "autonomy": {"modes": ["plan", "build"], "max_steps": 3,
-                         "auto_steps": 2, "approval": "small"},
+            "autonomy": {"modes": ["plan", "build"], "max_steps": 3, "auto_steps": 2, "approval": "small"},
             "do_not": ["visible do"],
             "values": ["visible value"],
         },
@@ -202,8 +225,7 @@ def test_profile_facts_reads_both_profile_layouts():
     assert facts["worker"] == "arivu"
     assert facts["crafts"] == ["plan", "build"]
     assert facts["modes"] == ["plan", "build"]
-    assert (facts["max_steps"], facts["auto_steps"],
-            facts["approval"]) == (3, 2, "small")
+    assert (facts["max_steps"], facts["auto_steps"], facts["approval"]) == (3, 2, "small")
     assert "visible do" in facts["do_not"]
     assert "visible value" in facts["values"]
     assert _profile_facts(None, "")["crafts"] == []
@@ -227,14 +249,21 @@ def _run_plan_only(tmp_path, replies):
 
     nun = _SeqNunnan(replies)
     return _run_one(
-        "arivu", "run9", tmp_path, workers_file=MANIFESTS / "workers.json",
+        "arivu",
+        "run9",
+        tmp_path,
+        workers_file=MANIFESTS / "workers.json",
         permissions_file=MANIFESTS / "permissions.json",
-        assessor_brain=None, target_brain=None,
+        assessor_brain=None,
+        target_brain=None,
         nunnan_factory=lambda b: nun,
-        worker_factory=lambda n, b: (_ for _ in ()).throw(
-            AssertionError("target must not be built")),
-        cases=1, threshold=0.6, answer_chars=8000,
-        probe_crafts_enabled=False, probe_tools_enabled=False), nun
+        worker_factory=lambda n, b: (_ for _ in ()).throw(AssertionError("target must not be built")),
+        cases=1,
+        threshold=0.6,
+        answer_chars=8000,
+        probe_crafts_enabled=False,
+        probe_tools_enabled=False,
+    ), nun
 
 
 def test_identical_bad_plans_stop_early(tmp_path):
@@ -264,8 +293,7 @@ def test_repeat_vetting_runs_each_pass(monkeypatch, tmp_path):
         return _summary("arivu", 1.0, True, str(run_dir))
 
     monkeypatch.setattr(runner_module, "run_vetting", fake_run)
-    out = repeat_vetting(["arivu"], run_dir=tmp_path / "parent", repeats=2,
-                         cases_from="arivu")
+    out = repeat_vetting(["arivu"], run_dir=tmp_path / "parent", repeats=2, cases_from="arivu")
     assert len(calls) == 2
     assert calls[0].endswith("repeat-01") and calls[1].endswith("repeat-02")
     assert out.workers[0].verdict == "PASS"

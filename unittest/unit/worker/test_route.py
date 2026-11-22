@@ -1,4 +1,5 @@
 """worker.route(): reusable decision call with no chat/memory side effects."""
+
 from nak_host.worker import GenericWorker, list_workers
 
 
@@ -24,8 +25,7 @@ def test_route_passes_own_decision_block_and_is_side_effect_free():
     before_history = list(w.history)
     before_memory = dict(w.entry.get("memory") or {})
 
-    out = w.route("pick a worker", workers=["aayan"],
-                  context={"situation": "plan step"}, session_id="s1")
+    out = w.route("pick a worker", workers=["aayan"], context={"situation": "plan step"}, session_id="s1")
 
     assert out["ok"] is True and out["worker"] == "aayan"
     assert seen["goal"] == "pick a worker"

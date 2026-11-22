@@ -82,16 +82,19 @@ class ExecutionHarness:
     <workspace>/workspace_history.json (worker, role, owner, time).
     """
 
-    def __init__(self, registry: Optional[str | Path] = None,
-                 extra_tools: Optional[Dict[str, Callable[[Dict[str, Any]], str]]] = None,
-                 workspace_root: Optional[str | Path] = None,
-                 user: Optional[str] = None,
-                 permissions: Any = None,
-                 worker: Optional[str] = None,
-                 approver: Optional[Callable[..., bool]] = None,
-                 workers_file: Optional[str | Path] = None,
-                 ml: Any = None,
-                 mcp: Any = None) -> None:
+    def __init__(
+        self,
+        registry: Optional[str | Path] = None,
+        extra_tools: Optional[Dict[str, Callable[[Dict[str, Any]], str]]] = None,
+        workspace_root: Optional[str | Path] = None,
+        user: Optional[str] = None,
+        permissions: Any = None,
+        worker: Optional[str] = None,
+        approver: Optional[Callable[..., bool]] = None,
+        workers_file: Optional[str | Path] = None,
+        ml: Any = None,
+        mcp: Any = None,
+    ) -> None:
         self.registry_path = str(Path(registry).expanduser() if registry else _DEFAULT_REGISTRY)
         self._specs: Dict[str, Dict[str, Any]] = {e["name"]: e for e in _load_registry(registry)}
         self.permissions: Dict[str, Any] = _load_permissions(permissions)
@@ -101,8 +104,7 @@ class ExecutionHarness:
             # Fail loud on typos: the worker must exist in workers.json.
             _assert_worker_known_fn(self.workers_file or None, _w)
         self.worker: Optional[str] = _w or None
-        self.worker_role: Optional[str] = _load_worker_role_fn(
-            self.workers_file or None, self.worker)
+        self.worker_role: Optional[str] = _load_worker_role_fn(self.workers_file or None, self.worker)
         self._approver = approver
         self._calls = 0
         self._exec_seconds = 0.0
@@ -113,7 +115,8 @@ class ExecutionHarness:
         self._overrides: Dict[str, Callable[[Dict[str, Any]], str]] = {}
         self._cache: Dict[str, Callable[[Dict[str, Any]], str]] = {}
         self.workspace_root = str(
-            Path(workspace_root).expanduser() if workspace_root
+            Path(workspace_root).expanduser()
+            if workspace_root
             else Path(os.environ.get("NAK_WORKSPACE", "").strip() or default_workspace())
         )
         Path(self.workspace_root).mkdir(parents=True, exist_ok=True)
@@ -122,8 +125,9 @@ class ExecutionHarness:
             self.register(name, fn)
         self.session_id, self.session_dir = self.create_session(self.user, event="started")
 
-    def create_session(self, user: Optional[str] = None, event: str = "rotated",
-                       assigned_workers: Optional[List[str]] = None) -> tuple:
+    def create_session(
+        self, user: Optional[str] = None, event: str = "rotated", assigned_workers: Optional[List[str]] = None
+    ) -> tuple:
         """New session dir <workspace>/<user>_<UTC timestamp>__. Returns (id, dir).
 
         Records the session (worker, role, owner, time, assigned_workers) to
@@ -132,20 +136,24 @@ class ExecutionHarness:
         empty/None when none — reserved for future simultaneous workers.
         """
         from datetime import datetime, timezone
+
         who = sanitize_user(user or self.user)
         self.user = who
         self.session_id, self.session_dir = create_session_dir(self.workspace_root, who)
         self._calls = 0
         self._exec_seconds = 0.0
-        record_session_history(self.workspace_root, {
-            "time": datetime.now(timezone.utc).isoformat(),
-            "event": event,
-            "session_id": self.session_id,
-            "worker": self.worker,
-            "role": self.worker_role,
-            "owner": self.user,
-            "assigned_workers": list(assigned_workers or []),
-        })
+        record_session_history(
+            self.workspace_root,
+            {
+                "time": datetime.now(timezone.utc).isoformat(),
+                "event": event,
+                "session_id": self.session_id,
+                "worker": self.worker,
+                "role": self.worker_role,
+                "owner": self.user,
+                "assigned_workers": list(assigned_workers or []),
+            },
+        )
         return self.session_id, self.session_dir
 
     def prune_sessions(self, keep: int = 20) -> Dict[str, Any]:
@@ -160,10 +168,14 @@ class ExecutionHarness:
 
     from nak_host.utils.constant import PLAN_FILENAME as PLAN_FILENAME
 
-    def start_plan(self, goal: str, steps: List[str],
-                   assigned_workers: Optional[List[str]] = None,
-                   needs_approval: bool = True,
-                   decision_evidence: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def start_plan(
+        self,
+        goal: str,
+        steps: List[str],
+        assigned_workers: Optional[List[str]] = None,
+        needs_approval: bool = True,
+        decision_evidence: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         """Write the session plan file (<session>/nak_plan.md). Returns info dict.
 
         Called when a worker starts to plan: persists goal + numbered steps
@@ -176,6 +188,7 @@ class ExecutionHarness:
         Raises ValueError on empty goal/steps or sandbox refusal.
         """
         from datetime import datetime, timezone
+
         g = str(goal or "").strip()
         if not g:
             raise ValueError("plan goal must be non-empty")
@@ -185,23 +198,29 @@ class ExecutionHarness:
         assigned = [str(w).strip() for w in (assigned_workers or []) if str(w).strip()]
         status = "pending-approval" if needs_approval else "auto-approved"
         now = datetime.now(timezone.utc).isoformat()
-        lines = [f"# Plan — {self.session_id}", "",
-                 f"- goal: {g}",
-                 f"- worker: {self.worker or 'unbound'} (role: {self.worker_role or '-'})",
-                 f"- created: {now}",
-                 f"- status: {status}",
-                 f"- steps: {len(clean)}", "",
-                 "## Steps", ""]
+        lines = [
+            f"# Plan — {self.session_id}",
+            "",
+            f"- goal: {g}",
+            f"- worker: {self.worker or 'unbound'} (role: {self.worker_role or '-'})",
+            f"- created: {now}",
+            f"- status: {status}",
+            f"- steps: {len(clean)}",
+            "",
+            "## Steps",
+            "",
+        ]
         lines += [f"- [ ] {i}. {s}" for i, s in enumerate(clean, 1)]
-        lines += ["", "## Assigned",
-                  ("- " + ", ".join(assigned)) if assigned else "- (none)", ""]
+        lines += ["", "## Assigned", ("- " + ", ".join(assigned)) if assigned else "- (none)", ""]
         if isinstance(decision_evidence, dict):
-            meta = " ".join(str(decision_evidence.get(k, "")).strip()
-                            for k in ("scope", "mode", "status")
-                            if str(decision_evidence.get(k, "")).strip())
+            meta = " ".join(
+                str(decision_evidence.get(k, "")).strip()
+                for k in ("scope", "mode", "status")
+                if str(decision_evidence.get(k, "")).strip()
+            )
             lines += ["## Decision", f"- {meta or 'enabled'}"]
             items = decision_evidence.get("items")
-            for item in (items if isinstance(items, list) else []):
+            for item in items if isinstance(items, list) else []:
                 if not isinstance(item, dict):
                     continue
                 who = str(item.get("worker", "") or "(unassigned)").strip()
@@ -209,8 +228,8 @@ class ExecutionHarness:
                 why = " ".join(why.split())[:220]
                 lines.append(
                     f"- step {item.get('step', '?')}: {who} "
-                    f"({item.get('source', 'decision')})"
-                    + (f" — {why}" if why else ""))
+                    f"({item.get('source', 'decision')})" + (f" — {why}" if why else "")
+                )
             lines.append("")
         lines += ["## Approvals", ""]
         if needs_approval:
@@ -221,20 +240,21 @@ class ExecutionHarness:
         if not ok:
             raise ValueError(resolved)
         Path(resolved).write_text("\n".join(lines) + "\n", encoding="utf-8")
-        record_session_history(self.workspace_root, {
-            "time": now,
-            "event": "planned",
-            "session_id": self.session_id,
-            "worker": self.worker,
-            "role": self.worker_role,
-            "owner": self.user,
-            "assigned_workers": assigned,
-        })
-        return {"path": str(resolved), "status": status,
-                "steps": len(clean), "assigned_workers": assigned}
+        record_session_history(
+            self.workspace_root,
+            {
+                "time": now,
+                "event": "planned",
+                "session_id": self.session_id,
+                "worker": self.worker,
+                "role": self.worker_role,
+                "owner": self.user,
+                "assigned_workers": assigned,
+            },
+        )
+        return {"path": str(resolved), "status": status, "steps": len(clean), "assigned_workers": assigned}
 
-    def approve_plan(self, approved: bool = True, by: str = "user",
-                     note: str = "", path: str = "") -> Dict[str, Any]:
+    def approve_plan(self, approved: bool = True, by: str = "user", note: str = "", path: str = "") -> Dict[str, Any]:
         """Flip the session plan file to approved/rejected. Returns info dict.
 
         Appends an approval line; raises ValueError when no plan file
@@ -243,6 +263,7 @@ class ExecutionHarness:
         import re
 
         from datetime import datetime, timezone
+
         ok, resolved = safe_join(self.session_dir, str(path or "").strip() or self.PLAN_FILENAME)
         if not ok:
             raise ValueError(resolved)
@@ -308,8 +329,7 @@ class ExecutionHarness:
         return _rule_for_fn(self.permissions, None, bound, self.worker_role)
 
     @staticmethod
-    def _deny(tool: str, worker_label: str, reason: str,
-              need_approval: bool = False) -> Dict[str, Any]:
+    def _deny(tool: str, worker_label: str, reason: str, need_approval: bool = False) -> Dict[str, Any]:
         """See permission.deny (kept as a thin wrapper for backward compat)."""
         return _deny_fn(tool, worker_label, reason, need_approval=need_approval)
 
@@ -337,23 +357,26 @@ class ExecutionHarness:
             return False
         return [str(c).strip() for c in caps if str(c).strip()]
 
-    def _ask(self, tool: str, given: Dict[str, Any], worker_label: str,
-             what: str, approver: Optional[Callable[..., bool]] = None) -> Optional[Dict[str, Any]]:
+    def _ask(
+        self,
+        tool: str,
+        given: Dict[str, Any],
+        worker_label: str,
+        what: str,
+        approver: Optional[Callable[..., bool]] = None,
+    ) -> Optional[Dict[str, Any]]:
         """See approval.ask (kept as a thin wrapper)."""
-        return _ask_fn(tool, given, worker_label, what,
-                       approver=approver, fallback_approver=self._approver)
+        return _ask_fn(tool, given, worker_label, what, approver=approver, fallback_approver=self._approver)
 
     def _resource_bases(self) -> List[Path]:
         """See sandbox.resource_bases (session + workspace + project root)."""
         return _resource_bases_fn(self.session_dir, self.workspace_root, __file__)
 
-    def _check_resources(self, resolved: str, op: str,
-                         entry: Dict[str, Any]) -> Optional[str]:
+    def _check_resources(self, resolved: str, op: str, entry: Dict[str, Any]) -> Optional[str]:
         """See sandbox.check_resources (kept as a thin wrapper)."""
         return _check_resources_fn(resolved, op, entry, self._resource_bases())
 
-    def _check_limits(self, given: Dict[str, Any], resolved: Optional[str],
-                      entry: Dict[str, Any]) -> Optional[str]:
+    def _check_limits(self, given: Dict[str, Any], resolved: Optional[str], entry: Dict[str, Any]) -> Optional[str]:
         """See limits.check_limits (kept as a thin wrapper)."""
         return _check_limits_fn(given, resolved, entry, self._calls, self._exec_seconds)
 
@@ -365,10 +388,14 @@ class ExecutionHarness:
         given_root = str((args or {}).get("root", "")).strip()
         return given_root or self.session_dir
 
-    def inspect(self, name: str, args: Optional[Dict[str, Any]] = None,
-                allow: Optional[List[str]] = None,
-                worker: Optional[str] = None,
-                approver: Optional[Callable[..., bool]] = None) -> Dict[str, Any]:
+    def inspect(
+        self,
+        name: str,
+        args: Optional[Dict[str, Any]] = None,
+        allow: Optional[List[str]] = None,
+        worker: Optional[str] = None,
+        approver: Optional[Callable[..., bool]] = None,
+    ) -> Dict[str, Any]:
         """Check a tool BEFORE running: boundary, spec, sandbox, args, deps.
 
         Boundary (worker<->harness, fail-closed): worker entry must exist
@@ -414,8 +441,7 @@ class ExecutionHarness:
         # --- boundary: capability verdicts (per-action when mapped) ---
         need = self._action_caps(spec, given)
         if need is False:
-            return self._deny(tool, who,
-                              f"bad action {str(given.get('action', ''))!r} for tool {tool!r}")
+            return self._deny(tool, who, f"bad action {str(given.get('action', ''))!r} for tool {tool!r}")
         need = need if isinstance(need, list) else self._required_caps(spec)
         for cap in need:
             cv = (entry.get("capabilities") or {}).get(cap)
@@ -428,60 +454,83 @@ class ExecutionHarness:
                 if pending:
                     return pending
         if tool in self._overrides and tool not in self._specs:
-            sandbox = {"root": self._effective_root(given),
-                       "session": self.session_id}
+            sandbox = {"root": self._effective_root(given), "session": self.session_id}
             resolved = None
             if "path" in given and str(given.get("path", "")).strip():
                 ok, resolved = safe_join(sandbox["root"], str(given["path"]))
                 sandbox["resolved"] = resolved
                 if not ok:
-                    return {"ok": False, "error": resolved, "tool": tool,
-                            "description": "caller-provided function",
-                            "sandbox": sandbox}
+                    return {
+                        "ok": False,
+                        "error": resolved,
+                        "tool": tool,
+                        "description": "caller-provided function",
+                        "sandbox": sandbox,
+                    }
                 hit = self._check_resources(resolved, "", entry)
                 if hit:
                     return self._deny(tool, who, hit)
             over = self._check_limits(given, resolved, entry)
             if over:
                 return self._deny(tool, who, over)
-            return {"ok": True, "tool": tool, "source": "in-memory override",
-                    "description": "caller-provided function",
-                    "dependencies": [], "dependencies_ok": True,
-                    "capabilities": [], "args_expected": {},
-                    "args_given": sorted(given),
-                    "worker": who,
-                    "sandbox": sandbox}
+            return {
+                "ok": True,
+                "tool": tool,
+                "source": "in-memory override",
+                "description": "caller-provided function",
+                "dependencies": [],
+                "dependencies_ok": True,
+                "capabilities": [],
+                "args_expected": {},
+                "args_given": sorted(given),
+                "worker": who,
+                "sandbox": sandbox,
+            }
         expected = spec.get("args") or {}
-        missing = [k for k, v in expected.items()
-                   if "required" in str(v).lower()
-                   and not str(given.get(k, "")).strip()]
+        missing = [k for k, v in expected.items() if "required" in str(v).lower() and not str(given.get(k, "")).strip()]
         if missing:
-            return {"ok": False, "error": f"tool {tool!r} missing required args: {missing}",
-                    "tool": tool, "description": spec.get("description", ""),
-                    "args_expected": expected, "args_given": sorted(given),
-                    "sandbox": {"root": self._effective_root(given),
-                                "session": self.session_id}}
+            return {
+                "ok": False,
+                "error": f"tool {tool!r} missing required args: {missing}",
+                "tool": tool,
+                "description": spec.get("description", ""),
+                "args_expected": expected,
+                "args_given": sorted(given),
+                "sandbox": {"root": self._effective_root(given), "session": self.session_id},
+            }
         missing_deps = []
         for dep in spec.get("dependencies") or []:
             try:
                 import importlib as _importlib
+
                 _importlib.import_module(str(dep))
             except ImportError:
                 missing_deps.append(str(dep))
         if missing_deps:
-            return {"ok": False, "error": f"tool {tool!r} missing dependencies: {missing_deps}",
-                    "tool": tool, "description": spec.get("description", ""),
-                    "dependencies": spec.get("dependencies", [])}
+            return {
+                "ok": False,
+                "error": f"tool {tool!r} missing dependencies: {missing_deps}",
+                "tool": tool,
+                "description": spec.get("description", ""),
+                "dependencies": spec.get("dependencies", []),
+            }
         # Sandbox pre-check for path-taking tools (same rules as the tool).
-        sandbox: Dict[str, Any] = {"root": self._effective_root(given),
-                                   "session": self.session_id,
-                                   "session_dir": self.session_dir}
+        sandbox: Dict[str, Any] = {
+            "root": self._effective_root(given),
+            "session": self.session_id,
+            "session_dir": self.session_dir,
+        }
         if "path" in given and str(given.get("path", "")).strip():
             ok, resolved = safe_join(sandbox["root"], str(given["path"]))
             sandbox["resolved"] = resolved
             if not ok:
-                return {"ok": False, "error": resolved, "tool": tool,
-                        "description": spec.get("description", ""), "sandbox": sandbox}
+                return {
+                    "ok": False,
+                    "error": resolved,
+                    "tool": tool,
+                    "description": spec.get("description", ""),
+                    "sandbox": sandbox,
+                }
         # --- boundary: resources + limits ---
         resolved = sandbox.get("resolved")
         if resolved:
@@ -497,50 +546,83 @@ class ExecutionHarness:
         over = self._check_limits(given, resolved, entry)
         if over:
             return self._deny(tool, who, over)
-        return {"ok": True, "tool": tool,
-                "description": spec.get("description", ""),
-                "module": spec.get("module"), "function": spec.get("function"),
-                "version": spec.get("version", ""),
-                "dependencies": spec.get("dependencies", []),
-                "dependencies_ok": True,
-                "capabilities": spec.get("capabilities", []),
-                "worker": who,
-                "sandbox": {**sandbox, **({"deny": (spec.get("sandbox") or {})} if spec.get("sandbox") else {})},
-                "args_expected": expected, "args_given": sorted(given)}
+        return {
+            "ok": True,
+            "tool": tool,
+            "description": spec.get("description", ""),
+            "module": spec.get("module"),
+            "function": spec.get("function"),
+            "version": spec.get("version", ""),
+            "dependencies": spec.get("dependencies", []),
+            "dependencies_ok": True,
+            "capabilities": spec.get("capabilities", []),
+            "worker": who,
+            "sandbox": {**sandbox, **({"deny": (spec.get("sandbox") or {})} if spec.get("sandbox") else {})},
+            "args_expected": expected,
+            "args_given": sorted(given),
+        }
 
     def _resolve(self, tool: str) -> Callable[[Dict[str, Any]], str]:
         """See execution.resolve_tool (lazy importlib, cached)."""
         return _resolve_tool_fn(tool, self._overrides, self._cache, self._specs)
 
-    def run(self, name: str, args: Optional[Dict[str, Any]] = None,
-            allow: Optional[List[str]] = None,
-            worker: Optional[str] = None,
-            approver: Optional[Callable[..., bool]] = None) -> str:
+    def run(
+        self,
+        name: str,
+        args: Optional[Dict[str, Any]] = None,
+        allow: Optional[List[str]] = None,
+        worker: Optional[str] = None,
+        approver: Optional[Callable[..., bool]] = None,
+    ) -> str:
         """Take tool variable → boundary+spec+sandbox inspect → run accordingly."""
         counters = {"calls": self._calls, "exec_seconds": self._exec_seconds}
-        out = _run_tool_fn(name, args, self._specs, self._overrides, self._cache,
-                           self.session_dir, self.inspect, counters,
-                           allow=allow, worker=worker, approver=approver)
+        out = _run_tool_fn(
+            name,
+            args,
+            self._specs,
+            self._overrides,
+            self._cache,
+            self.session_dir,
+            self.inspect,
+            counters,
+            allow=allow,
+            worker=worker,
+            approver=approver,
+        )
         self._calls = int(counters.get("calls", self._calls))
         self._exec_seconds = float(counters.get("exec_seconds", self._exec_seconds))
         return out
 
-    def suggest_and_run(self, suggestion: Dict[str, Any],
-                        allow: Optional[List[str]] = None,
-                        worker: Optional[str] = None,
-                        approver: Optional[Callable[..., bool]] = None) -> str:
+    def suggest_and_run(
+        self,
+        suggestion: Dict[str, Any],
+        allow: Optional[List[str]] = None,
+        worker: Optional[str] = None,
+        approver: Optional[Callable[..., bool]] = None,
+    ) -> str:
         """Run a Brain-shaped suggestion: {"tool": ..., "arguments": {...}}."""
         counters = {"calls": self._calls, "exec_seconds": self._exec_seconds}
-        out = _suggest_and_run_fn(suggestion, self._specs, self._overrides, self._cache,
-                                  self.session_dir, self.inspect, counters,
-                                  allow=allow, worker=worker, approver=approver)
+        out = _suggest_and_run_fn(
+            suggestion,
+            self._specs,
+            self._overrides,
+            self._cache,
+            self.session_dir,
+            self.inspect,
+            counters,
+            allow=allow,
+            worker=worker,
+            approver=approver,
+        )
         self._calls = int(counters.get("calls", self._calls))
         self._exec_seconds = float(counters.get("exec_seconds", self._exec_seconds))
         return out
 
     def __repr__(self) -> str:
-        return (f"ExecutionHarness(tools={self.list()}, session={self.session_id!r}, "
-                f"worker={self.worker!r}, role={self.worker_role!r})")
+        return (
+            f"ExecutionHarness(tools={self.list()}, session={self.session_id!r}, "
+            f"worker={self.worker!r}, role={self.worker_role!r})"
+        )
 
 
 # Backward compat: old class name still works everywhere.

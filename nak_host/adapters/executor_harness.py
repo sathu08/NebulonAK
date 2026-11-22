@@ -35,21 +35,18 @@ class HarnessExecutor:
         self._harness = harness
 
     def _allow(self, ctx: ExecutionContext) -> list | None:
-        tools = sorted({str(t or "").strip() for t in (ctx.allowed_tools or ())
-                        if str(t or "").strip()})
+        tools = sorted({str(t or "").strip() for t in (ctx.allowed_tools or ()) if str(t or "").strip()})
         return tools or None  # empty = no task-level restriction (harness policy applies)
 
-    def _plan(self, tool: str, args: dict[str, Any],
-              ctx: ExecutionContext) -> tuple[Verdict, str]:
+    def _plan(self, tool: str, args: dict[str, Any], ctx: ExecutionContext) -> tuple[Verdict, str]:
         """Verdict + human-readable reason (approver never consulted here)."""
         name = str(tool or "").strip()
         if not name:
             return Verdict.DENY, "missing tool name"
         try:
-            res = self._harness.inspect(name, dict(args or {}),
-                                        allow=self._allow(ctx),
-                                        worker=ctx.worker_id,
-                                        approver=None)
+            res = self._harness.inspect(
+                name, dict(args or {}), allow=self._allow(ctx), worker=ctx.worker_id, approver=None
+            )
         except Exception as exc:
             return Verdict.DENY, f"inspect failed: {exc}"
         if not isinstance(res, dict):
@@ -60,14 +57,12 @@ class HarnessExecutor:
             return Verdict.ASK, str(res.get("error", "") or "needs approval")
         return Verdict.DENY, str(res.get("error", "") or "denied")
 
-    def inspect(self, tool: str, args: dict[str, Any],
-                ctx: ExecutionContext) -> Verdict:
+    def inspect(self, tool: str, args: dict[str, Any], ctx: ExecutionContext) -> Verdict:
         """Check a tool call under the context (no execution)."""
         verdict, _ = self._plan(tool, args, ctx)
         return verdict
 
-    def inspect_detail(self, tool: str, args: dict[str, Any],
-                       ctx: ExecutionContext) -> tuple:
+    def inspect_detail(self, tool: str, args: dict[str, Any], ctx: ExecutionContext) -> tuple:
         """(Verdict, reason): the explainable form of inspect().
 
         Extra method beyond ToolExecutorPort (which stays minimal): loops use
@@ -77,42 +72,38 @@ class HarnessExecutor:
         verdict, reason = self._plan(tool, args, ctx)
         return verdict, str(reason or "")[:300]
 
-    def run(self, tool: str, args: dict[str, Any],
-            ctx: ExecutionContext) -> ToolResult:
+    def run(self, tool: str, args: dict[str, Any], ctx: ExecutionContext) -> ToolResult:
         """Execute a tool call under the context."""
         ctx.cancel.raise_if_cancelled()
         verdict, reason = self._plan(tool, args, ctx)
         if verdict == Verdict.DENY:
-            return ToolResult(ok=False, data={"tool": str(tool or "")},
-                              error=reason or "denied")
+            return ToolResult(ok=False, data={"tool": str(tool or "")}, error=reason or "denied")
         if verdict == Verdict.ASK and ctx.approval is None:
-            return ToolResult(ok=False, data={"tool": str(tool or ""),
-                                              "need_approval": True},
-                              error=reason or "needs approval")
+            return ToolResult(
+                ok=False, data={"tool": str(tool or ""), "need_approval": True}, error=reason or "needs approval"
+            )
         if verdict == Verdict.ASK and not ctx.authority.is_valid(ctx.approval, ctx):
-            raise ApprovalRevoked(
-                f"approval {getattr(ctx.approval, 'id', '?')!r} is no longer valid")
+            raise ApprovalRevoked(f"approval {getattr(ctx.approval, 'id', '?')!r} is no longer valid")
         try:
             raw = self._harness.run(
-                str(tool or "").strip(), dict(args or {}),
-                allow=self._allow(ctx), worker=ctx.worker_id,
-                approver=lambda *a, **k: bool(
-                    ctx.authority.is_valid(ctx.approval, ctx)))
+                str(tool or "").strip(),
+                dict(args or {}),
+                allow=self._allow(ctx),
+                worker=ctx.worker_id,
+                approver=lambda *a, **k: bool(ctx.authority.is_valid(ctx.approval, ctx)),
+            )
         except Exception as exc:
-            return ToolResult(ok=False, data={"tool": str(tool or "")},
-                              error=f"tool run failed: {exc}")
+            return ToolResult(ok=False, data={"tool": str(tool or "")}, error=f"tool run failed: {exc}")
         try:
             parsed = json.loads(raw) if isinstance(raw, str) else raw
         except ValueError:
-            return ToolResult(ok=False, data={"tool": str(tool or ""),
-                                              "raw": str(raw)[:500]},
-                              error="non-JSON tool output")
+            return ToolResult(
+                ok=False, data={"tool": str(tool or ""), "raw": str(raw)[:500]}, error="non-JSON tool output"
+            )
         if not isinstance(parsed, dict):
-            return ToolResult(ok=False, data={"tool": str(tool or "")},
-                              error="tool returned no result object")
+            return ToolResult(ok=False, data={"tool": str(tool or "")}, error="tool returned no result object")
         ok = bool(parsed.get("ok"))
         data = {k: v for k, v in parsed.items() if k != "ok"}
         if not ok and parsed.get("need_approval"):
             data.setdefault("need_approval", True)
-        return ToolResult(ok=ok, data=data,
-                          error="" if ok else str(parsed.get("error", "") or "failed"))
+        return ToolResult(ok=ok, data=data, error="" if ok else str(parsed.get("error", "") or "failed"))

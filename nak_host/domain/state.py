@@ -24,11 +24,8 @@ class TaskState(str, Enum):
 TRANSITIONS: dict[TaskState, frozenset[TaskState]] = {
     # CREATED->ASSIGNED skips separate planning: chain children and named
     # calls are assigned slices of an already-planned parent, not fresh plans.
-    TaskState.CREATED: frozenset({TaskState.PLANNED, TaskState.ASSIGNED,
-                                  TaskState.FAILED}),
-    TaskState.PLANNED: frozenset(
-        {TaskState.APPROVED, TaskState.NEEDS_APPROVAL, TaskState.FAILED}
-    ),
+    TaskState.CREATED: frozenset({TaskState.PLANNED, TaskState.ASSIGNED, TaskState.FAILED}),
+    TaskState.PLANNED: frozenset({TaskState.APPROVED, TaskState.NEEDS_APPROVAL, TaskState.FAILED}),
     TaskState.NEEDS_APPROVAL: frozenset({TaskState.APPROVED, TaskState.FAILED}),
     TaskState.APPROVED: frozenset({TaskState.ASSIGNED, TaskState.FAILED}),
     TaskState.ASSIGNED: frozenset({TaskState.RUNNING, TaskState.FAILED}),
@@ -46,9 +43,7 @@ TRANSITIONS: dict[TaskState, frozenset[TaskState]] = {
     TaskState.FAILED: frozenset(),
 }
 
-TERMINAL_STATES: frozenset[TaskState] = frozenset(
-    {TaskState.REPORTED, TaskState.FAILED}
-)
+TERMINAL_STATES: frozenset[TaskState] = frozenset({TaskState.REPORTED, TaskState.FAILED})
 RESUMABLE_STATES: frozenset[TaskState] = frozenset({TaskState.BLOCKED})
 PENDING_STATES: frozenset[TaskState] = frozenset(
     {

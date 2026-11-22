@@ -28,6 +28,18 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from nak_host.utils.constant import (
+    CRAFT_DEFAULT_MODES as _DEFAULT_MODES,
+    CRAFT_VALID_APPROVALS as _VALID_APPROVALS,
+    CRAFT_WORKER_MODES as _WORKER_MODES,
+    DECISION_ASSIGNMENTS as _DECISION_ASSIGNMENTS,
+    DECISION_DEFAULTS as _DECISION_DEFAULTS,
+    DECISION_MODES as _DECISION_MODES,
+    DECISION_ON_ERROR as _DECISION_ON_ERROR,
+    DECISION_SCOPES as _DECISION_SCOPES,
+)
+
+
 def _cfg_path(attr: str) -> Optional[str]:
     """cfg-backed path for a harness setting (None when no cfg is found)."""
     try:
@@ -45,8 +57,7 @@ def _default_registry() -> Path:
     """crafts.json path: env > cfg [harness] crafts > bundled default."""
     import os as _os
 
-    cand = (_os.environ.get("NAK_CRAFTS", "")
-            or _os.environ.get("NAK_CRAFTS_FILE", "") or "").strip()
+    cand = (_os.environ.get("NAK_CRAFTS", "") or _os.environ.get("NAK_CRAFTS_FILE", "") or "").strip()
     if cand:
         return Path(cand).expanduser()
     cfg = _cfg_path("crafts_path")
@@ -69,14 +80,6 @@ def _craft_root() -> Path:
 REGISTRY = _default_registry()
 BASE = Path(__file__).resolve().parent
 
-from nak_host.utils.constant import (
-    CRAFT_VALID_APPROVALS as _VALID_APPROVALS,
-    DECISION_ASSIGNMENTS as _DECISION_ASSIGNMENTS,
-    DECISION_DEFAULTS as _DECISION_DEFAULTS,
-    DECISION_MODES as _DECISION_MODES,
-    DECISION_ON_ERROR as _DECISION_ON_ERROR,
-    DECISION_SCOPES as _DECISION_SCOPES,
-)
 _WORKER_TAG = re.compile(r"\[\s*worker\s*=", re.IGNORECASE)
 _CRAFT_REF = re.compile(r"(?m)^\s*craft\s*:", re.IGNORECASE)
 _STEP_LINE = re.compile(r"^\s*(\d+)[.)]\s+(\S.*)$")
@@ -131,8 +134,9 @@ def _tool_names() -> List[str]:
     raw = _read_json(_tools_registry())
     if not isinstance(raw, list):
         return []
-    return sorted({str(e.get("name", "")).strip() for e in raw
-                   if isinstance(e, dict) and str(e.get("name", "")).strip()})
+    return sorted(
+        {str(e.get("name", "")).strip() for e in raw if isinstance(e, dict) and str(e.get("name", "")).strip()}
+    )
 
 
 def _split_frontmatter(text: str) -> tuple:
@@ -144,7 +148,7 @@ def _split_frontmatter(text: str) -> tuple:
         end = next(i for i in range(1, len(lines)) if lines[i].strip() == "---")
     except StopIteration:
         raise ValueError("craft.md frontmatter never closes (missing ---)")
-    return lines[1:end], "\n".join(lines[end + 1:])
+    return lines[1:end], "\n".join(lines[end + 1 :])
 
 
 def _parse_frontmatter(meta_lines: List[str]) -> Dict[str, Any]:
@@ -244,8 +248,7 @@ def _decision_pin(pin: Dict[str, Any], name: str) -> Dict[str, Any]:
     def _choice(key: str, valid: tuple) -> str:
         val = str(d.get(key, "") or "").strip().lower()
         if val not in valid:
-            raise ValueError(f"craft {name!r}: bad decision.{key} "
-                             f"{d.get(key)!r} (want one of {list(valid)})")
+            raise ValueError(f"craft {name!r}: bad decision.{key} {d.get(key)!r} (want one of {list(valid)})")
         d[key] = val
         return val
 
@@ -292,23 +295,20 @@ def load_craft(name: str) -> Dict[str, Any]:
     if pin is None:
         raise ValueError(f"unknown craft {want!r} (not in crafts.json)")
     raw_tools = pin.get("tools", [])
-    tools = [str(t).strip() for t in (raw_tools if isinstance(raw_tools, list) else [])
-             if str(t).strip()]
+    tools = [str(t).strip() for t in (raw_tools if isinstance(raw_tools, list) else []) if str(t).strip()]
     if not tools:
         raise ValueError(f"craft {want!r}: registry pin needs a non-empty tools list")
     known_tools = _tool_names()
     bad_tools = [t for t in tools if t not in known_tools]
     if bad_tools:
-        raise ValueError(f"craft {want!r}: unknown tools {bad_tools} "
-                         f"(have: {known_tools})")
+        raise ValueError(f"craft {want!r}: unknown tools {bad_tools} (have: {known_tools})")
     approval = str(pin.get("approval", "") or "").strip().lower()
     if approval not in _VALID_APPROVALS:
-        raise ValueError(f"craft {want!r}: bad approval "
-                         f"{pin.get('approval')!r}")
+        raise ValueError(f"craft {want!r}: bad approval {pin.get('approval')!r}")
     folder = str(pin.get("path", "") or want).strip()
     if not folder or folder.startswith(("/", "~")) or ".." in folder:
         raise ValueError(f"craft {want!r}: bad path {folder!r}")
-    md = (_craft_root() / folder / "craft.md")
+    md = _craft_root() / folder / "craft.md"
     try:
         text = md.read_text(encoding="utf-8")
     except OSError as exc:
@@ -316,11 +316,9 @@ def load_craft(name: str) -> Dict[str, Any]:
     meta_lines, body = _split_frontmatter(text)
     meta = _parse_frontmatter(meta_lines)
     if folder != str(meta.get("name", "")).strip():
-        raise ValueError(f"craft {want!r}: folder {folder!r} != frontmatter "
-                         f"name {meta.get('name')!r}")
+        raise ValueError(f"craft {want!r}: folder {folder!r} != frontmatter name {meta.get('name')!r}")
     if str(meta.get("version", "")).strip() != str(pin.get("version", "")).strip():
-        raise ValueError(f"craft {want!r}: md version {meta.get('version')!r} != "
-                         f"registry pin {pin.get('version')!r}")
+        raise ValueError(f"craft {want!r}: md version {meta.get('version')!r} != registry pin {pin.get('version')!r}")
     if not str(meta.get("description", "")).strip():
         raise ValueError(f"craft {want!r}: frontmatter missing 'description'")
     steps = _steps_from_body(body)
@@ -328,28 +326,32 @@ def load_craft(name: str) -> Dict[str, Any]:
         raise ValueError(f"craft {want!r}: no numbered steps under ## Steps")
     for i, step in enumerate(steps, 1):
         if _WORKER_TAG.search(step):
-            raise ValueError(f"craft {want!r} step {i}: [worker=] tags refused "
-                             f"(flat steps only — workers assign, crafts don't nest)")
+            raise ValueError(
+                f"craft {want!r} step {i}: [worker=] tags refused (flat steps only — workers assign, crafts don't nest)"
+            )
         if _CRAFT_REF.match(step):
-            raise ValueError(f"craft {want!r} step {i}: Craft: references refused "
-                             f"(flat steps only — no nesting)")
-    return {"name": want, "mode": want,
-            "version": str(pin.get("version", "")).strip(),
-            "description": str(meta.get("description", "")).strip(),
-            "tools": tools, "approval": approval,
-            "required_inputs": _required_inputs(body), "steps": steps,
-            "max_steps": pin.get("max_steps"),
-            "auto_steps": pin.get("auto_steps"),
-            "modes": [str(m).strip().lower() for m in (pin.get("modes") or [])
-                      if str(m).strip()],
-            "roles": list(pin.get("roles") or []),
-            "workers": list(pin.get("workers") or []),
-            "decision": _decision_pin(pin, want)}
+            raise ValueError(f"craft {want!r} step {i}: Craft: references refused (flat steps only — no nesting)")
+    return {
+        "name": want,
+        "mode": want,
+        "version": str(pin.get("version", "")).strip(),
+        "description": str(meta.get("description", "")).strip(),
+        "tools": tools,
+        "approval": approval,
+        "required_inputs": _required_inputs(body),
+        "steps": steps,
+        "max_steps": pin.get("max_steps"),
+        "auto_steps": pin.get("auto_steps"),
+        "modes": [str(m).strip().lower() for m in (pin.get("modes") or []) if str(m).strip()],
+        "roles": list(pin.get("roles") or []),
+        "workers": list(pin.get("workers") or []),
+        "decision": _decision_pin(pin, want),
+    }
 
 
-def list_crafts(worker: Optional[str] = None,
-                role: Optional[str] = None,
-                worker_modes: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+def list_crafts(
+    worker: Optional[str] = None, role: Optional[str] = None, worker_modes: Optional[List[str]] = None
+) -> List[Dict[str, Any]]:
     """Validated crafts, filtered by worker/role/modes allowlists.
 
     Modes gate: a craft with a non-empty modes pin is offered only when
@@ -357,8 +359,9 @@ def list_crafts(worker: Optional[str] = None,
     assign-only craft). worker_modes=None skips the modes check.
     Bad crafts are skipped (see craft_gaps()). Never raises.
     """
-    want_modes = ([str(m).strip().lower() for m in (worker_modes or [])
-                   if str(m).strip()] if worker_modes is not None else None)
+    want_modes = (
+        [str(m).strip().lower() for m in (worker_modes or []) if str(m).strip()] if worker_modes is not None else None
+    )
     out: List[Dict[str, Any]] = []
     for pin in _craft_pins():
         try:
@@ -369,8 +372,7 @@ def list_crafts(worker: Optional[str] = None,
             continue
         if role and craft["roles"] and role not in craft["roles"]:
             continue
-        if want_modes is not None and craft["modes"] and \
-                not set(want_modes) & set(craft["modes"]):
+        if want_modes is not None and craft["modes"] and not set(want_modes) & set(craft["modes"]):
             continue
         out.append(craft)
     return out
@@ -400,15 +402,10 @@ def expand_craft(name: str, inputs: Optional[Dict[str, Any]] = None) -> List[str
     def _fill(step: str) -> str:
         def _rep(m: "re.Match") -> str:
             return given.get(m.group(1), m.group(0))
+
         return _TOKEN.sub(_rep, step)
 
     return [_fill(s) for s in craft["steps"]]
-
-
-from nak_host.utils.constant import (
-    CRAFT_DEFAULT_MODES as _DEFAULT_MODES,
-    CRAFT_WORKER_MODES as _WORKER_MODES,
-)
 
 
 def _registry_modes() -> List[str]:
@@ -419,8 +416,7 @@ def _registry_modes() -> List[str]:
     """
     try:
         pins = _craft_pins()
-        modes = [str(p.get("name", "")).strip().lower() for p in pins
-                 if str(p.get("name", "")).strip()]
+        modes = [str(p.get("name", "")).strip().lower() for p in pins if str(p.get("name", "")).strip()]
         if modes:
             return ["assist"] + [m for m in modes if m != "assist"]
     except Exception:
@@ -446,16 +442,14 @@ def _worker_modes(entry: Any) -> List[str]:
     if not isinstance(raw_crafts, list):
         return list(_DEFAULT_MODES)
     valid = set(_registry_modes())
-    clean = [str(m).strip().lower() for m in raw_crafts
-             if str(m).strip().lower() in valid]
+    clean = [str(m).strip().lower() for m in raw_crafts if str(m).strip().lower() in valid]
     if not clean:
         # Explicit [] (or only unknown names) = assist (answer directly).
         return ["assist"] if isinstance(entry.get("crafts"), list) else list(_DEFAULT_MODES)
     return clean
 
 
-def crafts_for_worker(worker_name: str,
-                      workers_file: Any = None) -> List[Dict[str, str]]:
+def crafts_for_worker(worker_name: str, workers_file: Any = None) -> List[Dict[str, str]]:
     """[{name, description}] for a worker (crafts allowlist + role/modes applied).
 
     Reads workers.json raw (never `from nak_host.worker import ...` — same
@@ -482,20 +476,17 @@ def crafts_for_worker(worker_name: str,
                 modes = _worker_modes(e)
                 raw_crafts = e.get("crafts")
                 if isinstance(raw_crafts, list):
-                    allowed = [str(c or "").strip().lower()
-                               for c in raw_crafts if str(c or "").strip()]
+                    allowed = [str(c or "").strip().lower() for c in raw_crafts if str(c or "").strip()]
                 break
     if not role:
         # Unknown worker: still offer crafts with no role allowlist.
         pass
     out: List[Dict[str, str]] = []
     try:
-        for craft in list_crafts(worker=name or None, role=role or None,
-                                 worker_modes=modes or None):
+        for craft in list_crafts(worker=name or None, role=role or None, worker_modes=modes or None):
             if allowed is not None and craft["name"].strip().lower() not in allowed:
                 continue
-            out.append({"name": craft["name"],
-                        "description": craft["description"]})
+            out.append({"name": craft["name"], "description": craft["description"]})
     except Exception:
         return []
     return out

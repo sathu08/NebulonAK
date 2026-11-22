@@ -22,8 +22,7 @@ import re
 _ASSIGN_RE = re.compile(r"\[\s*worker\s*=\s*([^\]\s]+)\s*\]", re.IGNORECASE)
 
 
-def _resolve(name: str, workers: Optional[Dict[str, Any]],
-             factory: Optional[Callable[[str], Any]]) -> Optional[Any]:
+def _resolve(name: str, workers: Optional[Dict[str, Any]], factory: Optional[Callable[[str], Any]]) -> Optional[Any]:
     """Worker for ``name`` from a prebuilt mapping first, else the factory."""
     if isinstance(workers, dict) and name in workers:
         return workers[name]
@@ -46,15 +45,19 @@ def _assignment_text(answer: str, name: str, goal: str) -> str:
     return text or goal
 
 
-def run_workers(answer: str, assigned: Optional[List[str]] = None, *,
-                goal: str = "",
-                factory: Optional[Callable[[str], Any]] = None,
-                workers: Optional[Dict[str, Any]] = None,
-                session_id: Optional[str] = None,
-                approver: Any = None,
-                max_workers: Optional[int] = None,
-                exclude: Optional[str] = None,
-                parallel: bool = True) -> Dict[str, Any]:
+def run_workers(
+    answer: str,
+    assigned: Optional[List[str]] = None,
+    *,
+    goal: str = "",
+    factory: Optional[Callable[[str], Any]] = None,
+    workers: Optional[Dict[str, Any]] = None,
+    session_id: Optional[str] = None,
+    approver: Any = None,
+    max_workers: Optional[int] = None,
+    exclude: Optional[str] = None,
+    parallel: bool = True,
+) -> Dict[str, Any]:
     """Run each assigned worker as a peer, in parallel threads by default.
 
     Every thread builds its OWN worker via ``factory(name)`` (so state and
@@ -67,7 +70,7 @@ def run_workers(answer: str, assigned: Optional[List[str]] = None, *,
     Returns {"workers", "runs", "skipped", "session_id", "parallel"}.
     """
     names: List[str] = []
-    for n in (assigned or []):
+    for n in assigned or []:
         s = str(n or "").strip()
         if s and s not in names:
             names.append(s)
@@ -80,8 +83,13 @@ def run_workers(answer: str, assigned: Optional[List[str]] = None, *,
         else:
             todo.append(n)
     directives = {n: _assignment_text(answer, n, goal) for n in todo}
-    out: Dict[str, Any] = {"workers": todo, "runs": [], "skipped": skipped,
-                           "session_id": session_id, "parallel": bool(parallel)}
+    out: Dict[str, Any] = {
+        "workers": todo,
+        "runs": [],
+        "skipped": skipped,
+        "session_id": session_id,
+        "parallel": bool(parallel),
+    }
     if not todo:
         return out
 
@@ -93,13 +101,15 @@ def run_workers(answer: str, assigned: Optional[List[str]] = None, *,
         if w is None:
             return {"worker": name, "ok": False, "reason": "unknown worker"}
         try:
-            r = w.chat(directives[name], approve=approver,
-                       session_id=session_id)
+            r = w.chat(directives[name], approve=approver, session_id=session_id)
         except Exception as exc:  # one worker never kills the craft
             return {"worker": name, "ok": False, "reason": str(exc)[:150]}
-        return {"worker": name, "ok": True,
-                "answer": str((r or {}).get("answer", "")),
-                "memory": (r or {}).get("memory", {})}
+        return {
+            "worker": name,
+            "ok": True,
+            "answer": str((r or {}).get("answer", "")),
+            "memory": (r or {}).get("memory", {}),
+        }
 
     try:
         cap = max(1, int(max_workers)) if max_workers is not None else None

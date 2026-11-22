@@ -7,13 +7,24 @@ dependency never breaks the whole response.
 from __future__ import annotations
 
 import socket
+import threading
 import time
 
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from fastapi import APIRouter
 
 router = APIRouter()
+
+#: Short-lived cache so dashboard auto-refresh (every 15 s) and concurrent
+#: page loads don't re-run a full laya inference each time. The laya
+#: self-test is the expensive check (real model scoring); everything else
+#: is a local probe or a fast HTTP call.
+_STATUS_TTL_SECONDS = 10.0
+_status_cache: dict[str, Any] = {"at": 0.0, "body": None}
+_status_lock = threading.Lock()
+_status_workers = ThreadPoolExecutor(max_workers=6, thread_name_prefix="nak-status")
 
 
 def _timed(label: str, fn) -> dict[str, Any]:
@@ -26,8 +37,7 @@ def _timed(label: str, fn) -> dict[str, Any]:
             ok = False
     except Exception as exc:  # noqa: BLE001 — checks must never break status
         ok, detail = False, str(exc)[:300]
-    return {"label": label, "ok": bool(ok),
-            "ms": int((time.monotonic() - start) * 1000), "detail": detail}
+    return {"label": label, "ok": bool(ok), "ms": int((time.monotonic() - start) * 1000), "detail": detail}
 
 
 def _self_check() -> dict[str, Any]:
@@ -54,9 +64,13 @@ def _self_check() -> dict[str, Any]:
         from nak_host import __version__ as version
     except Exception:
         version = "0.1.0"
-    return {"pid": pid, "pid_alive": alive,
-            "host": settings.serve_host, "port": int(settings.serve_port),
-            "version": version}
+    return {
+        "pid": pid,
+        "pid_alive": alive,
+        "host": settings.serve_host,
+        "port": int(settings.serve_port),
+        "version": version,
+    }
 
 
 def _port_open(host: str, port: int) -> bool:
@@ -85,8 +99,7 @@ def _mind_ready() -> dict[str, Any]:
         llm = None
     provider = (llm or {}).get("provider", "") if isinstance(llm, dict) else ""
     model = (llm or {}).get("model", "") if isinstance(llm, dict) else ""
-    return {"ok": True, "ready": str(body)[:200],
-            "provider": str(provider), "model": str(model)}
+    return {"ok": True, "ready": str(body)[:200], "provider": str(provider), "model": str(model)}
 
 
 def _ndb_reachable() -> dict[str, Any]:
@@ -103,10 +116,12 @@ def _ndb_reachable() -> dict[str, Any]:
 def _laya_selftest() -> dict[str, Any]:
     from nak_host.api.laya_backend import run_laya
 
-    out = run_laya("status probe", {
-        "ok": {"type": "choice", "instructions": "pick one",
-               "criteria": {"a": "first", "b": "second"}},
-    })
+    out = run_laya(
+        "status probe",
+        {
+            "ok": {"type": "choice", "instructions": "pick one", "criteria": {"a": "first", "b": "second"}},
+        },
+    )
     return {"ok": True, "keys": sorted(out)[:8]}
 
 
@@ -115,8 +130,7 @@ def _store_probe() -> dict[str, Any]:
 
     store = make_prod_store()
     pending = store.list_pending()
-    return {"ok": True, "backend": type(store).__name__,
-            "pending": len(pending)}
+    return {"ok": True, "backend": type(store).__name__, "pending": len(pending)}
 
 
 @router.get("", include_in_schema=True)
@@ -126,20 +140,35 @@ def status() -> dict[str, Any]:
     from nak_host.utils.settings import load_settings
 
     settings = load_settings()
-    checks = [
-        _timed("server", _self_check),
-        _timed("nebulonmind_live", _mind_live),
-        _timed("nebulonmind_ready", _mind_ready),
-        _timed("nebulondb", _ndb_reachable),
-        _timed("laya", _laya_selftest),
-        _timed("taskstore", _store_probe),
+    now = time.monotonic()
+    with _status_lock:
+        cached_at = float(_status_cache.get("at") or 0.0)
+        if _status_cache.get("body") is not None and (now - cached_at) < _STATUS_TTL_SECONDS:
+            return dict(_status_cache["body"])
+    jobs = [
+        ("server", _self_check),
+        ("nebulonmind_live", _mind_live),
+        ("nebulonmind_ready", _mind_ready),
+        ("nebulondb", _ndb_reachable),
+        ("laya", _laya_selftest),
+        ("taskstore", _store_probe),
     ]
+    futures = {label: _status_workers.submit(_timed, label, fn) for label, fn in jobs}
+    checks = [futures[label].result() for label, _ in jobs]
     # The server itself is up iff this code ran; dependencies may be down.
     ok = all(c["ok"] for c in checks if c["label"] not in ("taskstore",))
     try:
         laya_serving = _port_open(settings.serve_host, int(settings.serve_port))
     except (TypeError, ValueError):
         laya_serving = True  # this response proves the port is open
-    return {"ok": bool(ok), "serving": bool(laya_serving),
-            "host": settings.serve_host, "port": int(settings.serve_port),
-            "checks": checks}
+    body = {
+        "ok": bool(ok),
+        "serving": bool(laya_serving),
+        "host": settings.serve_host,
+        "port": int(settings.serve_port),
+        "checks": checks,
+    }
+    with _status_lock:
+        _status_cache["at"] = time.monotonic()
+        _status_cache["body"] = body
+    return dict(body)

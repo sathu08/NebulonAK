@@ -1,4 +1,4 @@
-"""GET /, /pipeline, /settings — the web console pages (static HTML).
+"""GET /, /pipeline, /builder, /settings — the web console pages (static HTML).
 
 Mirrors NebulonDB's dashboard router: serve files from the configured
 web dir, 404 loudly when the install is incomplete.
@@ -19,9 +19,7 @@ def _page(name: str) -> Path:
 
     page = Path(load_settings().web_dir()) / name
     if not page.is_file():
-        raise HTTPException(status_code=404,
-                            detail=f"console page {name} missing "
-                                   f"(expected at {page})")
+        raise HTTPException(status_code=404, detail=f"console page {name} missing (expected at {page})")
     return page
 
 
@@ -43,6 +41,13 @@ async def console_index():
 async def console_pipeline():
     """Pipeline page (tasks, vetting runs, sessions)."""
     return FileResponse(_page("pipeline.html"))
+
+
+@router.get("/builder", response_class=HTMLResponse, include_in_schema=False)
+@router.get("/builder.html", response_class=HTMLResponse, include_in_schema=False)
+async def console_builder():
+    """Builder page (drag-drop single-chain pipelines: prompt/tool/craft)."""
+    return FileResponse(_page("builder.html"))
 
 
 @router.get("/settings", response_class=HTMLResponse, include_in_schema=False)

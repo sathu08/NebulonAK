@@ -4,6 +4,7 @@ Covers: list_workers truth, show(), prompt() rendering,
 can(), needs_plan_approval(), extract_plan/extract_assigned.
 crafts is the ONLY source of truth (no autonomy block).
 """
+
 from nak_host.worker import GenericWorker, list_workers, IDENTITY_FIELDS
 
 
@@ -112,5 +113,6 @@ def test_extract_assigned_drops_unknown():
 
 def test_unknown_worker_raises():
     import pytest
+
     with pytest.raises(ValueError, match="unknown worker"):
         GenericWorker("ghost-worker-xyz")

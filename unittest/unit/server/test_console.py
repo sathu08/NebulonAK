@@ -1,4 +1,5 @@
 """Console server tests (TestClient, no services needed)."""
+
 from fastapi.testclient import TestClient
 
 from nak_host.api.main import app
@@ -22,8 +23,13 @@ def test_status_never_raises_offline():
     body = resp.json()
     assert "ok" in body and "checks" in body
     assert {c["label"] for c in body["checks"]} >= {
-        "server", "nebulonmind_live", "nebulonmind_ready",
-        "nebulondb", "laya", "taskstore"}
+        "server",
+        "nebulonmind_live",
+        "nebulonmind_ready",
+        "nebulondb",
+        "laya",
+        "taskstore",
+    }
 
 
 def test_settings_redacts_secrets():
@@ -53,9 +59,6 @@ def test_pipeline_endpoints_offline():
     assert tasks.json()["backend"] in ("memory", "nebulondb")
     missing = client.get("/api/NebulonAK/pipeline/tasks/no-such-task")
     assert missing.status_code in (404, 503)
-    vetting = client.get("/api/NebulonAK/pipeline/vetting")
-    assert vetting.status_code == 200
-    assert "runs" in vetting.json()
     sessions = client.get("/api/NebulonAK/pipeline/sessions")
     assert sessions.status_code == 200
     assert "sessions" in sessions.json()
@@ -66,3 +69,22 @@ def test_console_pages_serve_html():
         resp = client.get(f"/api/NebulonAK/dashboard/{page}")
         assert resp.status_code == 200, page
         assert "<html" in resp.text.lower()
+
+
+def test_pipeline_page_lists_definitions_not_tasks():
+    resp = client.get("/api/NebulonAK/dashboard/pipeline")
+    assert resp.status_code == 200
+    html = resp.text.lower()
+    assert "definitions" in html
+    assert "pending tasks" not in html
+
+
+def test_flow_runs_endpoints_offline():
+    defs = client.get("/api/NebulonAK/pipeline_engine/definitions")
+    assert defs.status_code == 200
+    assert any(d["slug"] == "vetting" for d in defs.json()["definitions"])
+    missing = client.get("/api/NebulonAK/pipeline_engine/definitions/no-such-pipe/runs")
+    assert missing.status_code == 404
+    vetting_runs = client.get("/api/NebulonAK/pipeline_engine/definitions/vetting/runs")
+    assert vetting_runs.status_code == 200
+    assert vetting_runs.json()["runs"] == []

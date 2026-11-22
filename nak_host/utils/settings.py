@@ -70,6 +70,7 @@ from nak_host.utils.constant import DEFAULT_NDB_RETRY_BACKOFF
 from nak_host.utils.constant import DEFAULT_NDB_TIMEOUT
 from nak_host.utils.constant import DEFAULT_NDB_USER
 from nak_host.utils.constant import DEFAULT_PERMISSIONS
+from nak_host.utils.constant import DEFAULT_PIPELINE_DIR
 from nak_host.utils.constant import DEFAULT_POLICY_CLARIFY_ON_NEEDS_CLARIFICATION
 from nak_host.utils.constant import DEFAULT_POLICY_ENABLED
 from nak_host.utils.constant import DEFAULT_POLICY_ESCALATE_ON_HIGH_RISK
@@ -165,6 +166,8 @@ class Settings:
     harness_user: str = ""
     registry: str = DEFAULT_REGISTRY
     permissions: str = DEFAULT_PERMISSIONS
+    # [pipeline] — where Builder saves user pipelines (relative to home).
+    pipeline_dir: str = DEFAULT_PIPELINE_DIR
     # [nebulondb] — task store connection (password is env-only, never cfg).
     ndb_base_url: str = DEFAULT_NDB_BASE_URL
     ndb_user: str = DEFAULT_NDB_USER
@@ -273,6 +276,13 @@ class Settings:
     def workspace_path(self) -> str:
         return _resolve_near_cfg(self.workspace_root, self.cfg_dir())
 
+    def pipeline_dir_path(self) -> str:
+        """User pipeline location from [pipeline] directory (cfg-relative) or default."""
+        raw = (self.pipeline_dir or "").strip() or DEFAULT_PIPELINE_DIR
+        if Path(raw).is_absolute():
+            return str(Path(raw).expanduser())
+        return str((Path(self.home_path()) / raw))
+
 
 def load_settings(cfg_path: Optional[str | Path] = None) -> Settings:
     """Read nebulonak.cfg + env into Settings. Never reads any [llm]."""
@@ -319,10 +329,8 @@ def load_settings(cfg_path: Optional[str | Path] = None) -> Settings:
         serve_workers=getint("server", "workers", SERVE_DEFAULT_WORKERS),
         serve_timeout=getint("server", "timeout", SERVE_DEFAULT_TIMEOUT),
         serve_keep_alive=getint("server", "keep_alive", SERVE_DEFAULT_KEEP_ALIVE),
-        serve_graceful_timeout=getint("server", "graceful_timeout",
-                                      SERVE_DEFAULT_GRACEFUL_TIMEOUT),
-        serve_log_level=get("server", "log_level", SERVE_DEFAULT_LOG_LEVEL)
-        or SERVE_DEFAULT_LOG_LEVEL,
+        serve_graceful_timeout=getint("server", "graceful_timeout", SERVE_DEFAULT_GRACEFUL_TIMEOUT),
+        serve_log_level=get("server", "log_level", SERVE_DEFAULT_LOG_LEVEL) or SERVE_DEFAULT_LOG_LEVEL,
         base_url=get("nebulonmind", "base_url", DEFAULT_BASE_URL) or DEFAULT_BASE_URL,
         user=get("nebulonmind", "user", DEFAULT_USER) or DEFAULT_USER,
         auth_token=get("nebulonmind", "auth_token", ""),
@@ -337,8 +345,7 @@ def load_settings(cfg_path: Optional[str | Path] = None) -> Settings:
         # [decision] stays user-editable (endpoint/timeout/auth_token).
         decision_enabled=DEFAULT_DECISION_ENABLED,
         decision_model=DEFAULT_DECISION_MODEL,
-        decision_endpoint=get("decision", "endpoint", DEFAULT_DECISION_ENDPOINT)
-        or DEFAULT_DECISION_ENDPOINT,
+        decision_endpoint=get("decision", "endpoint", DEFAULT_DECISION_ENDPOINT) or DEFAULT_DECISION_ENDPOINT,
         decision_timeout=getfloat("decision", "timeout", DEFAULT_DECISION_TIMEOUT),
         decision_auth_token=get("decision", "auth_token", DEFAULT_DECISION_AUTH_TOKEN),
         policy_enabled=DEFAULT_POLICY_ENABLED,
@@ -352,18 +359,15 @@ def load_settings(cfg_path: Optional[str | Path] = None) -> Settings:
         registry=get("harness", "registry", DEFAULT_REGISTRY) or DEFAULT_REGISTRY,
         permissions=get("harness", "permissions", DEFAULT_PERMISSIONS) or DEFAULT_PERMISSIONS,
         crafts=get("harness", "crafts", DEFAULT_CRAFTS) or DEFAULT_CRAFTS,
-        crafts_prompt=get("harness", "crafts_prompt", DEFAULT_CRAFTS_PROMPT)
-        or DEFAULT_CRAFTS_PROMPT,
-        ndb_base_url=get("nebulondb", "base_url", DEFAULT_NDB_BASE_URL)
-        or DEFAULT_NDB_BASE_URL,
+        crafts_prompt=get("harness", "crafts_prompt", DEFAULT_CRAFTS_PROMPT) or DEFAULT_CRAFTS_PROMPT,
+        pipeline_dir=get("pipeline", "directory", DEFAULT_PIPELINE_DIR) or DEFAULT_PIPELINE_DIR,
+        ndb_base_url=get("nebulondb", "base_url", DEFAULT_NDB_BASE_URL) or DEFAULT_NDB_BASE_URL,
         ndb_user=get("nebulondb", "user", DEFAULT_NDB_USER),
-        ndb_corpus=get("nebulondb", "corpus", DEFAULT_NDB_CORPUS)
-        or DEFAULT_NDB_CORPUS,
+        ndb_corpus=get("nebulondb", "corpus", DEFAULT_NDB_CORPUS) or DEFAULT_NDB_CORPUS,
         ndb_timeout=getfloat("nebulondb", "timeout", DEFAULT_NDB_TIMEOUT),
         ndb_max_retries=getint("nebulondb", "max_retries", DEFAULT_NDB_MAX_RETRIES),
         ndb_retry_backoff=getfloat("nebulondb", "retry_backoff", DEFAULT_NDB_RETRY_BACKOFF),
-        resolve_from_mind=getbool("nebulondb", "resolve_from_mind",
-                                  DEFAULT_NDB_RESOLVE_FROM_MIND),
+        resolve_from_mind=getbool("nebulondb", "resolve_from_mind", DEFAULT_NDB_RESOLVE_FROM_MIND),
         cfg_path=found,
     )
     # NOTE: any [llm] section is intentionally IGNORED (NebulonMD owns LLM).
@@ -372,7 +376,7 @@ def load_settings(cfg_path: Optional[str | Path] = None) -> Settings:
     env = os.environ.get
     s.base_url = (env("NAK_BASE_URL", "").strip() or s.base_url).rstrip("/")
     s.user = env("NAK_USER", "").strip() or s.user
-    s.auth_token = env("NAK_AUTH_TOKEN", "").strip() or env("NMD_API_AUTH_TOKEN", "").strip() or s.auth_token
+    s.auth_token = env("NAK_AUTH_TOKEN", "").strip() or s.auth_token
     try:
         s.timeout = float(env("NAK_TIMEOUT", "").strip() or s.timeout)
     except ValueError:
@@ -386,10 +390,8 @@ def load_settings(cfg_path: Optional[str | Path] = None) -> Settings:
     except ValueError:
         pass
     s.workers_file = env("NAK_WORKERS_FILE", "").strip() or s.workers_file
-    s.crafts = (env("NAK_CRAFTS", "").strip()
-                or env("NAK_CRAFTS_FILE", "").strip() or s.crafts)
-    s.crafts_prompt = (env("NAK_CRAFTS_PROMPT", "").strip()
-                       or s.crafts_prompt)
+    s.crafts = env("NAK_CRAFTS", "").strip() or env("NAK_CRAFTS_FILE", "").strip() or s.crafts
+    s.crafts_prompt = env("NAK_CRAFTS_PROMPT", "").strip() or s.crafts_prompt
     s.worker_lang = env("NAK_WORKER_LANG", "").strip() or s.worker_lang
     # Server socket: env wins over [server] (host/port first, then tuning).
     s.serve_host = env("NAK_SERVE_HOST", "").strip() or s.serve_host
@@ -428,6 +430,7 @@ def load_settings(cfg_path: Optional[str | Path] = None) -> Settings:
     s.harness_user = env("NAK_HARNESS_USER", "").strip() or s.harness_user
     s.registry = env("NAK_REGISTRY", "").strip() or s.registry
     s.permissions = env("NAK_PERMISSIONS", "").strip() or s.permissions
+    s.pipeline_dir = env("NAK_PIPELINE_DIR", "").strip() or s.pipeline_dir
     s.ndb_base_url = (env("NAK_NDB_BASE_URL", "").strip() or s.ndb_base_url).rstrip("/")
     s.ndb_user = env("NAK_NDB_USER", "").strip() or s.ndb_user
     # Password is env-only by design (never read from the cfg file).
@@ -507,8 +510,7 @@ def _scan_permission_vocabulary(s: Optional[Settings] = None) -> tuple:
     s = s or Settings()
     tools: List[str] = []
     caps: List[str] = []
-    _cap_map = {"read": "file.read", "write": "file.write",
-                "delete": "file.delete", "execute": "system.execute"}
+    _cap_map = {"read": "file.read", "write": "file.write", "delete": "file.delete", "execute": "system.execute"}
 
     def _read(p: str) -> Any:
         try:
@@ -521,7 +523,7 @@ def _scan_permission_vocabulary(s: Optional[Settings] = None) -> tuple:
         for e in workers_raw:
             if not isinstance(e, dict):
                 continue
-            for c in (e.get("capabilities") or []):
+            for c in e.get("capabilities") or []:
                 c = str(c or "").strip()
                 if c and c not in caps:
                     caps.append(c)
@@ -535,7 +537,7 @@ def _scan_permission_vocabulary(s: Optional[Settings] = None) -> tuple:
         t = str(e.get("name", "") or "").strip()
         if t and t not in tools:
             tools.append(t)
-        for c in (e.get("capabilities") or []):
+        for c in e.get("capabilities") or []:
             c = str(c or "").strip()
             if not c:
                 continue
@@ -548,22 +550,20 @@ def _scan_permission_vocabulary(s: Optional[Settings] = None) -> tuple:
         for e in perm_workers.values():
             if not isinstance(e, dict):
                 continue
-            for t in (e.get("tools") or {}):
+            for t in e.get("tools") or {}:
                 t = str(t or "").strip()
                 if t and t not in tools:
                     tools.append(t)
-            for c in (e.get("capabilities") or {}):
+            for c in e.get("capabilities") or {}:
                 c = str(c or "").strip()
                 if c and c not in caps:
                     caps.append(c)
     return sorted(tools), sorted(caps)
 
 
-
-
-def default_permission_entry(name: str,
-                             worker_capabilities: Optional[List[str]] = None,
-                             s: Optional[Settings] = None) -> dict:
+def default_permission_entry(
+    name: str, worker_capabilities: Optional[List[str]] = None, s: Optional[Settings] = None
+) -> dict:
     """permissions.json workers.<name> block for a NEW worker.
 
     No capabilities.json catalog (removed): every new worker starts
@@ -582,10 +582,8 @@ def default_permission_entry(name: str,
     granted_caps: Dict[str, str] = {}
     read_grants: List[str] = []
     write_grants: List[str] = []
-    tool_verdicts = {t: granted_tools.get(t, "deny")
-                     for t in sorted(set(tools) | set(granted_tools))}
-    cap_verdicts = {c: granted_caps.get(c, "deny")
-                    for c in sorted(set(caps) | set(granted_caps))}
+    tool_verdicts = {t: granted_tools.get(t, "deny") for t in sorted(set(tools) | set(granted_tools))}
+    cap_verdicts = {c: granted_caps.get(c, "deny") for c in sorted(set(caps) | set(granted_caps))}
     return {
         "enabled": True,
         "description": f"{clean}: deny-all starter (traits {have or ['(none)']}); edit verdicts to grant.",
@@ -623,7 +621,7 @@ def default_worker_entry(
     s = s or Settings()
     clean = str(name or "").strip() or "worker"
     caps = ["identity", "decision"]
-    for c in (capabilities or []):
+    for c in capabilities or []:
         c = str(c or "").strip()
         if c and c not in caps:
             caps.append(c)

@@ -67,24 +67,28 @@ def _profile():
 
 def _persona_judgements(count=10, score=1.0):
     return [
-        json.dumps({
-            "case_id": f"persona-{index}",
-            "score": score,
-            "rationale": "Matches the persona.",
-            "evidence": "ok",
-        })
+        json.dumps(
+            {
+                "case_id": f"persona-{index}",
+                "score": score,
+                "rationale": "Matches the persona.",
+                "evidence": "ok",
+            }
+        )
         for index in range(1, count + 1)
     ]
 
 
 def _behavior_judgements(count=10, score=1.0):
     return [
-        json.dumps({
-            "case_id": f"behavior-{index}",
-            "score": score,
-            "rationale": "Matches the operational profile.",
-            "evidence": "ok",
-        })
+        json.dumps(
+            {
+                "case_id": f"behavior-{index}",
+                "score": score,
+                "rationale": "Matches the operational profile.",
+                "evidence": "ok",
+            }
+        )
         for index in range(1, count + 1)
     ]
 
@@ -94,8 +98,7 @@ def test_persona_cases_cover_identity_fields():
     assert len(cases) == 10
     assert len({case.id for case in cases}) == 10
     text = " ".join(case.question + " " + case.expected for case in cases)
-    for term in ("project_manager", "warm", "clarity", "lie", "English",
-                 "plan", "all"):
+    for term in ("project_manager", "warm", "clarity", "lie", "English", "plan", "all"):
         assert term in text
 
 
@@ -121,8 +124,7 @@ def test_behavior_cases_cover_operational_profile():
     assert len(cases) == 10
     assert len({case.id for case in cases}) == 10
     text = " ".join(case.question + " " + case.expected for case in cases)
-    for term in ("plan", "assign", "3", "all", "harness", "outside",
-                 "secret", "workspace", "git"):
+    for term in ("plan", "assign", "3", "all", "harness", "outside", "secret", "workspace", "git"):
         assert term in text
     assert all(case.checks for case in cases)
 
@@ -146,8 +148,7 @@ def test_behavior_cases_accept_craft_paraphrases():
 def test_behavior_cases_skip_inapplicable_plan_and_assign():
     profile = _profile()
     profile["worker_visible"]["crafts"] = [{"name": "test"}]
-    profile["worker_visible"]["autonomy"] = {
-        "modes": ["test"], "max_steps": 5, "approval": "all"}
+    profile["worker_visible"]["autonomy"] = {"modes": ["test"], "max_steps": 5, "approval": "all"}
     cases = rc.behavior_cases(profile, 10)
     text = " ".join(case.question for case in cases)
     assert len(cases) == 8
@@ -156,21 +157,21 @@ def test_behavior_cases_skip_inapplicable_plan_and_assign():
 
 
 def test_behavior_cases_do_not_ask_hidden_metadata():
-    text = " ".join(case.question.lower()
-                    for case in rc.behavior_cases(_profile(), 10))
+    text = " ".join(case.question.lower() for case in rc.behavior_cases(_profile(), 10))
     assert "decision layer" not in text
     assert "memory" not in text
 
 
 def test_report_card_checks_ignore_markdown(tmp_path):
     case = Case(
-        id="q1", question="Name the crafts", expected="plan and build",
-        rubric="Both crafts must appear", difficulty="easy",
-        checks=[{"id": "c1", "op": "contains",
-                 "expected": "plan and build"}],
+        id="q1",
+        question="Name the crafts",
+        expected="plan and build",
+        rubric="Both crafts must appear",
+        difficulty="easy",
+        checks=[{"id": "c1", "op": "contains", "expected": "plan and build"}],
     )
-    answer = Answer(case_id="q1",
-                    text="The two crafts are `plan` and **build**.")
+    answer = Answer(case_id="q1", text="The two crafts are `plan` and **build**.")
     checks = rc._run_checks([case], [answer], tmp_path)
     assert checks[0]["passed"] is True
 
@@ -195,13 +196,16 @@ def test_overall_renormalizes_missing_sections():
 
 
 def test_tool_checks_expand_each_allowed_tool_to_three(tmp_path, monkeypatch):
-    monkeypatch.setattr(rc.checks, "probe_tools", lambda *args, **kwargs: [
-        ProbeResult("file", "tool", "pass", "ok"),
-        ProbeResult("terminal", "tool", "fail", "bad"),
-        ProbeResult("report", "tool", "deny", "denied"),
-    ])
-    checks = rc._tool_checks(
-        "vizhi", tmp_path, workers_file=None, permissions_file=None)
+    monkeypatch.setattr(
+        rc.checks,
+        "probe_tools",
+        lambda *args, **kwargs: [
+            ProbeResult("file", "tool", "pass", "ok"),
+            ProbeResult("terminal", "tool", "fail", "bad"),
+            ProbeResult("report", "tool", "deny", "denied"),
+        ],
+    )
+    checks = rc._tool_checks("vizhi", tmp_path, workers_file=None, permissions_file=None)
     names = [check.name for check in checks]
     assert names.count("file:permission") == 1
     assert names.count("file:execution") == 1
@@ -215,46 +219,60 @@ def test_tool_checks_expand_each_allowed_tool_to_three(tmp_path, monkeypatch):
 
 
 def test_craft_checks_expand_each_craft_to_three(monkeypatch):
-    monkeypatch.setattr(rc.checks, "crafts_for_worker", lambda *args, **kwargs: [
-        {"name": "plan", "description": "plan work"},
-    ])
-    monkeypatch.setattr(rc.checks, "load_craft", lambda name: {
-        "name": name,
-        "description": "plan work",
-        "required_inputs": [],
-        "tools": ["file"],
-        "steps": ["do the plan"],
-        "approval": "all",
-    })
+    monkeypatch.setattr(
+        rc.checks,
+        "crafts_for_worker",
+        lambda *args, **kwargs: [
+            {"name": "plan", "description": "plan work"},
+        ],
+    )
+    monkeypatch.setattr(
+        rc.checks,
+        "load_craft",
+        lambda name: {
+            "name": name,
+            "description": "plan work",
+            "required_inputs": [],
+            "tools": ["file"],
+            "steps": ["do the plan"],
+            "approval": "all",
+        },
+    )
     monkeypatch.setattr(rc.checks, "expand_craft", lambda name, given: ["do the plan"])
     monkeypatch.setattr(rc.checks, "load_permissions", lambda *args, **kwargs: {})
     monkeypatch.setattr(rc.checks, "load_worker_role", lambda *args, **kwargs: "project_manager")
-    monkeypatch.setattr(rc.checks, "rule_for", lambda *args, **kwargs: (
-        {"tools": {"file": "allow"}}, "worker"))
-    checks = rc._craft_checks(
-        "vizhi", workers_file=None, permissions_file=None)
-    assert [check.name for check in checks] == [
-        "plan:load", "plan:expand", "plan:tools"]
+    monkeypatch.setattr(rc.checks, "rule_for", lambda *args, **kwargs: ({"tools": {"file": "allow"}}, "worker"))
+    checks = rc._craft_checks("vizhi", workers_file=None, permissions_file=None)
+    assert [check.name for check in checks] == ["plan:load", "plan:expand", "plan:tools"]
     assert all(check.score == 1.0 for check in checks)
 
 
 def _craft_checks_with_report_verdict(monkeypatch, verdict):
-    monkeypatch.setattr(rc.checks, "crafts_for_worker", lambda *args, **kwargs: [
-        {"name": "test", "description": "run tests"},
-    ])
-    monkeypatch.setattr(rc.checks, "load_craft", lambda name: {
-        "name": name,
-        "description": "run tests",
-        "required_inputs": [],
-        "tools": ["file", "report"],
-        "steps": ["run the tests"],
-        "approval": "all",
-    })
+    monkeypatch.setattr(
+        rc.checks,
+        "crafts_for_worker",
+        lambda *args, **kwargs: [
+            {"name": "test", "description": "run tests"},
+        ],
+    )
+    monkeypatch.setattr(
+        rc.checks,
+        "load_craft",
+        lambda name: {
+            "name": name,
+            "description": "run tests",
+            "required_inputs": [],
+            "tools": ["file", "report"],
+            "steps": ["run the tests"],
+            "approval": "all",
+        },
+    )
     monkeypatch.setattr(rc.checks, "expand_craft", lambda name, given: ["run the tests"])
     monkeypatch.setattr(rc.checks, "load_permissions", lambda *args, **kwargs: {})
     monkeypatch.setattr(rc.checks, "load_worker_role", lambda *args, **kwargs: "tester")
-    monkeypatch.setattr(rc.checks, "rule_for", lambda *args, **kwargs: (
-        {"tools": {"file": "allow", "report": verdict}}, "worker"))
+    monkeypatch.setattr(
+        rc.checks, "rule_for", lambda *args, **kwargs: ({"tools": {"file": "allow", "report": verdict}}, "worker")
+    )
     return rc._craft_checks("ezhilan", workers_file=None, permissions_file=None)
 
 
@@ -273,26 +291,36 @@ def test_craft_checks_reject_denied_tool_permission(monkeypatch):
 
 
 def test_tool_checks_treat_ask_as_pass(tmp_path, monkeypatch):
-    monkeypatch.setattr(rc.checks, "probe_tools", lambda *args, **kwargs: [
-        ProbeResult("report", "tool", "skip",
-                    "permission verdict 'ask'; not executed"),
-    ])
-    checks = rc._tool_checks(
-        "ezhilan", tmp_path, workers_file=None, permissions_file=None)
-    permission = next(check for check in checks
-                      if check.name == "report:permission")
+    monkeypatch.setattr(
+        rc.checks,
+        "probe_tools",
+        lambda *args, **kwargs: [
+            ProbeResult("report", "tool", "skip", "permission verdict 'ask'; not executed"),
+        ],
+    )
+    checks = rc._tool_checks("ezhilan", tmp_path, workers_file=None, permissions_file=None)
+    permission = next(check for check in checks if check.name == "report:permission")
     assert permission.status == "pass"
     assert permission.score == 1.0
 
 
 def test_render_card_contains_scores_and_improvements():
-    card = rc.ReportCard(
-        worker="vizhi", threshold=60.0, overall=80.0, grade="B", passed=True)
+    card = rc.ReportCard(worker="vizhi", threshold=60.0, overall=80.0, grade="B", passed=True)
     card.sections = {
         "persona": rc.Section(
             "persona",
-            [rc.Check("persona", "persona-1", "q", "e", score=0.5,
-                      status="fail", detail="missed", suggestion="Be clearer.")],
+            [
+                rc.Check(
+                    "persona",
+                    "persona-1",
+                    "q",
+                    "e",
+                    score=0.5,
+                    status="fail",
+                    detail="missed",
+                    suggestion="Be clearer.",
+                )
+            ],
             score=50.0,
             grade="F",
             suggestions=["Be clearer."],
@@ -311,8 +339,7 @@ def test_run_report_card_writes_cards(tmp_path):
         ["vizhi"],
         run_dir=tmp_path / "run",
         brain=object(),
-        nunnan_brain=ScriptedBrain(
-            _persona_judgements(10) + _behavior_judgements(10)),
+        nunnan_brain=ScriptedBrain(_persona_judgements(10) + _behavior_judgements(10)),
         worker_factory=lambda name, brain: FakeTarget(["I stay in role."] * 10),
         nunnan_factory=lambda brain: FakeAssessor(brain),
         persona_cases=10,
@@ -341,12 +368,15 @@ def test_cli_parser_defaults_and_weights():
     assert args.behavior_cases == 10
     assert args.threshold == 60.0
     assert cli._weights("persona=40,behavior=20,tools=20,craft=20") == {
-        "persona": 40.0, "behavior": 20.0, "tools": 20.0, "craft": 20.0}
+        "persona": 40.0,
+        "behavior": 20.0,
+        "tools": 20.0,
+        "craft": 20.0,
+    }
 
 
 def test_cli_main_prints_card(monkeypatch, capsys, tmp_path):
-    card = rc.ReportCard(
-        worker="vizhi", overall=80.0, grade="B", passed=True)
+    card = rc.ReportCard(worker="vizhi", overall=80.0, grade="B", passed=True)
     summary = rc.ReportSummary(
         run_dir=str(tmp_path),
         report_dir=str(tmp_path / "report_card"),

@@ -41,9 +41,7 @@ class Result:
             try:
                 status = ResultStatus(str(self.status))
             except ValueError as exc:
-                raise ValidationError(
-                    f"result.status {self.status!r} is invalid"
-                ) from exc
+                raise ValidationError(f"result.status {self.status!r} is invalid") from exc
         object.__setattr__(self, "status", status)
         object.__setattr__(self, "files_changed", tuple(self.files_changed))
         object.__setattr__(self, "commands_run", tuple(self.commands_run))

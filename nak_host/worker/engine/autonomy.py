@@ -2,6 +2,7 @@
 
 Pure helpers: read crafts.json/workers.json only. No brain/decision/harness.
 """
+
 from __future__ import annotations
 
 import json
@@ -30,8 +31,7 @@ def _worker_types(workers_file: str | Path | None = None) -> list[str]:
     list. Never raises.
     """
     try:
-        cand = Path(workers_file).expanduser() if str(workers_file or "").strip() \
-            else _DEFAULT_WORKERS
+        cand = Path(workers_file).expanduser() if str(workers_file or "").strip() else _DEFAULT_WORKERS
         raw = json.loads(cand.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return list(_FALLBACK_TYPES)
@@ -68,14 +68,13 @@ def _craft_modes(workers_file: str | Path | None = None) -> list[str]:
     try:
         reg_path = _registry_path(workers_file)
         reg = json.loads(reg_path.read_text(encoding="utf-8"))
-        items = (reg.get("crafts") if isinstance(reg, dict)
-                 and isinstance(reg.get("crafts"), list) else [])
+        items = reg.get("crafts") if isinstance(reg, dict) and isinstance(reg.get("crafts"), list) else []
         if not items and isinstance(reg, dict) and isinstance(reg.get("craft"), list):
             items = reg.get("craft")
     except (OSError, ValueError):
         return list(_FALLBACK_MODES)
     out: list[str] = []
-    for e in (items or []):
+    for e in items or []:
         if not isinstance(e, dict):
             continue
         mode = str(e.get("mode", "") or e.get("name", "")).strip().lower()
@@ -84,8 +83,7 @@ def _craft_modes(workers_file: str | Path | None = None) -> list[str]:
     return out or list(_FALLBACK_MODES)
 
 
-def _autonomy_from_crafts(allowed: Any, workers_file: str | Path,
-                          entry_name: str) -> dict[str, Any]:
+def _autonomy_from_crafts(allowed: Any, workers_file: str | Path, entry_name: str) -> dict[str, Any]:
     """Derive worker behavior from its crafts allowlist + crafts.json pins.
 
     crafts is the ONLY source of truth (workers.json carries no autonomy
@@ -103,8 +101,7 @@ def _autonomy_from_crafts(allowed: Any, workers_file: str | Path,
     try:
         reg_path = _registry_path(workers_file)
         reg = json.loads(reg_path.read_text(encoding="utf-8"))
-        items = (reg.get("crafts") if isinstance(reg, dict)
-                 and isinstance(reg.get("crafts"), list) else [])
+        items = reg.get("crafts") if isinstance(reg, dict) and isinstance(reg.get("crafts"), list) else []
         if not items and isinstance(reg, dict) and isinstance(reg.get("craft"), list):
             items = reg.get("craft")
     except (OSError, ValueError):
@@ -117,10 +114,14 @@ def _autonomy_from_crafts(allowed: Any, workers_file: str | Path,
         mode = str(e.get("mode", "") or e.get("name", "")).strip().lower()
         if mode not in valid_modes or mode == "assist":
             continue
-        pins.append({"mode": mode,
-                     "max_steps": e.get("max_steps", 3),
-                     "approval": str(e.get("approval", "all") or "all").strip().lower(),
-                     "auto_steps": e.get("auto_steps", 2)})
+        pins.append(
+            {
+                "mode": mode,
+                "max_steps": e.get("max_steps", 3),
+                "approval": str(e.get("approval", "all") or "all").strip().lower(),
+                "auto_steps": e.get("auto_steps", 2),
+            }
+        )
     if allowed is None:
         selected = pins
     elif isinstance(allowed, list):
@@ -129,8 +130,7 @@ def _autonomy_from_crafts(allowed: Any, workers_file: str | Path,
     else:
         selected = []
     if not selected:
-        return {"modes": ["assist"], "max_steps": 3,
-                "approval": "all", "auto_steps": 2}
+        return {"modes": ["assist"], "max_steps": 3, "approval": "all", "auto_steps": 2}
     modes = [p["mode"] for p in selected]
     # Step limits belong to planning crafts only (plan/build). A non-planning
     # craft (assign/assess/...) must never cap the plan step budget.
@@ -150,8 +150,7 @@ def _autonomy_from_crafts(allowed: Any, workers_file: str | Path,
     except (TypeError, ValueError):
         auto_n = 2
     auto_n = max(CRAFT_MIN_STEPS, min(steps, auto_n))
-    return {"modes": modes, "max_steps": steps,
-            "approval": approval, "auto_steps": auto_n}
+    return {"modes": modes, "max_steps": steps, "approval": approval, "auto_steps": auto_n}
 
 
 def _autonomy_lines(autonomy: dict[str, Any]) -> list[str]:
@@ -159,22 +158,22 @@ def _autonomy_lines(autonomy: dict[str, Any]) -> list[str]:
     modes = (autonomy or {}).get("modes", ["assist"])
     steps = (autonomy or {}).get("max_steps", 3)
     if "assist" in modes:
-        return ["Autonomy: assist — answer directly, do not propose plans "
-                "or name other workers."]
+        return ["Autonomy: assist — answer directly, do not propose plans or name other workers."]
     lines = [f"Autonomy: {', '.join(modes)} (max {steps} steps)."]
     if "plan" in modes or "build" in modes:
-        lines.append(f"- You MAY propose a numbered plan (at most {steps} steps), "
-                     "then STOP and wait for approval.")
-        lines.append("- Answer questions directly; only propose a plan when the "
-                     "user asks you to do work.")
+        lines.append(f"- You MAY propose a numbered plan (at most {steps} steps), then STOP and wait for approval.")
+        lines.append("- Answer questions directly; only propose a plan when the user asks you to do work.")
     else:
         lines.append("- You may NOT propose plans — answer directly.")
     if "build" in modes:
-        lines.append("- You MAY implement approved build steps via file writes "
-                     "and terminal checks, one step at a time.")
+        lines.append(
+            "- You MAY implement approved build steps via file writes and terminal checks, one step at a time."
+        )
     if "assign" in modes:
-        lines.append("- You MAY tag steps with [worker=name] using only names "
-                     "from the worker registry; unknown names are ignored.")
+        lines.append(
+            "- You MAY tag steps with [worker=name] using only names "
+            "from the worker registry; unknown names are ignored."
+        )
     else:
         lines.append("- You may NOT name other workers.")
     lines.append("- Do not run ahead — propose, then wait.")
@@ -188,23 +187,31 @@ def _autonomy_lines(autonomy: dict[str, Any]) -> list[str]:
     elif appr == "none":
         lines.append("- Approval: plans run without asking (harness write-gates still apply).")
     else:
-        lines.append(f"- Approval: plans with {auto_n} or fewer steps run ahead; "
-                     f"plans with more than {auto_n} steps (max {steps}) wait "
-                     "for approval.")
+        lines.append(
+            f"- Approval: plans with {auto_n} or fewer steps run ahead; "
+            f"plans with more than {auto_n} steps (max {steps}) wait "
+            "for approval."
+        )
     if "plan" in modes or "build" in modes:
         if appr == "all":
-            lines.append(f"- Whenever you describe or propose a plan, state the "
-                         f"step limit (max {steps}) and that it waits for "
-                         "approval before running.")
+            lines.append(
+                f"- Whenever you describe or propose a plan, state the "
+                f"step limit (max {steps}) and that it waits for "
+                "approval before running."
+            )
         elif appr == "none":
-            lines.append(f"- Whenever you describe or propose a plan, state the "
-                         f"step limit (max {steps}) and that it runs without "
-                         "asking.")
+            lines.append(
+                f"- Whenever you describe or propose a plan, state the "
+                f"step limit (max {steps}) and that it runs without "
+                "asking."
+            )
         else:
-            lines.append(f"- Whenever you describe or propose a plan, state the "
-                         f"step limit (max {steps}) and that plans with {auto_n} "
-                         "or fewer steps run ahead while larger plans wait for "
-                         "approval.")
+            lines.append(
+                f"- Whenever you describe or propose a plan, state the "
+                f"step limit (max {steps}) and that plans with {auto_n} "
+                "or fewer steps run ahead while larger plans wait for "
+                "approval."
+            )
     return lines
 
 
@@ -247,9 +254,10 @@ class AutonomyMixin:
     @staticmethod
     def extract_assigned(answer: str, known: list[str] | None = None) -> list[str]:
         """[worker=name] tags out of a plan reply (unknown names dropped)."""
-        names = [m.group(1).strip()
-                 for m in re.finditer(r"\[\s*worker\s*=\s*([^\]\s]+)\s*\]",
-                                      str(answer or ""), re.IGNORECASE)]
+        names = [
+            m.group(1).strip()
+            for m in re.finditer(r"\[\s*worker\s*=\s*([^\]\s]+)\s*\]", str(answer or ""), re.IGNORECASE)
+        ]
         seen: list[str] = []
         for n in names:
             if n and n not in seen and (known is None or n in known):
@@ -267,8 +275,7 @@ class AutonomyMixin:
         if not text.strip():
             return text
         if not self.can("plan") and not self.can("build"):
-            kept = [ln for ln in text.splitlines()
-                    if not re.match(r"^\s*plan\s*:", ln, re.IGNORECASE)]
+            kept = [ln for ln in text.splitlines() if not re.match(r"^\s*plan\s*:", ln, re.IGNORECASE)]
             text = "\n".join(kept).strip() or text
         else:
             try:
@@ -276,13 +283,11 @@ class AutonomyMixin:
             except (TypeError, ValueError):
                 limit = 3
             lines = text.splitlines()
-            step_idx = [i for i, ln in enumerate(lines)
-                        if re.match(r"^\s*\d+[.)]\s+\S", ln)]
+            step_idx = [i for i, ln in enumerate(lines) if re.match(r"^\s*\d+[.)]\s+\S", ln)]
             if len(step_idx) > limit:
                 cut = step_idx[limit]
                 lines = lines[:cut] + [f"[plan truncated to {limit} steps]"]
                 text = "\n".join(lines)
         if not self.can("assign"):
-            text = re.sub(r"\[\s*worker\s*=\s*[^\]]+\]\s*", "", text,
-                           flags=re.IGNORECASE)
+            text = re.sub(r"\[\s*worker\s*=\s*[^\]]+\]\s*", "", text, flags=re.IGNORECASE)
         return text

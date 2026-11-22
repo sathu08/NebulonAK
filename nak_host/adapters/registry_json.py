@@ -83,11 +83,13 @@ def _cache_key(kind: str, path: Path) -> tuple | None:
 class JsonRegistry:
     """RegistryPort over JSON manifests (shared mtime-checked cache)."""
 
-    def __init__(self, workers_file: Any = None, teams_file: Any = None,
-                 tools_file: Any = None, permissions_file: Any = None) -> None:
+    def __init__(
+        self, workers_file: Any = None, teams_file: Any = None, tools_file: Any = None, permissions_file: Any = None
+    ) -> None:
         self._workers = _resolve_workers(workers_file)
-        self._teams = (Path(str(teams_file)).expanduser() if str(teams_file or "").strip()
-                       else self._workers.parent / "teams.json")
+        self._teams = (
+            Path(str(teams_file)).expanduser() if str(teams_file or "").strip() else self._workers.parent / "teams.json"
+        )
         self._tools = _resolve_tools(tools_file)
         self._permissions = _resolve_permissions(permissions_file)
 
@@ -113,8 +115,7 @@ class JsonRegistry:
         """Worker entries (the loader validates shape + membership itself)."""
         from nak_host.worker.engine.registry import list_workers
 
-        return self._cached("workers", self._workers,
-                            lambda: list_workers(self._workers))
+        return self._cached("workers", self._workers, lambda: list_workers(self._workers))
 
     def teams(self) -> list:
         """Team entries (validated roster + entry shape)."""
@@ -124,11 +125,9 @@ class JsonRegistry:
             entries = list_teams(self._teams, self._workers)
             for entry in entries:
                 if not isinstance(entry, dict) or not str(entry.get("name", "")).strip():
-                    raise ValidationError(
-                        f"teams registry {self._teams}: entries need a non-empty 'name'")
+                    raise ValidationError(f"teams registry {self._teams}: entries need a non-empty 'name'")
                 if not isinstance(entry.get("members"), list):
-                    raise ValidationError(
-                        f"team {entry.get('name')!r}: need a 'members' list")
+                    raise ValidationError(f"team {entry.get('name')!r}: need a 'members' list")
             return entries
 
         return self._cached("teams", self._teams, _load)
@@ -149,12 +148,10 @@ class JsonRegistry:
         """Tool catalog entries (validated name/module/function)."""
         from nak_host.harness.engine.registry import load_registry
 
-        return self._cached("tools", self._tools,
-                            lambda: load_registry(self._tools))
+        return self._cached("tools", self._tools, lambda: load_registry(self._tools))
 
     def permissions(self) -> dict:
         """Worker<->harness boundary (fail-closed; never raises)."""
         from nak_host.harness.engine.permission import load_permissions
 
-        return self._cached("permissions", self._permissions,
-                            lambda: load_permissions(str(self._permissions)))
+        return self._cached("permissions", self._permissions, lambda: load_permissions(str(self._permissions)))

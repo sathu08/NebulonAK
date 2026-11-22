@@ -38,9 +38,7 @@ from nak_host.utils.constant import (
 
 
 def _root(data: dict) -> str:
-    return (str(data.get("root", "")).strip()
-            or os.environ.get("NAK_WORKSPACE", "").strip()
-            or str(default_workspace()))
+    return str(data.get("root", "")).strip() or os.environ.get("NAK_WORKSPACE", "").strip() or str(default_workspace())
 
 
 def _tail(data: dict) -> int:
@@ -69,8 +67,7 @@ def trace(args: dict) -> str:
     data = args or {}
     action = str(data.get("action", "")).strip().lower() or "trace"
     if action not in ("trace", "read", "grep", "tail"):
-        return json.dumps({"ok": False,
-                           "error": f"bad action {action!r}: want trace|read|grep|tail"})
+        return json.dumps({"ok": False, "error": f"bad action {action!r}: want trace|read|grep|tail"})
     raw = str(data.get("path", "")).strip()
     if not raw:
         return json.dumps({"ok": False, "error": "missing path: pass a file path"})
@@ -81,8 +78,7 @@ def trace(args: dict) -> str:
     if not p.exists():
         return json.dumps({"ok": False, "path": raw, "error": f"not found: {p}"})
     if not p.is_file():
-        return json.dumps({"ok": False, "path": raw,
-                           "error": f"not a file: {p} (trace is files-only)"})
+        return json.dumps({"ok": False, "path": raw, "error": f"not a file: {p} (trace is files-only)"})
     try:
         lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
     except (OSError, UnicodeError) as exc:
@@ -92,20 +88,37 @@ def trace(args: dict) -> str:
         try:
             rx = re.compile(pattern)
         except re.error as exc:
-            return json.dumps({"ok": False, "path": raw,
-                               "error": f"bad pattern: {exc}"[:300]})
+            return json.dumps({"ok": False, "path": raw, "error": f"bad pattern: {exc}"[:300]})
         hits = [(i, ln) for i, ln in enumerate(lines, 1) if rx.search(ln)]
         matches, truncated = _collect(hits[:MAX_MATCHES])
-        return json.dumps({"ok": True, "path": raw, "resolved": str(p),
-                           "mode": "match", "pattern": pattern,
-                           "lines": len(lines), "matched": len(hits),
-                           "returned": len(matches),
-                           "truncated": truncated or len(hits) > MAX_MATCHES,
-                           "matches": matches})
+        return json.dumps(
+            {
+                "ok": True,
+                "path": raw,
+                "resolved": str(p),
+                "mode": "match",
+                "pattern": pattern,
+                "lines": len(lines),
+                "matched": len(hits),
+                "returned": len(matches),
+                "truncated": truncated or len(hits) > MAX_MATCHES,
+                "matches": matches,
+            }
+        )
     tail = _tail(data)
     start = max(0, len(lines) - tail)
     matches, truncated = _collect([(i, lines[i - 1]) for i in range(start + 1, len(lines) + 1)])
-    return json.dumps({"ok": True, "path": raw, "resolved": str(p),
-                       "mode": "tail", "tail": tail, "lines": len(lines),
-                       "matched": None, "returned": len(matches),
-                       "truncated": truncated, "matches": matches})
+    return json.dumps(
+        {
+            "ok": True,
+            "path": raw,
+            "resolved": str(p),
+            "mode": "tail",
+            "tail": tail,
+            "lines": len(lines),
+            "matched": None,
+            "returned": len(matches),
+            "truncated": truncated,
+            "matches": matches,
+        }
+    )

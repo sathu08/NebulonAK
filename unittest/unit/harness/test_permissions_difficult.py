@@ -1,10 +1,14 @@
 """DIFFICULT permission tests — fail-closed, ask-gates, resources, limits."""
+
 import json
 import pytest
 
 from nak_host.harness.engine import ExecutionHarness
 from nak_host.harness.engine.permission import (
-    load_permissions, deny_all_permissions, audit_tool_coverage, merge_entries,
+    load_permissions,
+    deny_all_permissions,
+    audit_tool_coverage,
+    merge_entries,
 )
 
 
@@ -55,15 +59,13 @@ def test_vizhi_write_is_ask_without_approver(harness_vizhi):
 
 
 def test_vizhi_write_ask_with_approver_true(tmp_workspace):
-    h = ExecutionHarness(worker="vizhi", user="t", workspace_root=tmp_workspace,
-                         approver=lambda *a, **k: True)
+    h = ExecutionHarness(worker="vizhi", user="t", workspace_root=tmp_workspace, approver=lambda *a, **k: True)
     out = h.inspect("file", {"action": "write", "path": "a.txt", "content": "x"})
     assert out["ok"] is True
 
 
 def test_vizhi_write_ask_with_approver_false(tmp_workspace):
-    h = ExecutionHarness(worker="vizhi", user="t", workspace_root=tmp_workspace,
-                         approver=lambda *a, **k: False)
+    h = ExecutionHarness(worker="vizhi", user="t", workspace_root=tmp_workspace, approver=lambda *a, **k: False)
     out = h.inspect("file", {"action": "write", "path": "a.txt", "content": "x"})
     assert out["ok"] is False
     assert out.get("need_approval") is True
@@ -91,8 +93,7 @@ def test_per_call_allow_list_intersection(harness_vizhi):
 
 def test_missing_permissions_file_is_deny_all(tmp_workspace, tmp_path):
     missing = str(tmp_path / "no-such-perms.json")
-    h = ExecutionHarness(worker="vizhi", user="t", workspace_root=tmp_workspace,
-                         permissions=missing, workers_file=None)
+    ExecutionHarness(worker="vizhi", user="t", workspace_root=tmp_workspace, permissions=missing, workers_file=None)
     # constructor with unknown worker name would raise; use unbound inspect
     h2 = ExecutionHarness(user="t", workspace_root=tmp_workspace, permissions=missing)
     out = h2.inspect("file", {"action": "read", "path": "x.md"})
@@ -107,12 +108,10 @@ def test_deny_all_builtin_shape():
 
 def test_disabled_worker_denied(tmp_workspace):
     perms = {
-        "workers": {"vizhi": {"enabled": False, "tools": {"file": "allow"},
-                              "capabilities": {"file.read": "allow"}}},
+        "workers": {"vizhi": {"enabled": False, "tools": {"file": "allow"}, "capabilities": {"file.read": "allow"}}},
         "roles": {},
     }
-    h = ExecutionHarness(worker="vizhi", user="t", workspace_root=tmp_workspace,
-                         permissions=perms)
+    h = ExecutionHarness(worker="vizhi", user="t", workspace_root=tmp_workspace, permissions=perms)
     out = h.inspect("file", {"action": "read", "path": "x.md"})
     assert out["ok"] is False
     assert "disabled" in out["error"]
@@ -120,6 +119,7 @@ def test_disabled_worker_denied(tmp_workspace):
 
 def test_audit_coverage_runs():
     from nak_host.harness.engine.registry import load_registry
+
     perms = load_permissions()
     specs = load_registry()
     gaps = audit_tool_coverage(perms, specs)
@@ -127,10 +127,20 @@ def test_audit_coverage_runs():
 
 
 def test_merge_enabled_ands():
-    base = {"enabled": True, "tools": {"file": "allow"}, "capabilities": {},
-            "resources": {"files": {"read": ["a"], "write": [], "deny": []}}, "limits": {}}
-    over = {"enabled": False, "tools": {}, "capabilities": {},
-            "resources": {"files": {"read": [], "write": [], "deny": []}}, "limits": {}}
+    base = {
+        "enabled": True,
+        "tools": {"file": "allow"},
+        "capabilities": {},
+        "resources": {"files": {"read": ["a"], "write": [], "deny": []}},
+        "limits": {},
+    }
+    over = {
+        "enabled": False,
+        "tools": {},
+        "capabilities": {},
+        "resources": {"files": {"read": [], "write": [], "deny": []}},
+        "limits": {},
+    }
     assert merge_entries(base, over)["enabled"] is False
 
 

@@ -6,6 +6,7 @@ Covers the two defects found in the cross-worker memory audit:
   2. Session docs were written turn-by-turn (or not at all), and the
      newest-wins chat store silently lost earlier teammates' turns.
 """
+
 import threading
 
 import pytest
@@ -46,8 +47,7 @@ class PersistentBrain:
         return {"chat": {"id": chat_id, "messages": list(self.docs[chat_id])}}
 
     def chat(self, prompt, messages=None, session_id=None):
-        self.chat_calls.append({"prompt": prompt, "messages": messages,
-                                "session_id": session_id})
+        self.chat_calls.append({"prompt": prompt, "messages": messages, "session_id": session_id})
         if self.answer == "echo":
             return {"answer": f"ack: {prompt}"}
         return {"answer": self.answer}
@@ -69,6 +69,7 @@ def arivu(brain):
 
 
 # ---------- fix 1: identity prompt is not the user turn ----------
+
 
 def test_text_is_utterance_and_identity_is_tool_message(vizhi, brain):
     vizhi.chat("please review the login bug", session_id="s1")
@@ -97,12 +98,12 @@ def test_long_prompt_does_not_crowd_out_ask(vizhi, brain):
 
 # ---------- fix 2: session docs merge, never overwrite ----------
 
+
 def test_cross_worker_turn_is_visible(vizhi, arivu, brain):
     vizhi.chat("codeword TANGERINE-77", session_id="team")
     out = arivu.chat("what codeword?", session_id="team")
     assert out["memory"]["shared"] is True
-    block = next(m["content"] for m in brain.chat_calls[-1]["messages"]
-                 if "session team so far" in m["content"])
+    block = next(m["content"] for m in brain.chat_calls[-1]["messages"] if "session team so far" in m["content"])
     assert "TANGERINE-77" in block
     assert "ack" in block  # vizhi's reply too
 
@@ -117,8 +118,7 @@ def test_session_doc_grows_across_turns(brain):
     assert len(brain.docs["team"]) == 4
     vizhi.chat("three", session_id="team")
     assert len(brain.docs["team"]) == 6
-    assert [m["content"] for m in brain.docs["team"] if m["role"] == "user"] == [
-        "one", "two", "three"]
+    assert [m["content"] for m in brain.docs["team"] if m["role"] == "user"] == ["one", "two", "three"]
 
 
 def test_merge_reports_turn_count(vizhi, brain):
@@ -132,8 +132,7 @@ def test_no_duplicate_when_turn_already_saved(vizhi, brain):
     vizhi.chat("one", session_id="team")
     # Simulate Mind having auto-appended this exact turn (user + assistant)
     # under the session key before AK's merge runs.
-    brain.docs["team"] += [{"role": "user", "content": "two"},
-                           {"role": "assistant", "content": "ack"}]
+    brain.docs["team"] += [{"role": "user", "content": "two"}, {"role": "assistant", "content": "ack"}]
     out = vizhi.chat("two", session_id="team")
     assert out["memory"]["merged"] is False  # trailing turn already present
     assert [m["content"] for m in brain.docs["team"] if m["role"] == "user"] == ["one", "two"]
@@ -142,10 +141,10 @@ def test_no_duplicate_when_turn_already_saved(vizhi, brain):
 def test_legitimately_repeated_turn_is_kept():
     """A repeated utterance must NOT be collapsed as a 'duplicate' (Mind's
     identical-turn dedupe is a defect we deliberately do not copy)."""
+
     class CountingBrain(PersistentBrain):
         def chat(self, prompt, messages=None, session_id=None):
-            self.chat_calls.append({"prompt": prompt, "messages": messages,
-                                    "session_id": session_id})
+            self.chat_calls.append({"prompt": prompt, "messages": messages, "session_id": session_id})
             return {"answer": f"ans{len(self.chat_calls)}"}
 
     brain = CountingBrain()
@@ -169,19 +168,18 @@ def test_concurrent_workers_lose_no_turns(brain):
         except Exception as exc:  # pragma: no cover - surfaced below
             errors.append(exc)
 
-    threads = [threading.Thread(target=run, args=(vizhi, "v")),
-               threading.Thread(target=run, args=(arivu, "a"))]
+    threads = [threading.Thread(target=run, args=(vizhi, "v")), threading.Thread(target=run, args=(arivu, "a"))]
     for t in threads:
         t.start()
     for t in threads:
         t.join()
     assert not errors
     users = [m["content"] for m in brain.docs["race"] if m["role"] == "user"]
-    assert sorted(users) == sorted([f"v-{i}" for i in range(5)]
-                                   + [f"a-{i}" for i in range(5)])
+    assert sorted(users) == sorted([f"v-{i}" for i in range(5)] + [f"a-{i}" for i in range(5)])
 
 
 # ---------- fix 3: legacy prompt-dump docs stay readable ----------
+
 
 def test_strip_prompt_dump_keeps_utterance():
     dump = "You are vizhi, project_manager.\n" + ("Tone: friendly\n" * 50)
@@ -201,20 +199,22 @@ def test_legacy_doc_ask_survives_snippet_cap(vizhi, brain):
     ]
     out = vizhi.chat("continue", session_id="old")
     assert out["memory"]["shared"] is True
-    block = next(m["content"] for m in brain.chat_calls[-1]["messages"]
-                 if "session old so far" in m["content"])
+    block = next(m["content"] for m in brain.chat_calls[-1]["messages"] if "session old so far" in m["content"])
     assert "the real ask is at the tail" in block
     assert "Tone:" not in block
 
 
 # ---------- non-regressions ----------
 
+
 def test_stateless_memory_disabled_keeps_nothing(tmp_path):
     import json
 
     entry = {
-        "name": "quiet", "type": "coordinator",
-        "description": "quiet", "identity": {"role": "assistant", "language": "en"},
+        "name": "quiet",
+        "type": "coordinator",
+        "description": "quiet",
+        "identity": {"role": "assistant", "language": "en"},
         "memory": {"enabled": False},
     }
     path = tmp_path / "workers.json"
@@ -235,6 +235,7 @@ def test_session_without_utterance_is_not_written(vizhi, brain):
 
 
 # ---------- fix 4: transcript ownership (Mind-owned vs client-owned) ----------
+
 
 class SessionBrain(PersistentBrain):
     """PersistentBrain that also knows which sessions Mind itself created."""

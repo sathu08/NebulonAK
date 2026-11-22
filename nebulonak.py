@@ -10,10 +10,13 @@ routes and settings live in the ``nak_host`` package. No interactive
 UI — everything observable lives on the web console.
 
 Usage:
-    python nebulonak.py start [--foreground] [--force]
+    python nebulonak.py start [--foreground|-f] [--force]
     python nebulonak.py stop [--force]
-    python nebulonak.py restart [--foreground] [--force]
+    python nebulonak.py restart [--foreground|-f] [--force]
     python nebulonak.py status
+
+Foreground serving (same app, logs to terminal, Ctrl+C stops):
+    python nebulonak.py start --foreground
 """
 
 from nak_host.cli.app import main

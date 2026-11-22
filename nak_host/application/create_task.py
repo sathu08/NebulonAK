@@ -10,11 +10,19 @@ from nak_host.domain.errors import DuplicateTask
 from nak_host.domain.task import Task, TaskRun
 
 
-def create_task(goal: str, *, store: Any, task_id: str | None = None,
-                idempotency_key: str | None = None,
-                inputs: Any = None, acceptance: Any = (),
-                workspace: str = "", max_steps: int = 3, timeout: int = 60,
-                allowed_tools: Any = frozenset()) -> tuple[Task, TaskRun]:
+def create_task(
+    goal: str,
+    *,
+    store: Any,
+    task_id: str | None = None,
+    idempotency_key: str | None = None,
+    inputs: Any = None,
+    acceptance: Any = (),
+    workspace: str = "",
+    max_steps: int = 3,
+    timeout: int = 60,
+    allowed_tools: Any = frozenset(),
+) -> tuple[Task, TaskRun]:
     """Build a Task, persist it, and record the creation event.
 
     A duplicate ``idempotency_key`` returns the existing (Task, TaskRun)

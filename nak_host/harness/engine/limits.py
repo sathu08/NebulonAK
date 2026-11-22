@@ -23,9 +23,9 @@ def norm_limits(value: Any) -> Dict[str, float]:
     return out
 
 
-def check_limits(given: Dict[str, Any], resolved: Optional[str],
-                 entry: Dict[str, Any], calls: int,
-                 exec_seconds: float) -> Optional[str]:
+def check_limits(
+    given: Dict[str, Any], resolved: Optional[str], entry: Dict[str, Any], calls: int, exec_seconds: float
+) -> Optional[str]:
     """Session limits: calls, cumulative time, file/content size."""
     lim = entry.get("limits") or {}
     try:
@@ -34,8 +34,9 @@ def check_limits(given: Dict[str, Any], resolved: Optional[str],
     except (TypeError, ValueError):
         pass
     try:
-        if exec_seconds >= float(lim.get("max_execution_time", DEFAULT_LIMITS["max_execution_time"])):
-            return f"limit: max_execution_time ({lim.get('max_execution_time', DEFAULT_LIMITS['max_execution_time'])}s) exceeded"
+        cap_seconds = float(lim.get("max_execution_time", DEFAULT_LIMITS["max_execution_time"]))
+        if exec_seconds >= cap_seconds:
+            return f"limit: max_execution_time ({lim.get('max_execution_time', cap_seconds)}s) exceeded"
     except (TypeError, ValueError):
         pass
     try:

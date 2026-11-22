@@ -60,8 +60,7 @@ class InMemoryTaskStore:
 
     def list_pending(self) -> list[TaskRun]:
         with self._lock:
-            return [self._copy(r) for r in self._runs.values()
-                    if is_pending_state(r.state)]
+            return [self._copy(r) for r in self._runs.values() if is_pending_state(r.state)]
 
     def events_for(self, task_id: str) -> list[dict[str, Any]]:
         """Stored events (oldest first). Test/observation helper."""
@@ -72,15 +71,12 @@ class InMemoryTaskStore:
     def create_task(self, task: Task) -> TaskRun:
         with self._lock:
             if task.idempotency_key in self._by_key:
-                raise DuplicateTask(
-                    f"task with idempotency key {task.idempotency_key!r} already exists"
-                )
+                raise DuplicateTask(f"task with idempotency key {task.idempotency_key!r} already exists")
             if task.id in self._tasks:
                 raise DuplicateTask(f"task {task.id!r} already exists")
             self._tasks[task.id] = task
             self._by_key[task.idempotency_key] = task.id
-            run = TaskRun(task_id=task.id, state=TaskState.CREATED,
-                          version=0, assigned_worker=None, attempt=1)
+            run = TaskRun(task_id=task.id, state=TaskState.CREATED, version=0, assigned_worker=None, attempt=1)
             self._runs[task.id] = run
             self._events.setdefault(task.id, [])
             self._attempt_of[task.id] = 1
@@ -93,9 +89,9 @@ class InMemoryTaskStore:
             seq = len(self._events.setdefault(task_id, [])) + 1
             self._events[task_id].append({"seq": seq, **dict(event)})
 
-    def transition(self, task_id: str, expected_version: int,
-                   to_state: TaskState, event: dict[str, Any],
-                   **fields: Any) -> TaskRun:
+    def transition(
+        self, task_id: str, expected_version: int, to_state: TaskState, event: dict[str, Any], **fields: Any
+    ) -> TaskRun:
         unknown = [k for k in fields if k not in _RUN_FIELDS]
         if unknown:
             raise ValueError(f"unknown run fields: {unknown}")
@@ -112,11 +108,15 @@ class InMemoryTaskStore:
             run.state = to_state
             run.version = run.version + 1
             seq = len(self._events.setdefault(task_id, [])) + 1
-            self._events[task_id].append({
-                "seq": seq, "type": "task.state_changed",
-                "from_state": old_state.value, "to_state": to_state.value,
-                **dict(event),
-            })
+            self._events[task_id].append(
+                {
+                    "seq": seq,
+                    "type": "task.state_changed",
+                    "from_state": old_state.value,
+                    "to_state": to_state.value,
+                    **dict(event),
+                }
+            )
             return self._copy(run)
 
     def save_result(self, task_id: str, result: Result) -> None:
@@ -125,28 +125,30 @@ class InMemoryTaskStore:
                 raise TaskNotFound(f"unknown task {task_id!r}")
             attempt = self._attempt_of.get(task_id, 1)
             if (task_id, attempt) in self._results:
-                raise DuplicateTask(
-                    f"result for task {task_id!r} attempt {attempt} already saved"
-                )
+                raise DuplicateTask(f"result for task {task_id!r} attempt {attempt} already saved")
             self._results[(task_id, attempt)] = result
 
     def recover_incomplete(self) -> list[TaskRun]:
         recovered: list[TaskRun] = []
         with self._lock:
-            stuck = [r for r in self._runs.values()
-                     if r.state == TaskState.RUNNING]
+            stuck = [r for r in self._runs.values() if r.state == TaskState.RUNNING]
         for run in stuck:
             reason = BlockReason(
-                code="interrupted", detail="recovered on startup",
+                code="interrupted",
+                detail="recovered on startup",
                 resumable=False,
-                recovery={"state": TaskState.RUNNING.value,
-                          "version": run.version,
-                          "worker": run.assigned_worker or ""},
+                recovery={
+                    "state": TaskState.RUNNING.value,
+                    "version": run.version,
+                    "worker": run.assigned_worker or "",
+                },
             )
             try:
-                recovered.append(self.transition(
-                    run.task_id, run.version, TaskState.BLOCKED,
-                    {"type": "task.interrupted"}, block_reason=reason))
+                recovered.append(
+                    self.transition(
+                        run.task_id, run.version, TaskState.BLOCKED, {"type": "task.interrupted"}, block_reason=reason
+                    )
+                )
             except (ConcurrencyError, TaskNotFound):
                 # Lost a race with another transition; state already moved on.
                 continue

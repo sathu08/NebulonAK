@@ -14,14 +14,52 @@ async function api(path, query) {
   return resp.json();
 }
 
+async function apiPost(path, body) {
+  const resp = await fetch(BASE + path, {
+    method: "POST",
+    headers: {"Accept": "application/json", "Content-Type": "application/json"},
+    body: JSON.stringify(body || {}),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    throw new Error("HTTP " + resp.status + " for " + path + ": " + (data.detail || JSON.stringify(data).slice(0, 200)));
+  }
+  return data;
+}
+
+async function apiDelete(path) {
+  const resp = await fetch(BASE + path, {method: "DELETE", headers: {"Accept": "application/json"}});
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    throw new Error("HTTP " + resp.status + " for " + path);
+  }
+  return data;
+}
+
 const nakApi = {
   status: () => api("/status"),
   tasks: (limit) => api("/pipeline/tasks", {limit: limit || 20}),
   task: (id) => api("/pipeline/tasks/" + encodeURIComponent(id)),
-  vetting: (limit) => api("/pipeline/vetting", {limit: limit || 10}),
   sessions: (limit) => api("/pipeline/sessions", {limit: limit || 20}),
   settings: () => api("/settings"),
   manifests: () => api("/settings/manifests"),
+  saveSection: (section, values) => apiPost("/settings/section/" + encodeURIComponent(section), {values}),
+  listConfigFiles: () => api("/settings/files"),
+  getConfigFile: (id) => api("/settings/files/" + encodeURIComponent(id)),
+  validateConfigFile: (id, content) => apiPost("/settings/files/" + encodeURIComponent(id) + "/validate", {content}),
+  saveConfigFile: (id, content) => apiPost("/settings/files/" + encodeURIComponent(id), {content}),
+  listPipelines: () => api("/pipeline_engine/definitions"),
+  getPipeline: (slug) => api("/pipeline_engine/definitions/" + encodeURIComponent(slug)),
+  pipelineRuns: (slug) => api("/pipeline_engine/definitions/" + encodeURIComponent(slug) + "/runs"),
+  savePipeline: (def) => apiPost("/pipeline_engine/definitions", def),
+  deletePipeline: (slug) => apiDelete("/pipeline_engine/definitions/" + encodeURIComponent(slug)),
+  validatePipeline: (def) => apiPost("/pipeline_engine/validate", {definition: def}),
+  runPipeline: (def, worker, dry, autoApprove) => apiPost("/pipeline_engine/run",
+    {definition: def, worker: worker || "viyan", dry: !!dry, auto_approve: !!autoApprove}),
+  pipelineLocation: () => api("/pipeline_engine/location"),
+  workspaceFiles: (prefix) => api("/pipeline_engine/files", {prefix: prefix || ""}),
+  listApprovals: () => api("/pipeline_engine/approvals"),
+  decideApproval: (id, approved) => apiPost("/pipeline_engine/approvals/" + encodeURIComponent(id), {approved: !!approved}),
 };
 
 function banner(msg) {

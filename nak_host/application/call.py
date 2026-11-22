@@ -18,17 +18,31 @@ from nak_host.utils.constant import CALL_DEFAULT_MAX_STEPS
 from nak_host.utils.constant import CALL_DEFAULT_TIMEOUT
 
 
-def call_worker(name: str, goal: str, *, store: Any, worker_factory: Any,
-                brain_factory: Any, harness_factory: Any,
-                executor_factory: Any, memory_factory: Any = None,
-                registry: Any = None, approver: Any = None,
-                workspace: str = "", max_steps: int = CALL_DEFAULT_MAX_STEPS,
-                timeout: int = CALL_DEFAULT_TIMEOUT,
-                allowed_tools: Any = frozenset(), harness_kwargs: Any = None,
-                task_kwargs: Any = None, on_event: Any = None,
-                max_calls_per_turn: Any = None, obs_chars: Any = None,
-                history_keep: Any = None, max_stalls: Any = None,
-                auto_steps: Any = None) -> dict[str, Any]:
+def call_worker(
+    name: str,
+    goal: str,
+    *,
+    store: Any,
+    worker_factory: Any,
+    brain_factory: Any,
+    harness_factory: Any,
+    executor_factory: Any,
+    memory_factory: Any = None,
+    registry: Any = None,
+    approver: Any = None,
+    workspace: str = "",
+    max_steps: int = CALL_DEFAULT_MAX_STEPS,
+    timeout: int = CALL_DEFAULT_TIMEOUT,
+    allowed_tools: Any = frozenset(),
+    harness_kwargs: Any = None,
+    task_kwargs: Any = None,
+    on_event: Any = None,
+    max_calls_per_turn: Any = None,
+    obs_chars: Any = None,
+    history_keep: Any = None,
+    max_stalls: Any = None,
+    auto_steps: Any = None,
+) -> dict[str, Any]:
     """Build instances via injected factories and run one task loop.
 
     Factory protocols (duck-typed, no imports):
@@ -56,29 +70,44 @@ def call_worker(name: str, goal: str, *, store: Any, worker_factory: Any,
     except Exception:
         identity = ""
     tools = allowed_tool_schemas(worker_name, registry) if registry is not None else []
-    session_ws = (str(workspace or "").strip()
-                  or str(getattr(harness, "session_dir", "") or "").strip()
-                  or "default")
-    inputs: dict[str, Any] = {"goal": str(goal).strip(),
-                              "worker": worker_name}
-    for key, val in (("max_calls_per_turn", max_calls_per_turn),
-                     ("obs_chars", obs_chars), ("history_keep", history_keep),
-                     ("max_stalls", max_stalls), ("auto_steps", auto_steps)):
+    session_ws = str(workspace or "").strip() or str(getattr(harness, "session_dir", "") or "").strip() or "default"
+    inputs: dict[str, Any] = {"goal": str(goal).strip(), "worker": worker_name}
+    for key, val in (
+        ("max_calls_per_turn", max_calls_per_turn),
+        ("obs_chars", obs_chars),
+        ("history_keep", history_keep),
+        ("max_stalls", max_stalls),
+        ("auto_steps", auto_steps),
+    ):
         if val is not None:
             inputs[key] = val
     task, run = create_task(
-        str(goal).strip(), store=store, workspace=session_ws,
-        max_steps=int(max_steps), timeout=int(timeout),
+        str(goal).strip(),
+        store=store,
+        workspace=session_ws,
+        max_steps=int(max_steps),
+        timeout=int(timeout),
         allowed_tools=frozenset(allowed_tools or ()),
         inputs=inputs,
-        **dict(task_kwargs or {}))
-    run = store.transition(task.id, run.version, TaskState.ASSIGNED,
-                           {"type": "task.assigned", "worker": worker_name})
-    out = run_task(task, run, store=store, brain=brain, executor=executor,
-                   memory=memory, tools=tools, worker_name=worker_name,
-                   identity=identity, approver=approver, on_event=on_event,
-                   max_calls_per_turn=max_calls_per_turn, obs_chars=obs_chars,
-                   history_keep=history_keep, max_stalls=max_stalls,
-                   auto_steps=auto_steps)
-    return {"task": task, "run": out["run"], "result": out["result"],
-            "loop": out["loop"]}
+        **dict(task_kwargs or {}),
+    )
+    run = store.transition(task.id, run.version, TaskState.ASSIGNED, {"type": "task.assigned", "worker": worker_name})
+    out = run_task(
+        task,
+        run,
+        store=store,
+        brain=brain,
+        executor=executor,
+        memory=memory,
+        tools=tools,
+        worker_name=worker_name,
+        identity=identity,
+        approver=approver,
+        on_event=on_event,
+        max_calls_per_turn=max_calls_per_turn,
+        obs_chars=obs_chars,
+        history_keep=history_keep,
+        max_stalls=max_stalls,
+        auto_steps=auto_steps,
+    )
+    return {"task": task, "run": out["run"], "result": out["result"], "loop": out["loop"]}

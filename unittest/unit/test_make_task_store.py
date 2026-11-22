@@ -17,17 +17,15 @@ def test_memory_backend_and_unknown():
 
 
 def test_explicit_values_skip_resolution():
-    store = make_task_store("nebulondb", base_url="http://db:6969/api/NebulonDB",
-                            user="admin", password="pw",
-                            resolve_from_mind=False)
+    store = make_task_store(
+        "nebulondb", base_url="http://db:6969/api/NebulonDB", user="admin", password="pw", resolve_from_mind=False
+    )
     assert isinstance(store, NebulonDBTaskStore)
     assert store._resolver is None
-    assert store._explicit == {"base_url": True, "user": True,
-                               "password": True}
+    assert store._explicit == {"base_url": True, "user": True, "password": True}
 
 
 def test_resolver_attached_by_default():
-    store = make_task_store("nebulondb", base_url="http://db:6969/api/NebulonDB",
-                            user="admin", password="pw")
+    store = make_task_store("nebulondb", base_url="http://db:6969/api/NebulonDB", user="admin", password="pw")
     assert isinstance(store, NebulonDBTaskStore)
     assert store._resolver is not None

@@ -22,6 +22,14 @@ from .permission import (
     registry_coverage,
 )
 
-__all__ = ["ExecutionHarness", "ToolEngine", "ask",
-           "assert_worker_known", "audit_tool_coverage", "load_worker_names",
-           "load_worker_role", "merge_entries", "registry_coverage"]
+__all__ = [
+    "ExecutionHarness",
+    "ToolEngine",
+    "ask",
+    "assert_worker_known",
+    "audit_tool_coverage",
+    "load_worker_names",
+    "load_worker_role",
+    "merge_entries",
+    "registry_coverage",
+]

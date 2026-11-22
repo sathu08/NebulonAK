@@ -3,6 +3,7 @@
 Templates stay markdown in nak_host/worker/prompts/; this module only fills the
 double-brace values from an entry's identity.
 """
+
 from __future__ import annotations
 
 import re
@@ -22,13 +23,10 @@ from .autonomy import _autonomy_lines
 
 # Labels whose line is dropped when the rendered value is empty
 # (e.g. "Never:" with an empty do_not list).
-_EMPTY_OK_LABELS = ("Personality", "Tone", "Formality", "Humor", "Gender",
-                    "Language", "Values", "Never")
+_EMPTY_OK_LABELS = ("Personality", "Tone", "Formality", "Humor", "Gender", "Language", "Values", "Never")
 
 # {{#key}}...{{/key}} sections: kept only when flags[key] is truthy.
-_SECTION_RE = re.compile(
-    r"\{\{#([A-Za-z_][A-Za-z0-9_]*)\}\}(.*?)\{\{/\1\}\}", re.DOTALL
-)
+_SECTION_RE = re.compile(r"\{\{#([A-Za-z_][A-Za-z0-9_]*)\}\}(.*?)\{\{/\1\}\}", re.DOTALL)
 
 
 def _render_sections(template: str, flags: dict[str, bool]) -> str:
@@ -37,10 +35,12 @@ def _render_sections(template: str, flags: dict[str, bool]) -> str:
     One level only (no nesting): inner text is rendered as-is, so plain
     ``{{value}}`` placeholders inside a kept section still resolve later.
     """
+
     def _pick(match: re.Match[str]) -> str:
         return match.group(2) if flags.get(match.group(1), False) else ""
 
     return _SECTION_RE.sub(_pick, str(template))
+
 
 def _craft_lines(crafts: Any) -> List[str]:
     """Prompt lines for a craft set ([{name, description}])."""
@@ -56,10 +56,14 @@ def _craft_lines(crafts: Any) -> List[str]:
     return out or ["- (no crafts assigned)"]
 
 
-def _render_prompt_template(template: str, identity: Dict[str, Any], entry_name: str = "",
-                            autonomy: Optional[Dict[str, Any]] = None,
-                            crafts: Any = None,
-                            team: dict[str, Any] | None = None) -> str:
+def _render_prompt_template(
+    template: str,
+    identity: Dict[str, Any],
+    entry_name: str = "",
+    autonomy: Optional[Dict[str, Any]] = None,
+    crafts: Any = None,
+    team: dict[str, Any] | None = None,
+) -> str:
     """Fill {{...}} values from identity + {{today}} + {{autonomy}} + {{crafts}}.
 
     Team-aware values: ``{{workers}}`` (comma-separated roster) and
@@ -69,8 +73,7 @@ def _render_prompt_template(template: str, identity: Dict[str, Any], entry_name:
     """
     p = identity or {}
     team = team if isinstance(team, dict) else {}
-    workers = ", ".join(str(m).strip() for m in (team.get("members") or [])
-                        if str(m).strip())
+    workers = ", ".join(str(m).strip() for m in (team.get("members") or []) if str(m).strip())
     values = {
         "name": str(entry_name or ""),
         "role": str(p.get("role", "") or ""),
@@ -116,12 +119,10 @@ def _crafts_from_entry(entry: Dict[str, Any], workers_file: str | Path) -> List[
             return []
         allowed = None
         if isinstance(raw, list):
-            allowed = [str(c or "").strip().lower()
-                       for c in raw if str(c or "").strip()]
+            allowed = [str(c or "").strip().lower() for c in raw if str(c or "").strip()]
         reg_path = Path(workers_file).expanduser().parent / "crafts.json"
         reg = json.loads(reg_path.read_text(encoding="utf-8"))
-        items = (reg.get("crafts") if isinstance(reg, dict)
-                 and isinstance(reg.get("crafts"), list) else [])
+        items = reg.get("crafts") if isinstance(reg, dict) and isinstance(reg.get("crafts"), list) else []
         if not items and isinstance(reg, dict) and isinstance(reg.get("craft"), list):
             items = reg.get("craft")  # backward compat: old singular key
         out: List[Dict[str, str]] = []
@@ -133,8 +134,7 @@ def _crafts_from_entry(entry: Dict[str, Any], workers_file: str | Path) -> List[
                 continue
             if allowed is not None and mode.lower() not in allowed:
                 continue
-            out.append({"name": mode,
-                        "description": str(e.get("description", "") or "").strip()})
+            out.append({"name": mode, "description": str(e.get("description", "") or "").strip()})
         return out
     except Exception:
         return []
@@ -157,9 +157,7 @@ def _load_prompt_template(entry: Dict[str, Any], workers_file: str | Path) -> Op
             return None
         return text if text.strip() else None
     base = Path(workers_file).expanduser().parent if str(workers_file or "").strip() else _DEFAULT_WORKERS.parent
-    for cand in (base / rel,
-                 base.parent / "worker" / rel,
-                 Path(__file__).resolve().parent / rel):
+    for cand in (base / rel, base.parent / "worker" / rel, Path(__file__).resolve().parent / rel):
         try:
             text = cand.read_text(encoding="utf-8")
         except OSError:
@@ -167,5 +165,3 @@ def _load_prompt_template(entry: Dict[str, Any], workers_file: str | Path) -> Op
         if text.strip():
             return text
     return None
-
-

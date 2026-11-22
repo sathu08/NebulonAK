@@ -11,9 +11,7 @@ from .errors import ValidationError
 from .freeze import deep_freeze
 
 APPROVAL_SCOPES: frozenset[str] = frozenset({"task", "step", "tool"})
-BLOCK_CODES: frozenset[str] = frozenset(
-    {"interrupted", "permission_denied", "approval_required", "policy", "crash"}
-)
+BLOCK_CODES: frozenset[str] = frozenset({"interrupted", "permission_denied", "approval_required", "policy", "crash"})
 
 
 class Verdict(str, Enum):
@@ -35,9 +33,7 @@ class ApprovalRef:
         if not str(self.id or "").strip():
             raise ValidationError("approval.id must be non-empty")
         if self.scope not in APPROVAL_SCOPES:
-            raise ValidationError(
-                f"approval.scope must be one of {sorted(APPROVAL_SCOPES)}"
-            )
+            raise ValidationError(f"approval.scope must be one of {sorted(APPROVAL_SCOPES)}")
         if not str(self.granted_by or "").strip():
             raise ValidationError("approval.granted_by must be non-empty")
 

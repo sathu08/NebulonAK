@@ -6,12 +6,18 @@
 <link rel="stylesheet" href="/assets/style.css">
 </head>
 <body>
-<nav><a href="/">Status</a><a href="pipeline">Pipeline</a><a href="settings">Settings</a></nav>
+<nav><a href="/api/NebulonAK/dashboard/">Status</a><a href="/api/NebulonAK/dashboard/pipeline">Pipeline</a><a href="/api/NebulonAK/dashboard/builder">Builder</a><a href="/api/NebulonAK/dashboard/settings">Settings</a></nav>
 <h1>NebulonAK console — status</h1>
 <div id="error"></div>
 <div class="grid" id="cards"></div>
 <h2>Checks</h2>
 <table id="checks"><tr><th>Check</th><th>Status</th><th>ms</th><th>Detail</th></tr></table>
+<h2>Pending tasks</h2>
+<div id="taskbackend" class="dim"></div>
+<table id="tasks"><tr><th>Task</th><th>State</th><th>Worker</th><th>Attempt</th></tr></table>
+<h2>Sessions</h2>
+<div id="taskws" class="dim"></div>
+<table id="sessions"><tr><th>Time</th><th>Worker</th><th>Session</th><th>Event</th></tr></table>
 <footer>NebulonAK web console · read-only · refreshes every 15 s</footer>
 <script src="/assets/api.js"></script>
 <script>
@@ -50,6 +56,36 @@ async function load() {
     srv.appendChild(el("div", "mono", (s.host || "") + ":" + (s.port || "")));
     cards.appendChild(srv);
     void head;
+    try {
+      const [t, se] = await Promise.all([nakApi.tasks(20), nakApi.sessions(20)]);
+      document.getElementById("taskbackend").textContent =
+        "backend: " + (t.backend || "?") + (t.notice ? " — " + t.notice : "");
+      const tt = document.getElementById("tasks");
+      tt.querySelectorAll("tr.data").forEach(r => r.remove());
+      (t.pending || []).forEach(p => {
+        const tr = document.createElement("tr");
+        tr.className = "data";
+        tr.appendChild(el("td", "mono", p.task_id));
+        tr.appendChild(el("td", null, p.state));
+        tr.appendChild(el("td", null, p.worker || "-"));
+        tr.appendChild(el("td", "mono", String(p.attempt)));
+        tt.appendChild(tr);
+      });
+      document.getElementById("taskws").textContent = se.workspace || "";
+      const st = document.getElementById("sessions");
+      st.querySelectorAll("tr.data").forEach(r => r.remove());
+      (se.sessions || []).slice().reverse().forEach(e => {
+        const tr = document.createElement("tr");
+        tr.className = "data";
+        tr.appendChild(el("td", "mono", (e.time || "").slice(0, 19).replace("T", " ")));
+        tr.appendChild(el("td", null, e.worker || "-"));
+        tr.appendChild(el("td", "mono", (e.session_id || "").slice(0, 32)));
+        tr.appendChild(el("td", null, e.event || "-"));
+        st.appendChild(tr);
+      });
+    } catch (e2) {
+      banner("activity failed: " + e2.message);
+    }
   } catch (e) {
     banner("status failed: " + e.message);
   }

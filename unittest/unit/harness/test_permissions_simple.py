@@ -1,6 +1,9 @@
 """SIMPLE permission tests — verdicts, rule resolution, inspect allow."""
+
 from nak_host.harness.engine.permission import (
-    verdict, load_permissions, rule_for,
+    verdict,
+    load_permissions,
+    rule_for,
 )
 from nak_host.harness.engine import ExecutionHarness
 
@@ -77,24 +80,27 @@ def test_nunnan_role_merge_grants_assessor_tools():
 
 def test_nunnan_inspect_allows_checks_and_gates_report(tmp_workspace):
     h = ExecutionHarness(worker="nunnan", user="t", workspace_root=tmp_workspace)
-    assert h.inspect("assertion", {"action": "check", "checks": [
-        {"op": "eq", "expected": 1, "actual": 1}]})["ok"] is True
-    assert h.inspect("scorecard", {"action": "score", "inputs": {"x": 1},
-                                   "rules": [{"metric": "x", "min": 0,
-                                              "max": 1}]})["ok"] is True
+    assert (
+        h.inspect("assertion", {"action": "check", "checks": [{"op": "eq", "expected": 1, "actual": 1}]})["ok"] is True
+    )
+    assert (
+        h.inspect("scorecard", {"action": "score", "inputs": {"x": 1}, "rules": [{"metric": "x", "min": 0, "max": 1}]})[
+            "ok"
+        ]
+        is True
+    )
     assert h.inspect("trace", {"action": "trace", "path": "x.md"})["ok"] is True
-    pending = h.inspect("report", {"action": "write", "sections": {"a": 1},
-                                   "path": "output/report.md"})
+    pending = h.inspect("report", {"action": "write", "sections": {"a": 1}, "path": "output/report.md"})
     assert pending["ok"] is False and pending.get("need_approval") is True
 
 
 def test_other_workers_cannot_use_assessor_tools(tmp_workspace):
     h = ExecutionHarness(worker="vizhi", user="t", workspace_root=tmp_workspace)
-    for tool, args in (("assertion", {"action": "check", "checks": [
-            {"op": "eq", "expected": 1, "actual": 1}]}),
-            ("trace", {"action": "trace", "path": "x.md"}),
-            ("scorecard", {"action": "score", "inputs": {},
-            "rules": [{"metric": "x", "min": 0, "max": 1}]}),
-            ("report", {"action": "write", "sections": {"a": 1}})):
+    for tool, args in (
+        ("assertion", {"action": "check", "checks": [{"op": "eq", "expected": 1, "actual": 1}]}),
+        ("trace", {"action": "trace", "path": "x.md"}),
+        ("scorecard", {"action": "score", "inputs": {}, "rules": [{"metric": "x", "min": 0, "max": 1}]}),
+        ("report", {"action": "write", "sections": {"a": 1}}),
+    ):
         out = h.inspect(tool, args)
         assert out["ok"] is False and out.get("need_approval") is not True

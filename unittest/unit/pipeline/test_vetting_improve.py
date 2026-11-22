@@ -21,22 +21,26 @@ def _summary(tmp_path, craft_workers=("vizhi",)):
     run.mkdir()
     summary = {
         "run_dir": str(run),
-        "workers": [{
-            "name": "vizhi",
-            "improvements": [{
-                "id": "vizhi-1",
-                "worker": "vizhi",
-                "source": "craft",
-                "scope": "craft",
-                "severity": "high",
-                "target": "plan",
-                "problem": "Craft plan probe error.",
-                "evidence": "missing craft.md",
-                "suggestion": "Fix craft plan.",
-                "affected_workers": list(craft_workers),
-                "status": "open",
-            }],
-        }],
+        "workers": [
+            {
+                "name": "vizhi",
+                "improvements": [
+                    {
+                        "id": "vizhi-1",
+                        "worker": "vizhi",
+                        "source": "craft",
+                        "scope": "craft",
+                        "severity": "high",
+                        "target": "plan",
+                        "problem": "Craft plan probe error.",
+                        "evidence": "missing craft.md",
+                        "suggestion": "Fix craft plan.",
+                        "affected_workers": list(craft_workers),
+                        "status": "open",
+                    }
+                ],
+            }
+        ],
     }
     (run / "summary.json").write_text(json.dumps(summary), encoding="utf-8")
     return run
@@ -51,18 +55,19 @@ def _craft_root(tmp_path):
 
 
 def test_build_improvements_covers_cases_checks_and_crafts():
-    case = Case(id="q1", question="Q?", expected="the answer",
-                rubric="R", difficulty="easy")
+    case = Case(id="q1", question="Q?", expected="the answer", rubric="R", difficulty="easy")
     result = WorkerResult(
-        name="vizhi", threshold=0.6, status="fail",
+        name="vizhi",
+        threshold=0.6,
+        status="fail",
         cases=[case],
         answers=[Answer(case_id="q1", text="nope")],
         judgements=[Judgement(case_id="q1", score=0.1, evidence="off topic")],
-        checks=[{"case_id": "q1", "id": "c1", "op": "contains",
-                 "expected": "answer", "actual": "nope", "passed": False}],
+        checks=[
+            {"case_id": "q1", "id": "c1", "op": "contains", "expected": "answer", "actual": "nope", "passed": False}
+        ],
     )
-    result.craft_probes = [type("P", (), {
-        "name": "plan", "status": "error", "detail": "missing"})()]
+    result.craft_probes = [type("P", (), {"name": "plan", "status": "error", "detail": "missing"})()]
     out = _build_improvements(result)
     sources = {item.source for item in out}
     assert {"case", "check", "craft"} <= sources
@@ -75,10 +80,18 @@ def test_build_improvements_covers_cases_checks_and_crafts():
 
 def test_report_lists_where_to_improve():
     result = WorkerResult(name="vizhi")
-    result.improvements = [Improvement(
-        id="vizhi-1", worker="vizhi", source="craft", scope="craft",
-        target="plan", problem="Craft plan failed.",
-        evidence="missing", suggestion="Fix it.")]
+    result.improvements = [
+        Improvement(
+            id="vizhi-1",
+            worker="vizhi",
+            source="craft",
+            scope="craft",
+            target="plan",
+            problem="Craft plan failed.",
+            evidence="missing",
+            suggestion="Fix it.",
+        )
+    ]
     md = render_worker_md(result)
     assert "## Where to improve" in md
     assert "Craft plan failed." in md
@@ -86,20 +99,20 @@ def test_report_lists_where_to_improve():
 
 
 def test_collect_improvements_deduplicates():
-    item = {"worker": "vizhi", "source": "case", "target": "q1",
-            "suggestion": "fix"}
-    summary = {"workers": [
-        {"name": "vizhi", "improvements": [item]},
-        {"name": "vizhi", "improvements": [dict(item)]},
-    ]}
+    item = {"worker": "vizhi", "source": "case", "target": "q1", "suggestion": "fix"}
+    summary = {
+        "workers": [
+            {"name": "vizhi", "improvements": [item]},
+            {"name": "vizhi", "improvements": [dict(item)]},
+        ]
+    }
     assert len(collect_improvements(summary)) == 1
 
 
 def test_plan_improvements_finds_craft_source(tmp_path):
     run = _summary(tmp_path)
     root = _craft_root(tmp_path)
-    plan = plan_improvements(run, crafts_prompt=root,
-                             workspace_root=tmp_path / "ws")
+    plan = plan_improvements(run, crafts_prompt=root, workspace_root=tmp_path / "ws")
     assert plan["push_status"] == "pending"
     assert len(plan["actions"]) == 1
     action = plan["actions"][0]
@@ -113,8 +126,11 @@ def test_apply_stages_and_records_history(tmp_path):
     root = _craft_root(tmp_path)
     ws = tmp_path / "ws"
     record = apply_improvements(
-        run, crafts_prompt=root, workspace_root=ws,
-        test_core=False, verify=False,
+        run,
+        crafts_prompt=root,
+        workspace_root=ws,
+        test_core=False,
+        verify=False,
     )
     assert record["status"] == "staged"
     assert record["push_status"] == "pending"
@@ -143,8 +159,11 @@ def test_apply_tests_with_core_and_verifies_with_nunnan(tmp_path):
         return {"ok": True, "exit_code": 0}
 
     record = apply_improvements(
-        run, crafts_prompt=root, workspace_root=ws,
-        core_runner=core, verify_fn=verify,
+        run,
+        crafts_prompt=root,
+        workspace_root=ws,
+        core_runner=core,
+        verify_fn=verify,
     )
     assert record["status"] == "verified"
     assert record["push_status"] == "pending"
@@ -166,8 +185,11 @@ def test_apply_stops_before_verify_when_core_fails(tmp_path):
         return {"ok": True}
 
     record = apply_improvements(
-        run, crafts_prompt=root, workspace_root=tmp_path / "ws",
-        core_runner=core, verify_fn=verify,
+        run,
+        crafts_prompt=root,
+        workspace_root=tmp_path / "ws",
+        core_runner=core,
+        verify_fn=verify,
     )
     assert record["status"] == "test_failed"
     assert called["verify"] is False

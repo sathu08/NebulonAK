@@ -15,9 +15,7 @@ from nak_host.brain.config import load_config
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(
-        prog="nak-brain", description="NAK Brain CLI — talks to NebulonMD"
-    )
+    parser = argparse.ArgumentParser(prog="nak-brain", description="NAK Brain CLI — talks to NebulonMD")
     parser.add_argument("--cfg", default=None, help="Path to nebulonak.cfg")
     parser.add_argument("--base-url", default=None, help="Override Mind base URL")
     parser.add_argument("--user", default=None, help="Override username")
@@ -54,11 +52,21 @@ def main(argv=None) -> int:
             print(f"  - {p}", file=sys.stderr)
         return 2
 
-    brain = Brain(base_url=args.base_url or cfg.base_url, user=args.user or cfg.user,
-                  cfg_path=cfg.cfg_path)
+    brain = Brain(base_url=args.base_url or cfg.base_url, user=args.user or cfg.user, cfg_path=cfg.cfg_path)
 
-    if not any([args.check, args.health, args.llm, args.create_user,
-                args.resolve_user, args.chat, args.search, args.remember, args.context]):
+    if not any(
+        [
+            args.check,
+            args.health,
+            args.llm,
+            args.create_user,
+            args.resolve_user,
+            args.chat,
+            args.search,
+            args.remember,
+            args.context,
+        ]
+    ):
         args.check = True
 
     def _print(obj, label: str = ""):
@@ -75,8 +83,7 @@ def main(argv=None) -> int:
             exit_code = 1
             if not args.json:
                 print("\nProbe FAILED — is NebulonMD up?", file=sys.stderr)
-                print(f"  Mind: {brain.base_url}  (NebulonDB :6969 first, then Mind :9696)",
-                      file=sys.stderr)
+                print(f"  Mind: {brain.base_url}  (NebulonDB :6969 first, then Mind :9696)", file=sys.stderr)
                 print(f"  Try: curl {brain.base_url}/health", file=sys.stderr)
         elif not args.json:
             print("\nAll probes PASSED.", file=sys.stderr)
@@ -115,9 +122,9 @@ def main(argv=None) -> int:
         _print(brain.remember(args.remember), f"remember({args.remember!r})")
 
     if args.search:
-        _print({"query": args.search,
-                "results": brain.search(args.search, top_k=args.top_k)},
-               f"search({args.search!r})")
+        _print(
+            {"query": args.search, "results": brain.search(args.search, top_k=args.top_k)}, f"search({args.search!r})"
+        )
 
     if args.context:
         _print(brain.context(args.context, top_k=args.top_k), f"context({args.context!r})")
